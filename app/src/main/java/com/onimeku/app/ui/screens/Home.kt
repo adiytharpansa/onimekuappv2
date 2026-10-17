@@ -166,7 +166,7 @@ private fun HomeContent(
         item {
             SectionHeader(
                 "Top Hits Anime",
-                if (genre == "Semua") null else genre,
+                if (genre == "Semua") null else "Reset",
                 onAction = { vm.genre.value = "Semua" }
             )
         }

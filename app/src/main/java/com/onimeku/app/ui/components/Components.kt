@@ -88,6 +88,7 @@ import com.onimeku.app.ui.theme.TextSecondary
 import com.onimeku.app.ui.theme.TextTertiary
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.animation.core.animateFloat
 
 val NavPad = 112.dp   // ruang agar konten tidak tertutup menu melayang
 
@@ -335,9 +336,14 @@ fun Chip(
 }
 
 @Composable
-fun ChipRow(items: List<String>, selected: String, onSelect: (String) -> Unit) =
+fun ChipRow(
+    items: List<String>,
+    selected: String,
+    contentPadding: PaddingValues = PaddingValues(horizontal = Space.lg, vertical = Space.xxs),
+    onSelect: (String) -> Unit
+) =
     LazyRow(
-        contentPadding = PaddingValues(horizontal = Space.lg, vertical = Space.xxs),
+        contentPadding = contentPadding,
         horizontalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
         items(items) { Chip(it, it == selected) { onSelect(it) } }

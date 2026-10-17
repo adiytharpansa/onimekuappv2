@@ -142,7 +142,10 @@ fun OnboardingScreen(onStart: () -> Unit) {
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) { i ->
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     OnboardArt(pages[i].icon, pages[i].hue)
                     Spacer(Modifier.height(Space.huge))
                     Text(
@@ -203,7 +206,7 @@ fun OnboardingScreen(onStart: () -> Unit) {
 
 @Composable
 private fun OnboardArt(icon: ImageVector, hue: Float) = Box(
-    Modifier.fillMaxWidth().height(300.dp),
+    Modifier.fillMaxWidth().height(278.dp),
     contentAlignment = Alignment.Center
 ) {
     Box(

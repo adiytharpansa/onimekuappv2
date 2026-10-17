@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,7 +62,6 @@ import com.onimeku.app.ui.components.ChipRow
 import com.onimeku.app.ui.components.EmptyState
 import com.onimeku.app.ui.components.IconCircle
 import com.onimeku.app.ui.components.PosterCard
-import com.onimeku.app.ui.components.SectionHeader
 import com.onimeku.app.ui.theme.Crimson
 import com.onimeku.app.ui.theme.Radius
 import com.onimeku.app.ui.theme.Space
@@ -129,16 +129,35 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpen: (Int) -> Unit) {
         }
 
         item(span = { GridItemSpan(3) }) {
-            ChipRow(listOf("Semua") + AnimeRepository.genres, g) { vm.searchGenre.value = it }
+            ChipRow(
+                listOf("Semua") + AnimeRepository.genres, g,
+                contentPadding = PaddingValues(vertical = Space.xxs)
+            ) { vm.searchGenre.value = it }
         }
 
         if (recent.isNotEmpty() && q.isBlank()) {
             item(span = { GridItemSpan(3) }) {
                 Column {
-                    SectionHeader("Pencarian terakhir", "Hapus") { vm.clearRecent() }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = Space.md, bottom = Space.xs),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Pencarian terakhir",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "Hapus",
+                            color = Crimson,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { vm.clearRecent() }
+                        )
+                    }
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(Space.sm),
-                        contentPadding = PaddingValues(horizontal = Space.lg)
+                        contentPadding = PaddingValues(horizontal = 0.dp)
                     ) {
                         items(recent) { r ->
                             Chip(r, false, leadingIcon = Icons.Rounded.History) {

@@ -54,6 +54,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -101,6 +102,7 @@ import com.onimeku.app.ui.theme.TextTertiary
 import com.onimeku.app.ui.theme.Wine
 import java.util.Calendar
 import androidx.compose.material.icons.rounded.Star
+import com.onimeku.app.ui.components.OptionSheet
 
 // ── Baris list bersama (Rilis, My List, Unduhan) ─────────────────────────────
 @Composable
@@ -253,66 +255,66 @@ fun MyListScreen(vm: AppViewModel, onOpen: (Int) -> Unit, onBrowse: () -> Unit) 
         }
     }
 
-    LazyVerticalGrid(
-        GridCells.Fixed(3),
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = Space.lg, end = Space.lg, bottom = NavPad),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item(span = { GridItemSpan(3) }) {
-            ScreenTitle("My List", "${list.size} judul") {
-                IconCircle(
-                    if (asGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
-                    "Ubah tampilan", bg = Surface2, onClick = { asGrid = !asGrid }
-                )
-            }
+    Column(Modifier.fillMaxSize()) {
+        ScreenTitle("My List", "${list.size} judul") {
+            IconCircle(
+                if (asGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                "Ubah tampilan", bg = Surface2, onClick = { asGrid = !asGrid }
+            )
         }
-        item(span = { GridItemSpan(3) }) {
-            ChipRow(
-                listOf("Semua", "Menonton", "Rencana", "Selesai", "Favorit"),
-                filter
-            ) { filter = it }
-        }
-        if (list.isEmpty()) {
-            item(span = { GridItemSpan(3) }) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    EmptyState(
-                        Icons.Rounded.BookmarkBorder,
-                        "Masih kosong",
-                        "Tambahkan anime ke My List atau favorit untuk melihatnya di sini."
-                    )
-                    PrimaryButton("Jelajahi anime", onClick = onBrowse)
+        ChipRow(
+            listOf("Semua", "Menonton", "Rencana", "Selesai", "Favorit"),
+            filter
+        ) { filter = it }
+        Spacer(Modifier.height(Space.xs))
+        LazyVerticalGrid(
+            GridCells.Fixed(3),
+            Modifier.weight(1f),
+            contentPadding = PaddingValues(start = Space.lg, end = Space.lg, bottom = NavPad),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (list.isEmpty()) {
+                item(span = { GridItemSpan(3) }) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        EmptyState(
+                            Icons.Rounded.BookmarkBorder,
+                            "Masih kosong",
+                            "Tambahkan anime ke My List atau favorit untuk melihatnya di sini."
+                        )
+                        PrimaryButton("Jelajahi anime", onClick = onBrowse)
+                    }
                 }
-            }
-        } else if (asGrid) {
-            items(list, key = { it.id }) { a ->
-                PosterCard(a, Modifier.fillMaxWidth()) { onOpen(a.id) }
-            }
-        } else {
-            items(list, key = { it.id }, span = { GridItemSpan(3) }) { a ->
-                ListRow(
-                    a,
-                    a.genres.joinToString(" · "),
-                    { onOpen(a.id) },
-                    Modifier.padding(horizontal = 0.dp),
-                    extra = {
-                    Column(Modifier.padding(top = Space.xs)) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(Space.xs),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Badge(status[a.id]?.label ?: "Favorit", Wine, Color(0xFFFFD3D8))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.Star, null, Modifier.size(12.dp), tint = Gold)
-                                Text(
-                                    " ${"%.1f".format(a.rating)}",
-                                    fontSize = 11.sp, color = TextSecondary
-                                )
+            } else if (asGrid) {
+                items(list, key = { it.id }) { a ->
+                    PosterCard(a, Modifier.fillMaxWidth()) { onOpen(a.id) }
+                }
+            } else {
+                items(list, key = { it.id }, span = { GridItemSpan(3) }) { a ->
+                    ListRow(
+                        a,
+                        a.genres.joinToString(" · "),
+                        { onOpen(a.id) },
+                        Modifier.padding(horizontal = 0.dp),
+                        extra = {
+                            Column(Modifier.padding(top = Space.xs)) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Badge(status[a.id]?.label ?: "Favorit", Wine, Color(0xFFFFD3D8))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Rounded.Star, null, Modifier.size(12.dp), tint = Gold)
+                                        Text(
+                                            " ${"%.1f".format(a.rating)}",
+                                            fontSize = 11.sp, color = TextSecondary
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
-                })
+                    )
+                }
             }
         }
     }
@@ -409,6 +411,14 @@ fun DownloadScreen(vm: AppViewModel, onOpen: (Int) -> Unit, onBrowse: () -> Unit
                 },
                 { onOpen(id) },
                 Modifier.padding(horizontal = Space.lg),
+                extra = {
+                    if (d.p < 100) LinearProgressIndicator(
+                        { d.p / 100f },
+                        Modifier.fillMaxWidth().padding(top = Space.xs).height(4.dp).clip(CircleShape),
+                        color = Crimson,
+                        trackColor = Surface3
+                    )
+                },
                 trailing = {
                 Row(
                     Modifier.padding(top = Space.xs),
@@ -438,6 +448,9 @@ fun NotifScreen(vm: AppViewModel, onBack: () -> Unit) {
     val list by vm.notif.collectAsState()
     val unread = list.filter { !it.read }
     val read = list.filter { it.read }
+
+    // Tandai terbaca saat pengguna meninggalkan layar (badge di Beranda ikut hilang).
+    DisposableEffect(Unit) { onDispose { vm.markNotifRead() } }
 
     LazyColumn(
         Modifier.fillMaxSize().navigationBarsPadding(),
@@ -643,7 +656,7 @@ fun ProfileScreen(vm: AppViewModel, onLogout: () -> Unit) {
             SectionCard("Tentang") {
                 ValueRow("Versi aplikasi", "1.0.0 (v2)", showChevron = false)
                 DividerLine(Modifier.padding(horizontal = Space.lg))
-                ValueRow("Syarat & kebijakan privasi", "Baca", showChevron = true) {}
+                ValueRow("Tentang Onimeku", "v2", showChevron = false)
             }
         }
         item {

@@ -212,26 +212,11 @@ fun DetailScreen(
                     modifier = Modifier.height(30.dp)
                 ) { Text("Baca selengkapnya", color = Crimson, fontSize = 12.sp) }
 
-                Row(
+                PrimaryButton(
+                    if (history[a.id] != null) "Lanjut Eps $resumeEp" else "Putar sekarang",
                     Modifier.fillMaxWidth().padding(top = Space.sm),
-                    horizontalArrangement = Arrangement.spacedBy(Space.sm)
-                ) {
-                    PrimaryButton(
-                        if (history[a.id] != null) "Lanjut Eps $resumeEp" else "Putar",
-                        Modifier.weight(1f),
-                        Icons.Rounded.PlayArrow
-                    ) { onPlay(resumeEp) }
-                    IconCircle(
-                        if (a.id in status) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                        "My List", bg = Surface2, tint = if (a.id in status) Crimson else Color.White,
-                        size = 48.dp
-                    ) { sheet = true }
-                    IconCircle(
-                        if (a.id in fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        "Favorit", bg = Surface2, tint = if (a.id in fav) Crimson else Color.White,
-                        size = 48.dp
-                    ) { vm.toggleFav(a.id) }
-                }
+                    Icons.Rounded.PlayArrow
+                ) { onPlay(resumeEp) }
 
                 Row(
                     Modifier.fillMaxWidth().padding(top = Space.md),
