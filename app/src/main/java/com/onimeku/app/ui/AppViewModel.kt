@@ -70,12 +70,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _profile = MutableStateFlow(UserProfile())
     val profile = _profile.asStateFlow()
 
+    private val catalogVersion = MutableStateFlow(0)
     val query = MutableStateFlow("")
     val searchGenre = MutableStateFlow("Semua")
     val sort = MutableStateFlow(Sort.Rating)
     private val _recent = MutableStateFlow<List<String>>(emptyList())
     val recent = _recent.asStateFlow()
-    val results = combine(query.debounce(300), searchGenre, sort) { q, g, s -> Triple(q, g, s) }
+    val results = combine(query.debounce(300), searchGenre, sort, catalogVersion) { q, g, s, _ ->
+        Triple(q, g, s)
+    }
         .mapLatest { (q, g, s) -> AnimeRepository.search(q, g, s) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnimeRepository.all)
 
@@ -93,6 +96,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _home.value = UiState.Loading
         try {
             AnimeRepository.refresh()
+            catalogVersion.value++
             val data = AnimeRepository.home()
             _home.value = UiState.Success(data)
             if (!AnimeRepository.isLive) {
@@ -106,6 +110,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshCatalog() = viewModelScope.launch {
         try {
             AnimeRepository.refresh(force = true)
+            catalogVersion.value++
             _home.value = UiState.Success(AnimeRepository.home())
             toast(if (AnimeRepository.isLive) "Katalog diperbarui" else "Gagal memperbarui katalog")
         } catch (e: Exception) {
