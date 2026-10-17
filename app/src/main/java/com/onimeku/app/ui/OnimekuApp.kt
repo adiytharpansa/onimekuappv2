@@ -50,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -190,6 +191,22 @@ fun OnimekuApp() {
                     vm, AnimeRepository.byId(args.getInt("id")), args.getInt("ep")
                 ) { nav.popBackStack() }
             }
+        }
+
+        // Scrim di belakang menu melayang supaya konten yang lewat tidak "bertabrakan".
+        AnimatedVisibility(
+            showBar,
+            Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(tween(250)),
+            exit = fadeOut(tween(200))
+        ) {
+            Box(
+                Modifier.fillMaxWidth().height(170.dp).background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Bg.copy(alpha = .82f), Bg)
+                    )
+                )
+            )
         }
 
         SnackbarHost(

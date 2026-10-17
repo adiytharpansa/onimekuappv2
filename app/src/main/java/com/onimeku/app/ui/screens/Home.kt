@@ -231,7 +231,7 @@ private fun HeroPager(
             }
         }
     }
-    Box(Modifier.fillMaxWidth().height(500.dp)) {
+    Box(Modifier.fillMaxWidth().height(470.dp)) {
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { i ->
             val a = featured[i]
             Box(Modifier.fillMaxSize()) {
@@ -260,8 +260,8 @@ private fun HeroPager(
                     Text(
                         a.title,
                         Modifier.padding(top = Space.sm).clickable { onOpen(a.id) },
-                        fontSize = 30.sp,
-                        lineHeight = 34.sp,
+                        fontSize = 28.sp,
+                        lineHeight = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -307,10 +307,12 @@ private fun HeroPager(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Logo(34.dp)
-            Column(Modifier.weight(1f).padding(start = Space.sm)) {
-                Text("Onimeku", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                Text("Streaming anime gratis", color = TextSecondary, fontSize = 10.sp)
-            }
+            Text(
+                "Onimeku",
+                Modifier.weight(1f).padding(start = Space.sm),
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 19.sp
+            )
             IconCircle(Icons.Rounded.Search, "Cari", onClick = onSearch)
             Spacer(Modifier.width(Space.sm))
             Box {

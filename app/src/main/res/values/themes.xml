@@ -2,6 +2,13 @@
     <style name="Theme.Onimeku" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/brand_red</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_logo_ring</item>
-        <item name="postSplashScreenTheme">@android:style/Theme.Material.NoActionBar</item>
+        <item name="postSplashScreenTheme">@style/Theme.Onimeku.Main</item>
+    </style>
+
+    <style name="Theme.Onimeku.Main" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

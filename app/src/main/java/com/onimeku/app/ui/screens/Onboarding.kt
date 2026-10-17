@@ -84,24 +84,24 @@ private data class OnboardPage(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
-    val hue: Float
+    val accent: Color
 )
 
 private val pages = listOf(
     OnboardPage(
         "Nonton anime kapan saja",
         "Ribuan judul HD dengan subtitle Indonesia, tanpa ribet.",
-        Icons.Rounded.PlayCircle, 350f
+        Icons.Rounded.PlayCircle, Color(0xFFE11D2E)
     ),
     OnboardPage(
         "Episode baru setiap hari",
         "Kalender rilis dan pengingat agar tak ketinggalan episode favorit.",
-        Icons.Rounded.NotificationsActive, 215f
+        Icons.Rounded.NotificationsActive, Color(0xFF9E1020)
     ),
     OnboardPage(
         "Simpan & unduh offline",
         "My List pribadi dan unduhan agar tetap bisa nonton tanpa internet.",
-        Icons.Rounded.Download, 270f
+        Icons.Rounded.Download, Color(0xFF6E0B16)
     )
 )
 
@@ -110,14 +110,14 @@ fun OnboardingScreen(onStart: () -> Unit) {
     val pager = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
     val tint by animateColorAsState(
-        Color.hsv(pages[pager.currentPage].hue, .55f, .28f),
+        pages[pager.currentPage].accent.copy(alpha = .30f),
         label = "bgTint"
     )
     val isLast = pager.currentPage == pages.lastIndex
 
     Box(
         Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(tint.copy(.75f), Wine.copy(.35f), Bg))
+            Brush.verticalGradient(listOf(tint, Color(0xFF1A0509), Bg))
         )
     ) {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = Space.xxl)) {
@@ -146,7 +146,7 @@ fun OnboardingScreen(onStart: () -> Unit) {
                     Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    OnboardArt(pages[i].icon, pages[i].hue)
+                    OnboardArt(pages[i].icon, pages[i].accent)
                     Spacer(Modifier.height(Space.huge))
                     Text(
                         pages[i].title,
@@ -205,7 +205,7 @@ fun OnboardingScreen(onStart: () -> Unit) {
 }
 
 @Composable
-private fun OnboardArt(icon: ImageVector, hue: Float) = Box(
+private fun OnboardArt(icon: ImageVector, accent: Color) = Box(
     Modifier.fillMaxWidth().height(278.dp),
     contentAlignment = Alignment.Center
 ) {
@@ -214,7 +214,7 @@ private fun OnboardArt(icon: ImageVector, hue: Float) = Box(
             .clip(RoundedCornerShape(Radius.xl))
             .background(
                 Brush.linearGradient(
-                    listOf(Color.hsv((hue + 40) % 360, .55f, .38f), Color.hsv((hue + 20) % 360, .6f, .16f))
+                    listOf(Color(0xFF2A0A10), Color(0xFF17171A))
                 )
             )
     )
@@ -223,7 +223,7 @@ private fun OnboardArt(icon: ImageVector, hue: Float) = Box(
             .clip(RoundedCornerShape(Radius.xl))
             .background(
                 Brush.linearGradient(
-                    listOf(Color.hsv((hue + 20) % 360, .6f, .35f), Color.hsv(hue, .7f, .14f))
+                    listOf(Color(0xFF23080D), Color(0xFF111113))
                 )
             )
     )
@@ -231,7 +231,7 @@ private fun OnboardArt(icon: ImageVector, hue: Float) = Box(
         Modifier.size(182.dp, 262.dp).rotate(-3f).clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
-                    listOf(Color.hsv(hue, .78f, .52f), Color.hsv((hue + 18) % 360, .82f, .18f))
+                    listOf(accent, Color(0xFF450E18), Color(0xFF141416))
                 )
             )
             .border(1.dp, Color.White.copy(.16f), RoundedCornerShape(28.dp)),

@@ -7,6 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import com.onimeku.app.ui.OnimekuApp
 import com.onimeku.app.ui.theme.OnimekuTheme
 
@@ -20,6 +21,11 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
+        // Paksa ikon status/navigation bar selalu terang — tema aplikasi selalu gelap.
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
         setContent { OnimekuTheme { OnimekuApp() } }
     }
 }

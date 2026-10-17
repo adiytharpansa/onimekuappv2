@@ -1,1 +1,4 @@
-<resources><color name="brand_red">#F20A16</color></resources>
+<resources>
+    <color name="brand_red">#F20A16</color>
+    <color name="bg_dark">#08080A</color>
+</resources>

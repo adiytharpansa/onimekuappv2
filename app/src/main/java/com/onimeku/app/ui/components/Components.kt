@@ -92,10 +92,21 @@ import androidx.compose.animation.core.animateFloat
 
 val NavPad = 112.dp   // ruang agar konten tidak tertutup menu melayang
 
-/** Gradasi unik per anime sebagai placeholder sampai poster dari API terisi. */
+/**
+ * Placeholder monokrom merah tua → hitam (sesuai brand) sampai poster dari API terisi.
+ * Tidak memakai hue acak agar tampilan tetap profesional.
+ */
 fun placeholder(id: Int): Brush {
-    val h = (id * 47 + 340) % 360f
-    return Brush.linearGradient(listOf(Color.hsv(h, .72f, .45f), Color.hsv((h + 30) % 360, .6f, .17f)))
+    val shift = (id * 29 % 40)
+    return Brush.linearGradient(
+        listOf(
+            Color(0xFF3A0D16),
+            Color(0xFF22080D).copy(alpha = .96f),
+            Color(0xFF131316)
+        ),
+        start = Offset(shift.toFloat(), 0f),
+        end = Offset(600f + shift * 4f, 900f)
+    )
 }
 
 /** Key-art placeholder: gradasi berlapis + cahaya radial + inisial besar, sampai poster API terisi. */
@@ -127,8 +138,8 @@ fun Poster(anime: Anime, modifier: Modifier = Modifier, banner: Boolean = false)
         if (anime.poster.isBlank()) {
             Text(
                 anime.title.take(1),
-                color = Color.White.copy(.1f),
-                fontSize = if (banner) 280.sp else 90.sp,
+                color = Color.White.copy(.06f),
+                fontSize = if (banner) 260.sp else 90.sp,
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier.align(Alignment.TopEnd).padding(end = 6.dp)
             )
