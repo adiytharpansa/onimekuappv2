@@ -2,8 +2,7 @@
 Tidak ada data contoh di aplikasi. Semua konten datang dari API Anda.
 
 ## 1. API (wajib)
-Atur di `~/.gradle/gradle.properties`: `ONIMEKU_API_URL=https://api.domainanda.com/v1/` (harus HTTPS dan diakhiri `/`).
-Build release otomatis GAGAL bila kosong.
+Endpoint default sudah diarahkan ke `https://onimekuappv2-api.adiyth-arpansa.workers.dev/`. Jika ingin mengganti, atur `ONIMEKU_API_URL` di `~/.gradle/gradle.properties` (harus HTTPS; garis miring akhir ditambahkan otomatis).
 - `GET anime` -> `[{"id":"a1","title":"...","episodes":24,"synopsis":"...","poster":"https://...jpg","genres":["Action"],"airDay":1,"airTime":"19:00"}]`
   (`airDay` 0=Minggu..6=Sabtu; kosongkan `airDay`/`airTime` untuk judul yang sudah tamat)
 - `GET anime/{id}/episodes/{ep}/stream` -> `{"url":"https://.../master.m3u8"}` (HLS)
@@ -14,7 +13,7 @@ Aktifkan Email/Password di console.firebase.google.com, taruh `google-services.j
 
 ## 3. Signing
 `ONIMEKU_STORE_FILE`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS` di gradle.properties, lalu `./gradlew bundleRelease`.
-Siapkan ikon adaptif (ganti `sym_def_app_icon` di manifest) dan Privacy Policy untuk Play Console.
+Ikon launcher merah-putih di manifest sudah dipasang dari aset ikon yang disediakan. Siapkan Privacy Policy untuk Play Console.
 
 ## Komentar saat menonton (API tambahan)
 - `GET anime/{id}/episodes/{ep}/comments` -> `[{"id","userId","user","text","timeMs","mine"}]` (`mine` true bila milik pengguna yang login)

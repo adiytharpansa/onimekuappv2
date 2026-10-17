@@ -1,6 +1,8 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("com.google.devtools.ksp"); id("org.jetbrains.kotlin.plugin.serialization") }
 
-val apiUrl = (findProperty("ONIMEKU_API_URL") as String?).orEmpty()   // contoh: https://api.domainanda.com/v1/
+val apiUrl = ((findProperty("ONIMEKU_API_URL") as String?)
+    ?.trim()?.takeIf { it.isNotBlank() }
+    ?: "https://onimekuappv2-api.adiyth-arpansa.workers.dev/").let { if (it.endsWith("/")) it else "$it/" }
 android {
     namespace = "com.onimeku.app"; compileSdk = 34
     defaultConfig { applicationId = "com.onimeku.app"; minSdk = 24; targetSdk = 34; versionCode = 1; versionName = "1.0.0" }
@@ -11,10 +13,8 @@ android {
         keyAlias = findProperty("ONIMEKU_KEY_ALIAS") as String?
         keyPassword = findProperty("ONIMEKU_STORE_PASS") as String? } }
     buildTypes {
-        debug { buildConfigField("String", "API_URL", "\"${apiUrl.ifBlank { "https://example.invalid/" }}\"") }
+        debug { buildConfigField("String", "API_URL", "\"$apiUrl\"") }
         release { buildConfigField("String", "API_URL", "\"$apiUrl\"")
-            if (apiUrl.isBlank() && gradle.startParameter.taskNames.any { it.contains("Release", true) })
-                throw GradleException("Set ONIMEKU_API_URL di gradle.properties sebelum build release.")
             isMinifyEnabled = true; isShrinkResources = true
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         signingConfig = signingConfigs.getByName("release") } }
