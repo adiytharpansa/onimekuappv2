@@ -1,1 +1,6 @@
-
+-keep class androidx.media3.** { *; }
+-keepattributes Signature, *Annotation*, InnerClasses
+-dontwarn org.slf4j.**
+-keep,includedescriptorclasses class com.onimeku.app.**$$serializer { *; }
+-keepclassmembers class com.onimeku.app.** { *** Companion; }
+-keepclasseswithmembers class com.onimeku.app.** { kotlinx.serialization.KSerializer serializer(...); }
