@@ -27,7 +27,18 @@ jobs:
           set +e
           gradle :app:assembleDebug --stacktrace 2>&1 | tee build.log
           result=${PIPESTATUS[0]}
-          { echo '## Build log'; echo '\`\`\`text'; tail -n 250 build.log; echo '\`\`\`'; } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo '## Gradle failure details'
+            echo '\`\`\`text'
+            grep -E '(^e: |^w: |What went wrong|Could not |FAILURE:|error:|Execution failed|^\* What went wrong)' build.log | tail -n 100 || true
+            echo '\`\`\`'
+            echo '## Build log tail'
+            echo '\`\`\`text'
+            tail -n 100 build.log
+            echo '\`\`\`'
+          } >> "$GITHUB_STEP_SUMMARY"
+          failure=$(grep -E '(^e: |Could not |FAILURE:|error:|Execution failed)' build.log | head -n 1 | cut -c1-500 || true)
+          if [[ -n "$failure" ]]; then echo "::error title=Gradle build failure::$failure"; fi
           exit "$result"
       - name: Upload build log on failure
         if: failure()
