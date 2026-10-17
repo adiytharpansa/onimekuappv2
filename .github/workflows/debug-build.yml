@@ -2,6 +2,8 @@ name: Debug build (errors as annotations)
 
 on:
   workflow_dispatch:
+  push:
+    branches: ['arena/d412c98a-onimekuappv2']
 
 permissions:
   contents: read
