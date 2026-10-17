@@ -1,0 +1,29 @@
+# Gradle / Android build output
+.gradle/
+build/
+*/build/
+out/
+
+# Local configuration (never commit)
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# Signing material (never commit)
+*.jks
+*.keystore
+keystore.properties
+
+# Built binaries (delivered via GitHub Actions artifacts, not git)
+*.apk
+*.aab
+*.aar
+
+# Downloaded build outputs
+build-output/
