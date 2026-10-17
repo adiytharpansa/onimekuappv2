@@ -1,17 +1,29 @@
-# Onimeku v2 — Android (Kotlin + Jetpack Compose)
-Tema: merah tua (#8B0F20 / #E11D2E) + putih di atas latar gelap. Menu bawah melayang, animasi transisi, shimmer loading.
-## Jalankan
-Android Studio (Koala+), JDK 17, sync Gradle, Run.
-## Fitur
-Onboarding+Auth (validasi), Home (hero auto-slide, filter genre, Lanjut Menonton, Top Hits, Episode Baru, notifikasi),
-Search (riwayat, filter genre, urutan), Detail (tab Episode/Info/Ulasan, status My List, favorit, unduh, bagikan),
-Player Media3 (seek, ±10s, kecepatan, kualitas, subtitle, autoplay, resume), Rilis (pengingat), My List (filter, grid/list),
-Unduhan (jeda/lanjut, penyimpanan), Profil (statistik, pengaturan).
-## Struktur
-`data/` model+repository · `ui/AppViewModel.kt` state · `ui/components/` komponen · `ui/screens/` layar · `ui/OnimekuApp.kt` navigasi
-## Brand
-Nama: Onimeku. Logo: ring putih di kotak merah (#F20A16) — aset di `res/drawable-nodpi/ic_logo_ring.png`, ikon launcher adaptive + legacy sudah dibuat, `play-store-icon-512.png` untuk Play Console.
-## Sebelum rilis
-1. Isi `poster`/`banner` dari API; ganti `SAMPLE` di Player.kt dengan stream HLS.
-2. Simpan data (My List, riwayat, pengaturan) dengan Room/DataStore; unduhan nyata via WorkManager.
-3. Auth nyata (backend/Firebase). Tambah ikon launcher + keystore. `./gradlew bundleRelease`
+# Onimeku (Kotlin, Media3) – siap rilis setelah 3 hal ini
+Tidak ada data contoh di aplikasi. Semua konten datang dari API Anda.
+
+## 1. API (wajib)
+Atur di `~/.gradle/gradle.properties`: `ONIMEKU_API_URL=https://api.domainanda.com/v1/` (harus HTTPS dan diakhiri `/`).
+Build release otomatis GAGAL bila kosong.
+- `GET anime` -> `[{"id":"a1","title":"...","episodes":24,"synopsis":"...","poster":"https://...jpg","genres":["Action"],"airDay":1,"airTime":"19:00"}]`
+  (`airDay` 0=Minggu..6=Sabtu; kosongkan `airDay`/`airTime` untuk judul yang sudah tamat)
+- `GET anime/{id}/episodes/{ep}/stream` -> `{"url":"https://.../master.m3u8"}` (HLS)
+Konten harus Anda miliki lisensinya.
+
+## 2. Firebase Auth (opsional tapi disarankan)
+Aktifkan Email/Password di console.firebase.google.com, taruh `google-services.json` di `app/`.
+
+## 3. Signing
+`ONIMEKU_STORE_FILE`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS` di gradle.properties, lalu `./gradlew bundleRelease`.
+Siapkan ikon adaptif (ganti `sym_def_app_icon` di manifest) dan Privacy Policy untuk Play Console.
+
+## Komentar saat menonton (API tambahan)
+- `GET anime/{id}/episodes/{ep}/comments` -> `[{"id","userId","user","text","timeMs","mine"}]` (`mine` true bila milik pengguna yang login)
+- `POST anime/{id}/episodes/{ep}/comments` body `{"text","timeMs"}` + header `Authorization: Bearer <Firebase ID token>` -> komentar baru. Server WAJIB memverifikasi token, membatasi laju (rate limit), dan menyaring kata terlarang.
+- `DELETE comments/{cid}` (hanya pemilik) · `POST comments/{cid}/report`
+Kebijakan konten buatan pengguna Google Play mewajibkan: pelaporan, pemblokiran pengguna, moderasi di server, dan syarat penggunaan. Aplikasi sudah punya tombol Laporkan/Blokir; moderasi dan Terms of Use Anda sediakan sendiri.
+
+## Tampilan (v2)
+- Home: carousel banner, baris "Lanjutkan Menonton / Sedang Tayang / per genre / Sudah Tamat", tarik-untuk-refresh.
+- Transisi poster -> detail memakai shared element (Compose BOM 2024.09.00).
+- Tema: Dark (default), Light, System, Dynamic (Material You) - pilih di Settings. Font: lihat `Theme.kt` (`AppFont`).
+- Detail: header parallax + blur, sinopsis "Selengkapnya", tombol Putar menempel, thumbnail episode (memakai poster karena API belum menyediakan gambar episode).
