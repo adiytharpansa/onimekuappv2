@@ -79,7 +79,7 @@ fun ProfileScreen(email: String?, onSettings: () -> Unit, onSignIn: () -> Unit, 
         TopBar("Profiles", null)
         Spacer(Modifier.height(12.dp))
         s.profiles.forEachIndexed { i, n ->
-            Surface(Modifier.fillMaxWidth().padding(bottom = 10.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface,
+            Surface(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, if (i == s.current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                 onClick = { scope.launch { store.set(K.current, i) } }) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
