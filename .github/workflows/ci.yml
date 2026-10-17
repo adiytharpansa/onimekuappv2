@@ -1,9 +1,10 @@
-name: Debug build (errors as annotations)
+name: CI Build (APK)
 
 on:
   workflow_dispatch:
   push:
-    branches: ['arena/d412c98a-onimekuappv2']
+    branches: ['arena/**']
+  pull_request:
 
 permissions:
   contents: read
@@ -52,6 +53,22 @@ jobs:
             msg=$(printf '%s' "$line" | sed 's/%/%25/g; s/\r//g' | cut -c1-900)
             echo "::error title=Log tail::$msg"
           done
+
+      - name: Upload debug APK
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: onimeku-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload release APK (unsigned)
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: onimeku-release-unsigned-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
       - name: Fail if build failed
         if: steps.build.outcome == 'failure'
