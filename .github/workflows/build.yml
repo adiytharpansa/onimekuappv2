@@ -2,8 +2,16 @@ name: Build APK
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Isi tag (mis. v1.0.0-debug) untuk membuat GitHub Release berisi APK debug; kosongkan untuk build biasa"
+        required: false
+        type: string
   push:
     branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,8 +31,8 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build debug + release APKs
-        run: gradle :app:assembleDebug :app:assembleRelease --stacktrace
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -33,9 +41,16 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Upload release APK (unsigned)
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release with debug APK
+        if: ${{ inputs.release_tag != '' }}
+        uses: softprops/action-gh-release@v2
         with:
-          name: app-release-unsigned
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          tag_name: ${{ inputs.release_tag }}
+          name: Onimeku Debug ${{ inputs.release_tag }}
+          body: |
+            APK debug Onimeku (Kotlin / Jetpack Compose) dari branch main.
+
+            - Build debug resmi dari GitHub Actions repo ini (ditandatangani kunci debug Android, siap pasang untuk pengujian).
+            - Catatan: sesuai desain sumbernya, API_URL build debug masih placeholder — katalog/API produksi diatur pada build rilis terpisah.
+          files: app/build/outputs/apk/debug/*.apk
+          fail_on_unmatched_files: true

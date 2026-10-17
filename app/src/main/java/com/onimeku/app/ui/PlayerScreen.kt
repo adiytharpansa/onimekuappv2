@@ -45,12 +45,12 @@ fun PlayerScreen(animeId: String, title: String, ep: Int, total: Int, onEpisode:
     val scope = rememberCoroutineScope()
     var player by remember { mutableStateOf<MediaController?>(null) }
     var showSkip by remember { mutableStateOf(false) }
-    var blocked by remember { mutableStateOf(false) }
+    var wifiBlocked by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }; var liveOn by remember { mutableStateOf(true) }
     var comments by remember { mutableStateOf<List<CommentDto>>(emptyList()) }; var pos by remember { mutableLongStateOf(0L) }
     var cmsg by remember { mutableStateOf<String?>(null) }; var lastPost by remember { mutableLongStateOf(0L) }
-    val blocked = settings.blocked; val store = remember { SettingsStore.of(ctx) }
+    val blockedUsers = settings.blocked; val store = remember { SettingsStore.of(ctx) }
     val key = "$animeId:$ep"
 
     fun save(p: Player?, k: String) { p ?: return; val d = p.duration; if (d <= 0) return
@@ -75,8 +75,8 @@ fun PlayerScreen(animeId: String, title: String, ep: Int, total: Int, onEpisode:
         val p = player ?: return@LaunchedEffect
         failed = false
         val local = withContext(Dispatchers.IO) { MediaKit.downloadedUri(ctx, key) }
-        blocked = cfg.wifiOnly && MediaKit.isMetered(ctx) && local == null
-        if (blocked) return@LaunchedEffect
+        wifiBlocked = cfg.wifiOnly && MediaKit.isMetered(ctx) && local == null
+        if (wifiBlocked) return@LaunchedEffect
         val url = local?.toString() ?: runCatching { Repo.of(ctx).stream(animeId, ep) }.getOrNull()
         if (url == null) { failed = true; return@LaunchedEffect }
         val saved = withContext(Dispatchers.IO) { dao.get(key) }
@@ -112,21 +112,21 @@ fun PlayerScreen(animeId: String, title: String, ep: Int, total: Int, onEpisode:
         AndroidView(modifier = Modifier.fillMaxSize(), factory = { c ->
             PlayerView(c).apply { layoutParams = ViewGroup.LayoutParams(-1, -1); setShowSubtitleButton(true) } // ikon gear bawaan: audio & subtitle
         }, update = { it.player = player })
-        if (blocked) Text("Stream over Wi-Fi only aktif. Sambungkan Wi-Fi atau unduh episode ini.", Modifier.align(Alignment.Center).padding(24.dp), color = Color.White)
+        if (wifiBlocked) Text("Stream over Wi-Fi only aktif. Sambungkan Wi-Fi atau unduh episode ini.", Modifier.align(Alignment.Center).padding(24.dp), color = Color.White)
         if (failed) Text("Gagal memuat video. Periksa koneksi lalu coba lagi.", Modifier.align(Alignment.Center).padding(24.dp), color = Color.White)
         if (!PlayerState.inPip) {
             TextButton(onBack, Modifier.align(Alignment.TopStart).statusBarsPadding()) { Text("‹ Back", color = Color.White) }
             if (showSkip) Button({ player?.seekTo(90_000L) }, Modifier.align(Alignment.BottomEnd).padding(24.dp, 72.dp)) { Text("Skip intro") }
             Row(Modifier.align(Alignment.TopEnd).statusBarsPadding()) {
-                TextButton({ showComments = !showComments }) { Text("Komentar (${comments.count { it.userId !in blocked }})", color = Color.White) }
+                TextButton({ showComments = !showComments }) { Text("Komentar (${comments.count { it.userId !in blockedUsers }})", color = Color.White) }
                 TextButton({ liveOn = !liveOn }) { Text(if (liveOn) "Live ✓" else "Live ✗", color = Color.White) }
                 TextButton({ act.enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }) { Text("PiP", color = Color.White) }
             }
             // Komentar "live": muncul sesuai menit tontonan
             if (liveOn && !showComments) Column(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 72.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                comments.filter { it.userId !in blocked && pos - it.timeMs in 0L..6000L }.takeLast(3).forEach {
+                comments.filter { it.userId !in blockedUsers && pos - it.timeMs in 0L..6000L }.takeLast(3).forEach {
                     Surface(color = Color.Black.copy(alpha = .55f), shape = RoundedCornerShape(12.dp)) { Text(it.text, Modifier.padding(10.dp, 4.dp), color = Color.White, maxLines = 1) } } }
-            if (showComments) CommentsPanel(Modifier.align(Alignment.CenterEnd), comments.filter { it.userId !in blocked },
+            if (showComments) CommentsPanel(Modifier.align(Alignment.CenterEnd), comments.filter { it.userId !in blockedUsers },
                 canPost = FirebaseApp.getApps(ctx).isNotEmpty() && FirebaseAuth.getInstance().currentUser != null, message = cmsg, posMs = pos,
                 onClose = { showComments = false }, onSeek = { player?.seekTo(it) },
                 onPost = { t -> if (System.currentTimeMillis() - lastPost < 3000) cmsg = "Tunggu beberapa detik sebelum mengirim lagi." else { lastPost = System.currentTimeMillis()
