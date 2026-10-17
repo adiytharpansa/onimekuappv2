@@ -1,35 +1,79 @@
 package com.onimeku.app.data
 
-import kotlinx.coroutines.delay
+import android.content.Context
+import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
-enum class Sort { Rating, Newest }
-enum class ListStatus(val label: String) { Watching("Sedang menonton"), Plan("Rencana menonton"), Done("Selesai") }
-
-data class Anime(
-    val id: Int, val title: String, val genres: List<String>, val rating: Double, val year: Int,
-    val studio: String, val synopsis: String, val poster: String = "", val banner: String = "",
-    val episodes: Int = 24, val ageRating: String = "PG-13", val hd: Boolean = true
-)
-data class ReleaseItem(val anime: Anime, val day: Int, val time: String, val episode: Int)
-data class HomeData(val featured: List<Anime>, val top: List<Anime>, val fresh: List<Anime>)
-
-/** Ganti dengan Retrofit (AniList/Jikan/API sendiri) — UI tidak perlu diubah. */
-object AnimeRepository {
-    val genres = listOf("Action", "Shounen", "Fantasy", "Comedy", "Romance", "Sports", "Drama", "Adventure")
-    private const val SYN = "Seorang pemuda berjuang melawan takdir demi melindungi orang yang ia sayangi dalam petualangan epik penuh aksi dan emosi yang tak terlupakan."
-    private val titles = listOf("Demon Slayer: Kimetsu no Yaiba", "Attack on Titan", "Spy x Family", "Jujutsu Kaisen",
-        "Bleach: Thousand-Year Blood War", "Kaguya-sama: Love is War", "Kuroko's Basketball", "My Dress-Up Darling",
-        "JoJo's Bizarre Adventure", "Frieren", "Haikyu!!", "Gintama")
-    private val studios = listOf("Ufotable", "MAPPA", "Wit Studio", "MAPPA", "Pierrot", "A-1 Pictures", "Production I.G",
-        "CloverWorks", "David Production", "Madhouse", "Production I.G", "Sunrise")
-    val all = titles.mapIndexed { i, t ->
-        Anime(i, t, listOf(genres[i % 8], genres[(i + 3) % 8]), 8.4 + ((i * 7) % 9) / 10.0, 2020 + i % 5, studios[i], SYN)
+// ---------- Room: progres tonton ----------
+@Entity data class Progress(@PrimaryKey val id: String, val positionMs: Long, val durationMs: Long, val updatedAt: Long)
+@Dao interface ProgressDao {
+    @Query("SELECT * FROM Progress WHERE id = :id") suspend fun get(id: String): Progress?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(p: Progress)
+    @Query("SELECT * FROM Progress ORDER BY updatedAt DESC") fun recent(): Flow<List<Progress>>
+    @Query("SELECT * FROM Progress WHERE id LIKE :animeId || ':%'") fun forAnime(animeId: String): Flow<List<Progress>>
+}
+@Entity data class Anime(@PrimaryKey val id: String, val title: String, val eps: Int, val synopsis: String, val poster: String?,
+                         val genres: String, val airDay: Int?, val airTime: String?) {   // airDay 0=Minggu..6=Sabtu, airTime "HH:mm"
+    val genreList get() = genres.split(",").filter { it.isNotBlank() }
+}
+@Dao abstract class AnimeDao {
+    @Query("SELECT * FROM Anime ORDER BY title") abstract fun all(): Flow<List<Anime>>
+    @Query("SELECT * FROM Anime WHERE id = :id") abstract fun one(id: String): Flow<Anime?>
+    @Query("SELECT * FROM Anime WHERE id = :id") abstract suspend fun get(id: String): Anime?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) abstract suspend fun upsertAll(l: List<Anime>)
+    @Query("DELETE FROM Anime") abstract suspend fun clear()
+    @Transaction open suspend fun replaceAll(l: List<Anime>) { clear(); upsertAll(l) }
+}
+@Entity data class MyItem(@PrimaryKey val animeId: String)
+@Entity data class Remind(@PrimaryKey val animeId: String)
+@Dao interface ListDao {
+    @Query("SELECT animeId FROM MyItem") fun myList(): Flow<List<String>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun add(i: MyItem)
+    @Query("DELETE FROM MyItem WHERE animeId = :id") suspend fun del(id: String)
+    @Query("SELECT animeId FROM Remind") fun reminders(): Flow<List<String>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun addRemind(i: Remind)
+    @Query("DELETE FROM Remind WHERE animeId = :id") suspend fun delRemind(id: String)
+}
+@Database(entities = [Progress::class, MyItem::class, Remind::class, Anime::class], version = 1, exportSchema = false)
+abstract class AppDb : RoomDatabase() {
+    abstract fun progress(): ProgressDao
+    abstract fun lists(): ListDao
+    abstract fun anime(): AnimeDao
+    companion object {
+        @Volatile private var i: AppDb? = null
+        fun get(c: Context): AppDb = i ?: synchronized(this) {
+            i ?: Room.databaseBuilder(c.applicationContext, AppDb::class.java, "onimeku.db").build().also { i = it } }
     }
-    val schedule = all.take(10).map { ReleaseItem(it, it.id % 7, "%02d:00".format(10 + it.id), 5 + it.id) }
+}
 
-    suspend fun home(): HomeData { delay(900); return HomeData(all.take(3), all.sortedByDescending { it.rating }.take(8), all.drop(4) + all.take(3)) }
-    suspend fun search(q: String, genre: String, sort: Sort): List<Anime> =
-        all.filter { (q.isBlank() || it.title.contains(q, true) || it.genres.any { g -> g.contains(q, true) }) && (genre == "Semua" || genre in it.genres) }
-            .let { if (sort == Sort.Rating) it.sortedByDescending { a -> a.rating } else it.sortedByDescending { a -> a.year } }
-    fun byId(id: Int) = all.first { it.id == id }
+// ---------- DataStore: pengaturan & profil ----------
+private val Context.ds by preferencesDataStore("onimeku")
+data class Settings(
+    val autoplay: Boolean = true, val skipIntro: Boolean = true, val quality: String = "Auto",
+    val wifiOnly: Boolean = false, val alerts: Boolean = true,
+    val profiles: List<String> = listOf("Me"), val current: Int = 0, val blocked: Set<String> = emptySet(),
+    val theme: String = "Dark")   // Dark | Light | System | Dynamic
+
+object K {
+    val autoplay = booleanPreferencesKey("autoplay"); val skipIntro = booleanPreferencesKey("skipIntro")
+    val quality = stringPreferencesKey("quality"); val wifiOnly = booleanPreferencesKey("wifiOnly")
+    val alerts = booleanPreferencesKey("alerts"); val profiles = stringPreferencesKey("profiles")
+    val current = intPreferencesKey("current"); val blocked = stringSetPreferencesKey("blocked")
+    val theme = stringPreferencesKey("theme")
+}
+
+class SettingsStore private constructor(private val c: Context) {
+    val flow: Flow<Settings> = c.ds.data.map { p -> Settings(
+        p[K.autoplay] ?: true, p[K.skipIntro] ?: true, p[K.quality] ?: "Auto", p[K.wifiOnly] ?: false, p[K.alerts] ?: true,
+        (p[K.profiles] ?: "Me").split("|").filter { it.isNotBlank() }.ifEmpty { listOf("Me") }, p[K.current] ?: 0, p[K.blocked] ?: emptySet(), p[K.theme] ?: "Dark") }
+    suspend fun <T> set(k: Preferences.Key<T>, v: T) { c.ds.edit { it[k] = v } }
+    suspend fun addProfile(name: String, cur: List<String>) {
+        if (cur.size < 4 && name.isNotBlank()) c.ds.edit { it[K.profiles] = (cur + name.trim().take(12).replace("|", "")).joinToString("|") } }
+    suspend fun removeProfile(i: Int, cur: List<String>) {
+        if (cur.size > 1) c.ds.edit { it[K.profiles] = cur.filterIndexed { n, _ -> n != i }.joinToString("|"); it[K.current] = 0 } }
+    suspend fun block(userId: String) { c.ds.edit { it[K.blocked] = (it[K.blocked] ?: emptySet()) + userId } }
+    companion object { fun of(c: Context) = SettingsStore(c.applicationContext) }
 }
