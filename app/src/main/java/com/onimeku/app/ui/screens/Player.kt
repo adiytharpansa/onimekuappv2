@@ -90,36 +90,55 @@ fun PlayerScreen(vm: AppViewModel, anime: Anime, startEp: Int, onBack: () -> Uni
     Column(Modifier.fillMaxSize().background(Color.Black), Arrangement.Center) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clickable(remember { MutableInteractionSource() }, null) { visible = !visible }) {
             AndroidView({ PlayerView(it).apply { this.player = player; useController = false; layoutParams = ViewGroup.LayoutParams(-1, -1) } }, Modifier.fillMaxSize())
-            AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
-                Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(.65f), Color.Black.copy(.15f), Color.Black.copy(.75f)))).padding(10.dp), Arrangement.SpaceBetween) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Kembali", onClick = onBack)
-                        Text("${anime.title} · Eps $ep", Modifier.weight(1f).padding(horizontal = 8.dp), maxLines = 1, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        IconCircle(Icons.Rounded.Settings, "Pengaturan") { sheet = "menu" }
-                    }
-                    Row(Modifier.fillMaxWidth(), Arrangement.Center, Alignment.CenterVertically) {
-                        IconCircle(Icons.Rounded.Replay10, "Mundur 10 detik", size = 48.dp) { player.seekTo((pos - 10000).coerceAtLeast(0)) }
-                        Spacer(Modifier.width(28.dp))
-                        IconCircle(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Putar/Jeda", bg = Crimson, size = 60.dp) { if (playing) player.pause() else player.play() }
-                        Spacer(Modifier.width(28.dp))
-                        IconCircle(Icons.Rounded.Forward10, "Maju 10 detik", size = 48.dp) { player.seekTo((pos + 10000).coerceAtMost(dur)) }
-                    }
-                    Column {
-                        Slider(pos.toFloat().coerceIn(0f, dur.toFloat()), { player.seekTo(it.toLong()); pos = it.toLong() }, valueRange = 0f..dur.toFloat(),
-                            colors = SliderDefaults.colors(thumbColor = Crimson, activeTrackColor = Crimson, inactiveTrackColor = Color.White.copy(.3f)))
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("${fmt(pos)} / ${fmt(dur)}", fontSize = 12.sp, modifier = Modifier.weight(1f))
-                            Chip("Eps ${ep + 1} ›", false) { next() }
-                            Text("  ${speed}x · ${settings.quality}", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
+            PlayerOverlay(
+                visible, anime.title, ep, playing, pos, dur, speed, settings.quality,
+                onBack, { sheet = "menu" },
+                { if (playing) player.pause() else player.play() },
+                { player.seekTo((pos - 10000).coerceAtLeast(0)) },
+                { player.seekTo((pos + 10000).coerceAtMost(dur)) },
+                { player.seekTo(it); pos = it },
+                next
+            )
         }
         Column(Modifier.padding(16.dp)) {
             Text("Episode $ep", style = MaterialTheme.typography.titleLarge)
             Text("Subtitle: ${settings.subtitle} · ${settings.quality}", color = TextSecondary, modifier = Modifier.padding(top = 4.dp))
             if (settings.autoplay) Text("Putar otomatis episode berikut: aktif", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun PlayerOverlay(
+    visible: Boolean, title: String, ep: Int, playing: Boolean,
+    pos: Long, dur: Long, speed: Float, quality: String,
+    onBack: () -> Unit, onOpenMenu: () -> Unit, onTogglePlay: () -> Unit,
+    onSeekBack: () -> Unit, onSeekForward: () -> Unit,
+    onSeek: (Long) -> Unit, onNext: () -> Unit
+) {
+    AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
+        Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(.65f), Color.Black.copy(.15f), Color.Black.copy(.75f)))).padding(10.dp), Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Kembali", onClick = onBack)
+                Text("$title · Eps $ep", Modifier.weight(1f).padding(horizontal = 8.dp), maxLines = 1, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                IconCircle(Icons.Rounded.Settings, "Pengaturan") { onOpenMenu() }
+            }
+            Row(Modifier.fillMaxWidth(), Arrangement.Center, Alignment.CenterVertically) {
+                IconCircle(Icons.Rounded.Replay10, "Mundur 10 detik", size = 48.dp) { onSeekBack() }
+                Spacer(Modifier.width(28.dp))
+                IconCircle(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Putar/Jeda", bg = Crimson, size = 60.dp) { onTogglePlay() }
+                Spacer(Modifier.width(28.dp))
+                IconCircle(Icons.Rounded.Forward10, "Maju 10 detik", size = 48.dp) { onSeekForward() }
+            }
+            Column {
+                Slider(pos.toFloat().coerceIn(0f, dur.toFloat()), { onSeek(it.toLong()) }, valueRange = 0f..dur.toFloat(),
+                    colors = SliderDefaults.colors(thumbColor = Crimson, activeTrackColor = Crimson, inactiveTrackColor = Color.White.copy(.3f)))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${fmt(pos)} / ${fmt(dur)}", fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Chip("Eps ${ep + 1} ›", false) { onNext() }
+                    Text("  ${speed}x · $quality", fontSize = 12.sp)
+                }
+            }
         }
     }
 }
