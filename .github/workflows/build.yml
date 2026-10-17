@@ -39,7 +39,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           failure=$(grep -E '(^e: |Could not |FAILURE:|error:|Execution failed)' build.log | head -n 1 | cut -c1-500 || true)
           if [[ -n "$failure" ]]; then echo "::error title=Gradle build failure::$failure"; fi
-          tail -n 60 build.log | tr '\n' ' ' | cut -c1-6000 | while IFS= read -r details; do echo "::error title=Gradle log::$details"; done
+          grep -A35 -B3 'What went wrong' build.log | tr '\n' ' ' | cut -c1-6000 | while IFS= read -r details; do echo "::error title=Gradle root cause::$details"; done
           exit "$result"
       - name: Upload build log on failure
         if: failure()
