@@ -154,15 +154,15 @@ fun ReleaseScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             ) { Badge("${todays.size} judul", Crimson.copy(.16f), Crimson) }
         }
         item {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = Space.lg),
-                horizontalArrangement = Arrangement.spacedBy(Space.sm)
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Space.lg),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(7) { i ->
+                for (i in 0..6) {
                     val d = dateFor(i)
                     val sel = i == day
                     Column(
-                        Modifier.width(52.dp)
+                        Modifier.weight(1f)
                             .clip(RoundedCornerShape(Radius.md))
                             .background(if (sel) Crimson else Surface1)
                             .border(
@@ -175,12 +175,12 @@ fun ReleaseScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            names[i], fontSize = 11.sp,
+                            names[i], fontSize = 10.sp,
                             color = if (sel) Color.White else TextSecondary
                         )
                         Text(
                             "${d.get(Calendar.DAY_OF_MONTH)}",
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Box(
@@ -594,7 +594,7 @@ fun ProfileScreen(vm: AppViewModel, onLogout: () -> Unit) {
                 modifier = Modifier.padding(top = Space.md)
             )
             Text(
-                "Member Gratis · sejak 2024",
+                "Member Gratis",
                 color = TextSecondary,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 2.dp, bottom = Space.lg)

@@ -209,7 +209,7 @@ fun DetailScreen(
                 TextButton(
                     { tab = 1 },
                     contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.height(30.dp)
+                    modifier = Modifier.height(36.dp)
                 ) { Text("Baca selengkapnya", color = Crimson, fontSize = 12.sp) }
 
                 PrimaryButton(
@@ -367,19 +367,23 @@ fun DetailScreen(
                             .padding(Space.lg),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        val avg = if (my.isEmpty()) a.rating else my.map { it.stars }.average()
-                        Text("%.1f".format(avg), fontSize = 40.sp, fontWeight = FontWeight.Black)
+                        val avg = if (my.isEmpty()) 0.0 else my.map { it.stars }.average()
+                        val filled = (avg + .5).toInt().coerceIn(0, 5)
+                        Text(
+                            if (my.isEmpty()) "—" else "%.1f".format(avg),
+                            fontSize = 40.sp, fontWeight = FontWeight.Black
+                        )
                         Row {
                             repeat(5) { i ->
                                 Icon(
                                     Icons.Rounded.Star, null,
                                     Modifier.size(18.dp).padding(horizontal = 1.dp),
-                                    tint = if (i < avg.toInt()) Gold else Surface3
+                                    tint = if (i < filled) Gold else Surface3
                                 )
                             }
                         }
                         Text(
-                            "${my.size} ulasan dari pengguna",
+                            if (my.isEmpty()) "Belum ada ulasan" else "${my.size} ulasan dari pengguna",
                             color = TextSecondary, fontSize = 12.sp,
                             modifier = Modifier.padding(top = Space.xs)
                         )

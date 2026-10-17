@@ -387,8 +387,7 @@ fun AuthScreen(vm: AppViewModel, onBack: () -> Unit, onDone: () -> Unit) {
         Spacer(Modifier.height(Space.xl))
         PrimaryButton(
             if (register) "Daftar" else "Masuk",
-            Modifier.fillMaxWidth().height(52.dp),
-            icon = Icons.Rounded.PlayArrow
+            Modifier.fillMaxWidth().height(52.dp)
         ) {
             submitted = true
             when {
