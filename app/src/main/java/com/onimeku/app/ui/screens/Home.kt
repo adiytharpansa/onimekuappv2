@@ -51,6 +51,9 @@ import com.onimeku.app.data.Anime
 import com.onimeku.app.data.AnimeRepository
 import com.onimeku.app.data.HomeData
 import com.onimeku.app.data.ReleaseItem
+import com.onimeku.app.data.episodeText
+import com.onimeku.app.data.ratingText
+import com.onimeku.app.data.yearText
 import com.onimeku.app.ui.AppViewModel
 import com.onimeku.app.ui.UiState
 import com.onimeku.app.ui.components.Badge
@@ -133,13 +136,14 @@ private fun HomeContent(
     val status by vm.status.collectAsState()
     val genre by vm.genre.collectAsState()
     val history by vm.history.collectAsState()
+    val historyItems = remember(history) {
+        history.mapNotNull { (id, p) -> AnimeRepository.byIdOrNull(id)?.let { it to p } }
+    }
     val notif by vm.notif.collectAsState()
     fun f(l: List<Anime>) = if (genre == "Semua") l else l.filter { genre in it.genres }
 
     val today = remember { Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - 1 }
-    val todayReleases = remember(today) {
-        AnimeRepository.schedule.filter { it.day == today }.take(4)
-    }
+    val todayReleases = AnimeRepository.schedule.filter { it.day == today }.take(4)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = NavPad)) {
         item {
@@ -150,15 +154,15 @@ private fun HomeContent(
         item {
             ChipRow(listOf("Semua") + AnimeRepository.genres, genre) { vm.genre.value = it }
         }
-        if (history.isNotEmpty()) {
+        if (historyItems.isNotEmpty()) {
             item { SectionHeader("Lanjut Menonton") }
             item {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = Space.lg),
                     horizontalArrangement = Arrangement.spacedBy(Space.md)
                 ) {
-                    items(history.toList(), key = { it.first }) { (id, p) ->
-                        WideCard(AnimeRepository.byId(id), p.ep, p.pct) { onPlay(id) }
+                    items(historyItems, key = { it.first.id }) { (a, p) ->
+                        WideCard(a, p.ep, p.pct) { onPlay(a.id) }
                     }
                 }
             }
@@ -253,7 +257,7 @@ private fun HeroPager(
                         Text("·", color = TextSecondary)
                         Spacer(Modifier.width(Space.sm))
                         Text(
-                            "${a.episodes} episode · ${a.ageRating}",
+                            "${a.episodeText} · ${a.ageRating}",
                             color = TextSecondary, fontSize = 11.sp
                         )
                     }
@@ -270,8 +274,8 @@ private fun HeroPager(
                         Modifier.padding(vertical = Space.sm),
                         horizontalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
-                        MetaChip("%.1f".format(a.rating), true)
-                        MetaChip("${a.year}")
+                        if (a.rating > 0) MetaChip(a.ratingText, true)
+                        MetaChip(a.yearText)
                         MetaChip(a.genres.first())
                         if (a.hd) MetaChip("HD")
                     }
@@ -341,7 +345,10 @@ private fun ReleaseTeaser(r: ReleaseItem, onClick: () -> Unit) = Row(
             r.anime.title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis
         )
-        Text("Eps ${r.episode} · ${r.time}", color = TextSecondary, fontSize = 11.sp)
+        Text(
+            if (r.episode > 0) "Eps ${r.episode} · ${r.time} WIB" else "Episode baru · ${r.time} WIB",
+            color = TextSecondary, fontSize = 11.sp
+        )
         Row(
             Modifier.padding(top = 5.dp),
             verticalAlignment = Alignment.CenterVertically

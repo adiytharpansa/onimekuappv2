@@ -244,6 +244,8 @@ fun PlayerScreen(vm: AppViewModel, anime: Anime, startEp: Int, onBack: () -> Uni
                 Badge("Sub ${settings.subtitle}", Surface1, TextSecondary)
                 Spacer(Modifier.width(Space.xs))
                 Badge(settings.quality, Surface1, TextSecondary)
+                Spacer(Modifier.width(Space.xs))
+                Badge("Pratinjau", Surface1, TextTertiary)
             }
             Text(
                 anime.title,
@@ -251,7 +253,7 @@ fun PlayerScreen(vm: AppViewModel, anime: Anime, startEp: Int, onBack: () -> Uni
                 modifier = Modifier.padding(top = Space.sm)
             )
             Text(
-                "Episode $ep · 24 menit · ${anime.studio}",
+                "Episode $ep · ${if (anime.episodes > 0) "${anime.episodes} eps" else "ongoing"} · ${anime.studio}",
                 color = TextSecondary,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(top = 2.dp)

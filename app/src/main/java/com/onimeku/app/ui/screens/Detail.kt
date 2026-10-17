@@ -1,6 +1,7 @@
 package com.onimeku.app.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.HorizontalDivider
@@ -65,6 +67,9 @@ import androidx.compose.ui.unit.sp
 import com.onimeku.app.data.Anime
 import com.onimeku.app.data.AnimeRepository
 import com.onimeku.app.data.ListStatus
+import com.onimeku.app.data.episodeText
+import com.onimeku.app.data.ratingText
+import com.onimeku.app.data.yearText
 import com.onimeku.app.ui.AppViewModel
 import com.onimeku.app.ui.components.Badge
 import com.onimeku.app.ui.components.ChipRow
@@ -91,6 +96,8 @@ import com.onimeku.app.ui.theme.TextSecondary
 import com.onimeku.app.ui.theme.TextTertiary
 import com.onimeku.app.ui.theme.Wine
 import androidx.compose.material.icons.rounded.StarBorder
+
+private val dayNames = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
 
 @Composable
 fun DetailScreen(
@@ -150,6 +157,14 @@ fun DetailScreen(
                 ) {
                     IconCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Kembali", onClick = onBack)
                     Spacer(Modifier.weight(1f))
+                    if (a.trailer.isNotBlank()) {
+                        IconCircle(Icons.Rounded.PlayCircle, "Tonton trailer") {
+                            runCatching {
+                                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(a.trailer)))
+                            }
+                        }
+                        Spacer(Modifier.width(Space.sm))
+                    }
                     IconCircle(Icons.Rounded.Share, "Bagikan") {
                         ctx.startActivity(
                             Intent.createChooser(
@@ -186,9 +201,9 @@ fun DetailScreen(
                     Modifier.padding(top = Space.sm),
                     horizontalArrangement = Arrangement.spacedBy(Space.xs)
                 ) {
-                    MetaChip("%.1f".format(a.rating), true)
-                    MetaChip("${a.year}")
-                    MetaChip("${a.episodes} Eps")
+                    if (a.rating > 0) MetaChip(a.ratingText, true)
+                    MetaChip(a.yearText)
+                    MetaChip(a.episodeText)
                 }
                 Row(
                     Modifier.padding(top = Space.sm),
@@ -199,7 +214,7 @@ fun DetailScreen(
                     if (a.hd) Badge("HD", Crimson, Color.White)
                 }
                 Text(
-                    a.synopsis,
+                    a.synopsis.ifBlank { "Sinopsis belum tersedia untuk judul ini." },
                     color = TextSecondary,
                     lineHeight = 21.sp,
                     maxLines = 2,
@@ -301,8 +316,14 @@ fun DetailScreen(
                         season = it.filter { c -> c.isDigit() }.toIntOrNull() ?: 1
                     }
                 }
-                items((1..12).toList()) { n ->
-                    val ep = n + (season - 1) * 12
+                val perSeason = 12
+                val epsInSeason =
+                    if (a.episodes > 0) {
+                        if (season < seasonCount) perSeason
+                        else (a.episodes - perSeason * (seasonCount - 1)).coerceAtLeast(1)
+                    } else perSeason
+                items((1..epsInSeason).toList()) { n ->
+                    val ep = n + (season - 1) * perSeason
                     val watched = (history[a.id]?.ep ?: 1) > ep
                     EpisodeRow(a, ep, watched) { onPlay(ep) }
                 }
@@ -313,7 +334,7 @@ fun DetailScreen(
                     Column(Modifier.padding(horizontal = Space.lg, vertical = Space.md)) {
                         Text("Sinopsis", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            a.synopsis,
+                            a.synopsis.ifBlank { "Sinopsis belum tersedia untuk judul ini." },
                             color = TextSecondary,
                             lineHeight = 22.sp,
                             modifier = Modifier.padding(top = Space.sm)
@@ -324,35 +345,16 @@ fun DetailScreen(
                     SectionCard("Informasi") {
                         InfoRow("Studio", a.studio)
                         HorizontalDivider(color = Color.White.copy(.05f))
-                        InfoRow("Tahun rilis", "${a.year}")
+                        InfoRow("Tahun rilis", a.yearText)
                         HorizontalDivider(color = Color.White.copy(.05f))
                         InfoRow("Rating usia", a.ageRating)
                         HorizontalDivider(color = Color.White.copy(.05f))
-                        InfoRow("Total episode", "${a.episodes}")
+                        InfoRow("Total episode", a.episodeText)
                         HorizontalDivider(color = Color.White.copy(.05f))
                         InfoRow("Genre", a.genres.joinToString(", "))
-                    }
-                }
-                item { SectionHeader("Pengisi Suara") }
-                item {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = Space.lg),
-                        horizontalArrangement = Arrangement.spacedBy(Space.lg)
-                    ) {
-                        items(listOf("Natsuki", "Satoshi", "Akari", "Yoshitsugu", "Miyu")) { n ->
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Box(
-                                    Modifier.size(58.dp).clip(CircleShape)
-                                        .background(placeholder(n.length * 7)),
-                                    Alignment.Center
-                                ) {
-                                    Text(n.take(1), fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                                }
-                                Text(
-                                    n, fontSize = 11.sp, color = TextSecondary,
-                                    modifier = Modifier.padding(top = Space.xs)
-                                )
-                            }
+                        a.dayIndex?.let { d ->
+                            HorizontalDivider(color = Color.White.copy(.05f))
+                            InfoRow("Jadwal tayang", "${dayNames[d]} · ${a.airTime} WIB")
                         }
                     }
                 }

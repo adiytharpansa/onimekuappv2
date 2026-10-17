@@ -45,6 +45,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -259,9 +260,12 @@ private fun OnboardArt(icon: ImageVector, accent: Color) = Box(
 
 @Composable
 fun AuthScreen(vm: AppViewModel, onBack: () -> Unit, onDone: () -> Unit) {
+    val current by vm.profile.collectAsState()
     var register by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
+    var name by remember {
+        mutableStateOf(if (current.name == "Tamu") "" else current.name)
+    }
+    var email by remember { mutableStateOf(current.email) }
     var pass by remember { mutableStateOf("") }
     var show by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
@@ -394,7 +398,14 @@ fun AuthScreen(vm: AppViewModel, onBack: () -> Unit, onDone: () -> Unit) {
                 !nameOk -> vm.toast("Nama tidak boleh kosong")
                 !emailOk -> vm.toast("Email tidak valid")
                 !passOk -> vm.toast("Sandi minimal 6 karakter")
-                else -> onDone()
+                else -> {
+                    val displayName = if (register) name else {
+                        current.name.takeUnless { it == "Tamu" }
+                            ?: email.substringBefore("@").replaceFirstChar { it.uppercase() }
+                    }
+                    vm.signIn(displayName, email)
+                    onDone()
+                }
             }
         }
         Spacer(Modifier.height(Space.md))

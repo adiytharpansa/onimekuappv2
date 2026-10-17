@@ -127,7 +127,7 @@ fun OnimekuApp() {
 
     Box(Modifier.fillMaxSize().background(Bg)) {
         NavHost(
-            nav, startDestination = "onboarding", modifier = Modifier.fillMaxSize(),
+            nav, startDestination = if (vm.profile.value.name == "Tamu") "onboarding" else "home", modifier = Modifier.fillMaxSize(),
             enterTransition = { fadeIn(tween(260)) + slideInHorizontally(tween(320)) { it / 10 } },
             exitTransition = { fadeOut(tween(180)) },
             popEnterTransition = { fadeIn(tween(240)) },
@@ -162,7 +162,7 @@ fun OnimekuApp() {
                 DownloadScreen(vm, ::open, ::goHome)
             }
             composable("profile", enterTransition = { fadeIn(tween(220)) }, exitTransition = { fadeOut(tween(160)) }) {
-                ProfileScreen(vm) { resetTo("onboarding") }
+                ProfileScreen(vm, onAuth = { nav.navigate("auth") }) { resetTo("onboarding") }
             }
             composable("notif") { NotifScreen(vm) { nav.popBackStack() } }
             composable("search") { SearchScreen(vm, { nav.popBackStack() }, ::open) }

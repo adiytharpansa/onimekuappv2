@@ -112,23 +112,18 @@ fun placeholder(id: Int): Brush {
 /** Key-art placeholder: gradasi berlapis + cahaya radial + inisial besar, sampai poster API terisi. */
 @Composable
 fun Poster(anime: Anime, modifier: Modifier = Modifier, banner: Boolean = false) {
-    val h = (anime.id * 47 + 340) % 360f
-    Box(modifier.background(placeholder(anime.id)).drawBehind {
-        drawRect(
-            Brush.radialGradient(
-                listOf(Color.hsv(h, .9f, .9f).copy(alpha = .5f), Color.Transparent),
-                Offset(size.width * .78f, size.height * .22f),
-                size.maxDimension * .55f
+    Box(
+        modifier.background(placeholder(anime.id)).drawBehind {
+            // Glow merah tipis — bukan rotasi hue, supaya tidak pernah muncul cokelat/olive.
+            drawRect(
+                Brush.radialGradient(
+                    listOf(Crimson.copy(alpha = .20f), Color.Transparent),
+                    Offset(size.width * .82f, size.height * .16f),
+                    size.maxDimension * .62f
+                )
             )
-        )
-        drawRect(
-            Brush.radialGradient(
-                listOf(Color.hsv((h + 50) % 360, .85f, .8f).copy(alpha = .35f), Color.Transparent),
-                Offset(size.width * .15f, size.height * .85f),
-                size.maxDimension * .6f
-            )
-        )
-    }) {
+        }
+    ) {
         AsyncImage(
             if (banner) anime.banner.ifBlank { anime.poster } else anime.poster,
             anime.title,
@@ -209,7 +204,7 @@ fun PosterCard(anime: Anime, modifier: Modifier = Modifier, rank: Int? = null, o
                 Spacer(Modifier.weight(1f))
                 if (anime.hd) Badge("HD", Crimson, Color.White)
             }
-            Row(
+            if (anime.rating > 0) Row(
                 Modifier.align(Alignment.BottomEnd).padding(Space.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {

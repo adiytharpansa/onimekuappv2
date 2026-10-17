@@ -1,23 +1,32 @@
 # Onimeku v2 — Android (Kotlin + Jetpack Compose)
 
 Aplikasi streaming anime berbahasa Indonesia. Tema gelap dengan aksen merah tua
-(`#E11D2E` / `#7A0C1B`) di atas latar `#0F0A0B`, menu bawah melayang, transisi
+(`#E11D2E` / `#6E0B16`) di atas latar `#08080A`, menu bawah melayang, transisi
 halus, dan shimmer loading.
+
+Katalog diambil **langsung dari MyAnimeList lewat Jikan API v4** (tanpa API key):
+judul, poster, skor, genre, studio, sinopsis, jadwal tayang, dan trailer resmi.
+Saat offline, aplikasi otomatis memakai katalog cadangan lokal agar tetap bisa
+dibuka.
 
 ## Fitur
 - **Onboarding + Auth** — 3 halaman pengenalan, masuk/daftar dengan validasi.
 - **Beranda** — hero auto-slide, filter genre, Lanjut Menonton, Top Hits,
   Episode Baru, dan teaser Rilis Hari Ini.
-- **Cari** — pencarian langsung (debounce), riwayat pencarian, filter genre,
+- **Cari** — pencarian langsung (debounce) ke katalog lokal, lalu jatuh ke
+  pencarian Jikan bila hasil kurang, riwayat pencarian, filter genre,
   urutan rating/terbaru.
-- **Detail** — poster banner, aksi cepat, tab Episode / Info / Ulasan,
-  status My List, favorit, unduh, bagikan.
+- **Detail** — poster banner, tombol putar penuh, tab Episode / Info / Ulasan,
+  status My List, favorit, unduh, bagikan, dan tautan trailer resmi.
 - **Pemutar Media3** — seek, ±10 detik, kecepatan, kualitas, subtitle,
   autoplay, resume posisi terakhir.
 - **Kalender Rilis** — jadwal mingguan dengan pengingat per judul.
 - **My List** — filter status, tampilan grid/list.
 - **Unduhan** — jeda/lanjut, progres, ringkasan penyimpanan.
-- **Profil** — statistik, pengaturan pemutaran/unduhan/notifikasi, konfirmasi keluar.
+- **Profil** — nama/email akun lokal, statistik, pengaturan
+  pemutaran/unduhan/notifikasi, konfirmasi keluar.
+- **Penyimpanan lokal** — My List, favorit, riwayat tontonan, pengingat, dan
+  pengaturan disimpan di `SharedPreferences` dan dipulihkan saat aplikasi dibuka.
 
 ## UI/UX
 - Design token terpusat di `ui/theme/Theme.kt` (`Space`, `Radius`, warna, typography, shapes).
@@ -33,7 +42,7 @@ halus, dan shimmer loading.
 ```
 app/src/main/java/com/onimeku/app/
 ├── MainActivity.kt          # edge-to-edge + tema
-├── data/Data.kt             # model + repository contoh
+├── data/Data.kt             # model + repository Jikan + fallback offline
 └── ui/
     ├── AppViewModel.kt      # state aplikasi
     ├── OnimekuApp.kt        # navigasi + bottom nav
@@ -51,12 +60,10 @@ app/src/main/java/com/onimeku/app/
 - Unduh APK dari tab **Actions → run terbaru → Artifacts**.
 
 ## Sebelum rilis
-1. Ganti `AnimeRepository` dengan API nyata (Retrofit/AniList/Jikan) dan isi
-   `poster`/`banner`.
-2. Ganti `SAMPLE` di `screens/Player.kt` dengan URL HLS/DASH.
-3. Simpan My List, riwayat, dan pengaturan dengan Room/DataStore; unduhan nyata
-   via WorkManager.
-4. Auth nyata (backend/Firebase) + keystore rilis, lalu `./gradlew bundleRelease`.
+1. Ganti `SAMPLE` di `screens/Player.kt` dengan URL HLS/DASH berlisensi —
+   metadata & poster sudah nyata dari Jikan, tetapi video pratinjau masih contoh.
+2. Ganti unduhan simulasi dengan `WorkManager` + `DownloadManager` nyata.
+3. Auth nyata (backend/Firebase) + keystore rilis, lalu `./gradlew bundleRelease`.
 
 ## Brand
 Nama: **Onimeku**. Logo: ring putih di kotak merah (`#F20A16`) —

@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.AlertDialog
@@ -222,7 +223,8 @@ fun ReleaseScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
         items(todays, key = { it.anime.id }) { r ->
             ListRow(
                 r.anime,
-                "Episode ${r.episode} · ${r.time} WIB",
+                if (r.episode > 0) "Episode ${r.episode} · ${r.time} WIB"
+                else "Episode baru · ${r.time} WIB",
                 { onOpen(r.anime.id) },
                 Modifier.padding(horizontal = Space.lg),
                 trailing = {
@@ -303,7 +305,7 @@ fun MyListScreen(vm: AppViewModel, onOpen: (Int) -> Unit, onBrowse: () -> Unit) 
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Badge(status[a.id]?.label ?: "Favorit", Wine, Color(0xFFFFD3D8))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (a.rating > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Rounded.Star, null, Modifier.size(12.dp), tint = Gold)
                                         Text(
                                             " ${"%.1f".format(a.rating)}",
@@ -533,11 +535,12 @@ private fun NotifRow(text: String, read: Boolean) = Row(
 
 // ── Profil ───────────────────────────────────────────────────────────────────
 @Composable
-fun ProfileScreen(vm: AppViewModel, onLogout: () -> Unit) {
+fun ProfileScreen(vm: AppViewModel, onAuth: () -> Unit, onLogout: () -> Unit) {
     val st by vm.settings.collectAsState()
     val status by vm.status.collectAsState()
     val fav by vm.fav.collectAsState()
     val hist by vm.history.collectAsState()
+    val user by vm.profile.collectAsState()
     var sheet by remember { mutableStateOf("") }
     var confirmLogout by remember { mutableStateOf(false) }
 
@@ -548,6 +551,7 @@ fun ProfileScreen(vm: AppViewModel, onLogout: () -> Unit) {
         confirmButton = {
             TextButton({
                 confirmLogout = false
+                vm.signOut()
                 onLogout()
             }) { Text("Keluar", color = Crimson, fontWeight = FontWeight.SemiBold) }
         },
@@ -589,15 +593,22 @@ fun ProfileScreen(vm: AppViewModel, onLogout: () -> Unit) {
                 Icon(Icons.Rounded.Person, null, Modifier.size(48.dp), tint = Color.White.copy(.92f))
             }
             Text(
-                "Pengguna Onimeku",
+                user.name,
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(top = Space.md)
             )
             Text(
-                "Member Gratis",
+                if (user.email.isBlank()) "Tamu · data tersimpan di perangkat" else user.email,
                 color = TextSecondary,
                 fontSize = 12.sp,
-                modifier = Modifier.padding(top = 2.dp, bottom = Space.lg)
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Text(
+                if (user.name == "Tamu") "Belum masuk" else "Member Gratis",
+                color = if (user.name == "Tamu") TextTertiary else Crimson,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = Space.xs, bottom = Space.lg)
             )
         }
         item {
@@ -654,18 +665,19 @@ fun ProfileScreen(vm: AppViewModel, onLogout: () -> Unit) {
         }
         item {
             SectionCard("Tentang") {
-                ValueRow("Versi aplikasi", "1.0.0 (v2)", showChevron = false)
+                ValueRow("Sumber data", "MyAnimeList", showChevron = false)
                 DividerLine(Modifier.padding(horizontal = Space.lg))
-                ValueRow("Tentang Onimeku", "v2", showChevron = false)
+                ValueRow("Versi aplikasi", "1.0.0 (v2)", showChevron = false)
             }
         }
         item {
             Spacer(Modifier.height(Space.xxl))
             GlassButton(
-                "Keluar",
+                if (user.name == "Tamu") "Masuk / Daftar" else "Keluar",
                 Modifier.padding(horizontal = Space.lg).fillMaxWidth(),
-                Icons.AutoMirrored.Rounded.Logout
-            ) { confirmLogout = true }
+                if (user.name == "Tamu") Icons.Rounded.PersonAdd
+                else Icons.AutoMirrored.Rounded.Logout
+            ) { if (user.name == "Tamu") onAuth() else confirmLogout = true }
             Text(
                 "Onimeku v1.0.0 · dibuat dengan ❤ untuk pecinta anime",
                 color = TextTertiary, fontSize = 11.sp,

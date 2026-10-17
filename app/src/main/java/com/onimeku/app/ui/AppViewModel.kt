@@ -1,6 +1,8 @@
 package com.onimeku.app.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.onimeku.app.data.AnimeRepository
 import com.onimeku.app.data.HomeData
@@ -38,64 +40,42 @@ data class Settings(
 )
 data class Notif(val text: String, val read: Boolean = false)
 data class Review(val user: String, val stars: Int, val text: String)
+data class UserProfile(val name: String = "Tamu", val email: String = "")
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-class AppViewModel : ViewModel() {
+class AppViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val prefs = app.getSharedPreferences("onimeku", Context.MODE_PRIVATE)
+
     private val _home = MutableStateFlow<UiState<HomeData>>(UiState.Loading)
     val home = _home.asStateFlow()
     val genre = MutableStateFlow("Semua")
 
-    private val _status = MutableStateFlow<Map<Int, ListStatus>>(
-        mapOf(3 to ListStatus.Watching, 9 to ListStatus.Plan)
-    )
+    private val _status = MutableStateFlow<Map<Int, ListStatus>>(emptyMap())
     val status = _status.asStateFlow()
-    private val _fav = MutableStateFlow(setOf(1))
+    private val _fav = MutableStateFlow<Set<Int>>(emptySet())
     val fav = _fav.asStateFlow()
-    private val _history = MutableStateFlow(mapOf(1 to Progress(7, 42), 3 to Progress(3, 68)))
+    private val _history = MutableStateFlow<Map<Int, Progress>>(emptyMap())
     val history = _history.asStateFlow()
     private val _dl = MutableStateFlow<Map<Int, Dl>>(emptyMap())
     val downloads = _dl.asStateFlow()
     private val _remind = MutableStateFlow<Set<Int>>(emptySet())
     val remind = _remind.asStateFlow()
-    private val _notif = MutableStateFlow(
-        listOf(
-            Notif("Demon Slayer episode 12 sudah tayang"),
-            Notif("Frieren masuk Top Hits minggu ini", true),
-            Notif("Attack on Titan: episode baru tersedia", true)
-        )
-    )
+    private val _notif = MutableStateFlow<List<Notif>>(emptyList())
     val notif = _notif.asStateFlow()
     private val _settings = MutableStateFlow(Settings())
     val settings = _settings.asStateFlow()
-
-    // Ulasan contoh tersebar di semua judul agar tab Ulasan tidak terasa kosong.
-    private val names = listOf("Rizky", "Sari", "Dewi", "Bagas", "Nadia", "Fajar", "Alya", "Rian")
-    private val texts = listOf(
-        "Animasinya luar biasa, wajib tonton!",
-        "Alur seru, OST-nya keren.",
-        "Pacing rapi dan karakter mudah disukai.",
-        "Fighting-nya memuaskan, tunggu season berikutnya.",
-        "Cerita ringan, cocok untuk maraton akhir pekan."
-    )
-    private val _reviews = MutableStateFlow(
-        AnimeRepository.all.associate { a ->
-            a.id to List(2) { i ->
-                Review(
-                    names[(a.id * 2 + i) % names.size],
-                    5 - (a.id + i) % 2,
-                    texts[(a.id + i * 3) % texts.size]
-                )
-            }
-        } + (0 to listOf(Review("Rizky", 5, "Animasinya luar biasa, wajib tonton!"), Review("Sari", 4, "Alur seru, OST keren.")))
-    )
+    private val _reviews = MutableStateFlow<Map<Int, List<Review>>>(emptyMap())
     val reviews = _reviews.asStateFlow()
+    private val _profile = MutableStateFlow(UserProfile())
+    val profile = _profile.asStateFlow()
 
     val query = MutableStateFlow("")
     val searchGenre = MutableStateFlow("Semua")
     val sort = MutableStateFlow(Sort.Rating)
-    private val _recent = MutableStateFlow(listOf("Jujutsu", "Action", "Frieren"))
+    private val _recent = MutableStateFlow<List<String>>(emptyList())
     val recent = _recent.asStateFlow()
-    val results = combine(query.debounce(250), searchGenre, sort) { q, g, s -> Triple(q, g, s) }
+    val results = combine(query.debounce(300), searchGenre, sort) { q, g, s -> Triple(q, g, s) }
         .mapLatest { (q, g, s) -> AnimeRepository.search(q, g, s) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnimeRepository.all)
 
@@ -103,17 +83,37 @@ class AppViewModel : ViewModel() {
     val msg = _msg.asSharedFlow()
     fun toast(s: String) { _msg.tryEmit(s) }
 
-    init { load() }
+    init {
+        restore()
+        load()
+    }
 
+    // ── Katalog ─────────────────────────────────────────────────────────────
     fun load() = viewModelScope.launch {
         _home.value = UiState.Loading
-        _home.value = try {
-            UiState.Success(AnimeRepository.home())
+        try {
+            AnimeRepository.refresh()
+            val data = AnimeRepository.home()
+            _home.value = UiState.Success(data)
+            if (!AnimeRepository.isLive) {
+                toast("Mode offline · menampilkan katalog contoh")
+            }
         } catch (e: Exception) {
-            UiState.Error(e.message ?: "Terjadi kesalahan")
+            _home.value = UiState.Error(e.message ?: "Tidak bisa memuat katalog")
         }
     }
 
+    fun refreshCatalog() = viewModelScope.launch {
+        try {
+            AnimeRepository.refresh(force = true)
+            _home.value = UiState.Success(AnimeRepository.home())
+            toast(if (AnimeRepository.isLive) "Katalog diperbarui" else "Gagal memperbarui katalog")
+        } catch (e: Exception) {
+            toast(e.message ?: "Gagal memperbarui katalog")
+        }
+    }
+
+    // ── My List / favorit / riwayat ────────────────────────────────────────
     fun quickToggle(id: Int) {
         if (id in _status.value) {
             _status.update { it - id }
@@ -122,48 +122,84 @@ class AppViewModel : ViewModel() {
             _status.update { it + (id to ListStatus.Plan) }
             toast("Ditambahkan ke My List")
         }
+        persist()
     }
 
     fun setStatus(id: Int, s: ListStatus?) {
         _status.update { if (s == null) it - id else it + (id to s) }
         toast(if (s == null) "Dihapus dari My List" else "My List diperbarui")
+        persist()
     }
 
     fun toggleFav(id: Int) {
         _fav.update { if (id in it) it - id else it + id }
         toast(if (id in _fav.value) "Ditambahkan ke favorit" else "Dihapus dari favorit")
+        persist()
     }
 
     fun toggleRemind(id: Int) {
-        _remind.update { if (id in it) it - id else it + id }
-        toast(if (id in _remind.value) "Pengingat diaktifkan" else "Pengingat dimatikan")
+        val adding = id !in _remind.value
+        _remind.update { if (adding) it + id else it - id }
+        if (adding) {
+            val title = AnimeRepository.byId(id).title
+            _notif.update { listOf(Notif("Pengingat untuk $title diaktifkan")) + it }
+        }
+        toast(if (adding) "Pengingat diaktifkan" else "Pengingat dimatikan")
+        persist()
     }
 
-    fun saveProgress(id: Int, ep: Int, pct: Int) =
+    fun saveProgress(id: Int, ep: Int, pct: Int) {
         _history.update { it + (id to Progress(ep, pct.coerceIn(1, 100))) }
+        persist()
+    }
 
+    // ── Notifikasi ─────────────────────────────────────────────────────────
     fun markNotifRead() = _notif.update { l -> l.map { it.copy(read = true) } }
 
     fun setSettings(f: (Settings) -> Settings) {
         _settings.update(f)
         toast("Pengaturan disimpan")
+        persist()
     }
 
+    // ── Ulasan ─────────────────────────────────────────────────────────────
     fun addReview(id: Int, stars: Int) {
         _reviews.update {
-            it + (id to (listOf(Review("Kamu", stars, "Terima kasih atas nilainya!")) + (it[id] ?: emptyList())))
+            it + (id to (listOf(Review(_profile.value.name, stars, "Terima kasih atas nilainya!")) + (it[id] ?: emptyList())))
         }
         toast("Ulasan terkirim")
     }
 
+    // ── Pencarian ──────────────────────────────────────────────────────────
     fun addRecent(q: String) {
-        if (q.isNotBlank() && q !in _recent.value) _recent.update { listOf(q) + it.take(5) }
+        if (q.isNotBlank() && q !in _recent.value) {
+            _recent.update { listOf(q) + it.take(5) }
+            persist()
+        }
     }
 
-    fun removeRecent(q: String) = _recent.update { it - q }
+    fun removeRecent(q: String) {
+        _recent.update { it - q }
+        persist()
+    }
 
-    fun clearRecent() { _recent.value = emptyList() }
+    fun clearRecent() {
+        _recent.value = emptyList()
+        persist()
+    }
 
+    // ── Akun lokal ─────────────────────────────────────────────────────────
+    fun signIn(name: String, email: String) {
+        _profile.value = UserProfile(name.ifBlank { "Pengguna Onimeku" }, email.trim())
+        persist()
+    }
+
+    fun signOut() {
+        _profile.value = UserProfile()
+        persist()
+    }
+
+    // ── Unduhan (simulasi progres; lihat README) ───────────────────────────
     fun download(id: Int) {
         if (id in _dl.value) {
             toast("Sudah ada di unduhan")
@@ -200,5 +236,73 @@ class AppViewModel : ViewModel() {
     fun clearDownloads() {
         _dl.value = emptyMap()
         toast("Semua unduhan dihapus")
+    }
+
+    // ── Persistensi ────────────────────────────────────────────────────────
+    private fun restore() {
+        _status.value = prefs.getStringSet(K_STATUS, emptySet()).orEmpty().mapNotNull { s ->
+            val id = s.substringBefore(':').toIntOrNull() ?: return@mapNotNull null
+            val value = ListStatus.entries.firstOrNull { it.name == s.substringAfter(':', "") }
+                ?: return@mapNotNull null
+            id to value
+        }.toMap()
+        _fav.value = prefs.getStringSet(K_FAV, emptySet()).orEmpty()
+            .mapNotNull { it.toIntOrNull() }.toSet()
+        _history.value = prefs.getStringSet(K_HISTORY, emptySet()).orEmpty().mapNotNull { s ->
+            val p = s.split(':')
+            val id = p.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+            id to Progress(p.getOrNull(1)?.toIntOrNull() ?: 1, p.getOrNull(2)?.toIntOrNull() ?: 1)
+        }.toMap()
+        _remind.value = prefs.getStringSet(K_REMIND, emptySet()).orEmpty()
+            .mapNotNull { it.toIntOrNull() }.toSet()
+        _settings.value = Settings(
+            autoplay = prefs.getBoolean(K_AUTOPLAY, true),
+            wifi = prefs.getBoolean(K_WIFI, true),
+            push = prefs.getBoolean(K_PUSH, true),
+            quality = prefs.getString(K_QUALITY, "1080p") ?: "1080p",
+            subtitle = prefs.getString(K_SUBTITLE, "Indonesia") ?: "Indonesia"
+        )
+        _profile.value = UserProfile(
+            name = prefs.getString(K_NAME, "Tamu") ?: "Tamu",
+            email = prefs.getString(K_EMAIL, "") ?: ""
+        )
+        _recent.value = prefs.getString(K_RECENT, null)
+            ?.split(SEP)?.filter { it.isNotBlank() } ?: emptyList()
+    }
+
+    private fun persist() {
+        prefs.edit()
+            .putStringSet(K_STATUS, _status.value.map { "${it.key}:${it.value.name}" }.toSet())
+            .putStringSet(K_FAV, _fav.value.map { it.toString() }.toSet())
+            .putStringSet(
+                K_HISTORY,
+                _history.value.map { "${it.key}:${it.value.ep}:${it.value.pct}" }.toSet()
+            )
+            .putStringSet(K_REMIND, _remind.value.map { it.toString() }.toSet())
+            .putBoolean(K_AUTOPLAY, _settings.value.autoplay)
+            .putBoolean(K_WIFI, _settings.value.wifi)
+            .putBoolean(K_PUSH, _settings.value.push)
+            .putString(K_QUALITY, _settings.value.quality)
+            .putString(K_SUBTITLE, _settings.value.subtitle)
+            .putString(K_NAME, _profile.value.name)
+            .putString(K_EMAIL, _profile.value.email)
+            .putString(K_RECENT, _recent.value.joinToString(SEP))
+            .apply()
+    }
+
+    private companion object {
+        const val SEP = "\u001F"
+        const val K_STATUS = "status"
+        const val K_FAV = "fav"
+        const val K_HISTORY = "history"
+        const val K_REMIND = "remind"
+        const val K_AUTOPLAY = "autoplay"
+        const val K_WIFI = "wifi"
+        const val K_PUSH = "push"
+        const val K_QUALITY = "quality"
+        const val K_SUBTITLE = "subtitle"
+        const val K_NAME = "name"
+        const val K_EMAIL = "email"
+        const val K_RECENT = "recent"
     }
 }
