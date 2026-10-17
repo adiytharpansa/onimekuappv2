@@ -90,6 +90,7 @@ import com.onimeku.app.ui.theme.Surface3
 import com.onimeku.app.ui.theme.TextSecondary
 import com.onimeku.app.ui.theme.TextTertiary
 import com.onimeku.app.ui.theme.Wine
+import androidx.compose.material.icons.rounded.StarBorder
 
 @Composable
 fun DetailScreen(

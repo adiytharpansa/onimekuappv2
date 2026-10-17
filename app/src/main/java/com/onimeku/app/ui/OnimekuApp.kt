@@ -81,6 +81,7 @@ import com.onimeku.app.ui.theme.Radius
 import com.onimeku.app.ui.theme.Space
 import com.onimeku.app.ui.theme.Surface2
 import com.onimeku.app.ui.theme.TextSecondary
+import androidx.compose.foundation.layout.width
 
 enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     Home("home", "Beranda", Icons.Rounded.Home),

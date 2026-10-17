@@ -86,6 +86,8 @@ import com.onimeku.app.ui.theme.Surface3
 import com.onimeku.app.ui.theme.TextPrimary
 import com.onimeku.app.ui.theme.TextSecondary
 import com.onimeku.app.ui.theme.TextTertiary
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.rounded.PlayArrow
 
 val NavPad = 112.dp   // ruang agar konten tidak tertutup menu melayang
 

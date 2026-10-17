@@ -100,6 +100,7 @@ import com.onimeku.app.ui.theme.TextSecondary
 import com.onimeku.app.ui.theme.TextTertiary
 import com.onimeku.app.ui.theme.Wine
 import java.util.Calendar
+import androidx.compose.material.icons.rounded.Star
 
 // ── Baris list bersama (Rilis, My List, Unduhan) ─────────────────────────────
 @Composable
