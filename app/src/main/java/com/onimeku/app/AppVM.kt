@@ -93,6 +93,18 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     init {
         Downloads.oneTimeResetV13(app)
         Downloads.oneTimeCleanupV23(app)
+        // Pembersihan sekali (debug.31, perintah user: semua data harus
+        // realtime dari API): snapshot katalog disk + cache gambar lama
+        // dibuang agar buka pertama build ini 100% data API live —
+        // tidak ada poster era resolusi-lama yang tersaji dari cache.
+        try {
+            val flags = app.getSharedPreferences("onimeku_flags", android.content.Context.MODE_PRIVATE)
+            if (!flags.getBoolean("purge_v31", false)) {
+                java.io.File(app.filesDir, "catalog_cache_direct.json").delete()
+                try { coil.Coil.imageLoader(app).diskCache?.clear() } catch (e: Exception) { /* abaikan */ }
+                flags.edit().putBoolean("purge_v31", true).apply()
+            }
+        } catch (e: Exception) { /* abaikan */ }
         PosterHealer.init(app)
         Reminders.rescheduleAll(app, s)
         initDownloads()
