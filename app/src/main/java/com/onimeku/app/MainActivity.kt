@@ -36,6 +36,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -271,45 +272,58 @@ fun App(vm: AppVM) {
 
 @Composable
 private fun TabBar(vm: AppVM, modifier: Modifier) {
-    data class T(val r: Route, val label: String, val icon: ImageVector, val sel: ImageVector)
+    data class T(val r: Route, val label: String, val glyph: NavGlyph)
     val tabs = listOf(
-        T(Route.Home, I18n.t("tab_home", "Home"), Icons.Outlined.Home, Icons.Filled.Home),
-        T(Route.Calendar, I18n.t("tab_calendar", "Calendar"), Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth),
-        T(Route.MyList, I18n.t("tab_mylist", "My List"), Icons.Outlined.BookmarkBorder, Icons.Filled.Bookmark),
-        T(Route.Search, I18n.t("tab_search", "Search"), Icons.Outlined.Search, Icons.Filled.Search),
-        T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), Icons.Outlined.Person, Icons.Filled.Person),
+        T(Route.Home, I18n.t("tab_home", "Home"), NavGlyph.Home),
+        T(Route.Calendar, I18n.t("tab_calendar", "Calendar"), NavGlyph.Calendar),
+        T(Route.MyList, I18n.t("tab_mylist", "My List"), NavGlyph.Bookmark),
+        T(Route.Search, I18n.t("tab_search", "Search"), NavGlyph.Search),
+        T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), NavGlyph.Profile),
     )
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val selIdx = tabs.indexOfFirst { it.r == vm.tab }.coerceAtLeast(0)
-    val pos by animateFloatAsState(selIdx.toFloat(), spring(dampingRatio = 0.72f, stiffness = 380f), label = "tabBar")
+    val pos by animateFloatAsState(selIdx.toFloat(), spring(dampingRatio = 0.78f, stiffness = 380f), label = "tabBar")
     Box(
         // Solid + garis tipis di atas, supaya konten yang digulir tidak tembus di balik tab bar.
         modifier.fillMaxWidth().background(Bg)
             .drawBehind { drawLine(Line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
             .navigationBarsPadding().height(TabBarHeight),
     ) {
-    // Penanda merah yang meluncur mengikuti tab aktif.
-    Box(Modifier.fillMaxWidth().height(3.dp).padding(horizontal = 8.dp).drawBehind {
+    // Penanda merah tua yang meluncur mengikuti tab aktif, DI BAWAH ikon + label (rata tengah tiap tab).
+    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = 5.dp).height(3.dp).drawBehind {
         val seg = size.width / tabs.size
-        drawRoundRect(RedText, Offset(pos * seg + seg * 0.3f, 0f), androidx.compose.ui.geometry.Size(seg * 0.4f, size.height),
+        val w = 18.dp.toPx()
+        drawRoundRect(Red, Offset(pos * seg + (seg - w) / 2f, 0f), androidx.compose.ui.geometry.Size(w, size.height),
             androidx.compose.ui.geometry.CornerRadius(size.height, size.height))
     })
     Row(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         tabs.forEach { t ->
             val sel = vm.tab == t.r
-            Column(Modifier.weight(1f).fillMaxHeight().clickable { if (!sel) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-                val tint by animateColorAsState(if (sel) RedText else NavOff, tween(200), label = "tabTint")
-                val pill by animateColorAsState(if (sel) Red.copy(alpha = 0.30f) else Color.Transparent, tween(220), label = "tabPill")
-                // debug.33: pil melebar dengan pegas + ikon sedikit membesar saat aktif.
-                val pw by animateDpAsState(if (sel) 60.dp else 34.dp, spring(dampingRatio = 0.7f, stiffness = 500f), label = "tabPillW")
-                val isc by animateFloatAsState(if (sel) 1.12f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "tabIconScale")
-                val lblA by animateFloatAsState(if (sel) 1f else 0.72f, tween(200), label = "tabLabelA")
-                Box(Modifier.size(width = pw, height = 30.dp).clip(CircleShape).background(pill), contentAlignment = Alignment.Center) {
-                    Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(24.dp).graphicsLayer { scaleX = isc; scaleY = isc }, tint = tint)
+            // Tanpa ripple/sorotan putih transparan: indication = null. Umpan balik sentuhan hanya
+            // mengecilkan ikon sedikit; satu-satunya penanda aktif adalah kapsul + garis merah tua.
+            val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val pressed by src.collectIsPressedAsState()
+            Column(
+                Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = src, indication = null) {
+                    if (!sel) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    vm.setTab(t.r)
+                },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.Top),
+            ) {
+                Spacer(Modifier.height(5.dp))
+                val tint by animateColorAsState(if (sel) Color.White else NavOff, tween(200), label = "tabTint")
+                val labelTint by animateColorAsState(if (sel) Color.White else NavOff, tween(200), label = "tabLabel")
+                val pill by animateColorAsState(if (sel) RedDeep else Color.Transparent, tween(220), label = "tabPill")
+                val pw by animateDpAsState(if (sel) 58.dp else 34.dp, spring(dampingRatio = 0.75f, stiffness = 500f), label = "tabPillW")
+                val isc by animateFloatAsState(if (pressed) 0.86f else if (sel) 1.06f else 1f, spring(dampingRatio = 0.55f, stiffness = 650f), label = "tabIconScale")
+                val fillA by animateFloatAsState(if (sel) 1f else 0f, tween(240), label = "tabFill")
+                val lblA by animateFloatAsState(if (sel) 1f else 0.78f, tween(200), label = "tabLabelA")
+                Box(Modifier.size(width = pw, height = 32.dp).clip(CircleShape).background(pill), contentAlignment = Alignment.Center) {
+                    NavGlyphIcon(t.glyph, tint, fillA, Modifier.size(24.dp).graphicsLayer { scaleX = isc; scaleY = isc })
                 }
-                Text(t.label, fontSize = 11.5.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, color = tint, maxLines = 1,
-                    modifier = Modifier.graphicsLayer { alpha = lblA })
+                Text(t.label, fontSize = 11.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, color = labelTint, maxLines = 1,
+                    letterSpacing = 0.1.sp, modifier = Modifier.graphicsLayer { alpha = lblA })
             }
         }
     }

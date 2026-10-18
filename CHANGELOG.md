@@ -1,3 +1,8 @@
+## v1.0.0-debug.45 (belum dirilis): Hero penuh saat refresh + tab bar modern
+- Tarik-untuk-segar: daftar TIDAK lagi digeser turun (dulu membuka celah hitam di atas dan memotong poster hero). Poster tetap penuh sampai tepi atas; saat ditarik hanya membesar halus (stretch) dan indikator putar merah (kapsul gelap) melayang di bawah status bar.
+- Tab bar: ripple/sorotan putih transparan saat disentuh DIHAPUS (indication = null); penanda aktif hanya kapsul + garis merah tua. Sentuhan = ikon mengecil sedikit.
+- Ikon tab bar diganti ikon garis bulat gaya duotone buatan sendiri (ui/NavIcons.kt: Home, Calendar, Bookmark, Search, Profile), badan ikon terisi lembut saat aktif.
+
 ## v1.0.0-debug.44 (belum dirilis): Subtitle otomatis Indonesia / English
 - Setting baru Settings -> Subtitles: Auto / Indonesia / English / Off (Settings.subLang, tersimpan). Auto mengikuti bahasa aplikasi (id -> Indonesia dulu, selain itu English dulu).
 - Bahasa pilihan tidak ada di episode -> otomatis pakai bahasa cadangan (Indonesia <-> English, lalu trek pertama) + toast pemberitahuan.

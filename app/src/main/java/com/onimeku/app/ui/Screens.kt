@@ -170,40 +170,22 @@ private fun HomeContent(vm: AppVM) {
             }
         }
     }
-    // Visual tarik-untuk-segar DIKEMBALIKAN (perintah user 19 Okt 2026;
-    // paket Redesign membuang indikator + pergeserannya). Seluruh daftar
-    // bergeser turun sebagai SATU blok mengikuti tarikan — poster hero
-    // ikut bergeser utuh, tidak pernah terpotong — dan indikator putar
-    // merah tampil di celah atas. Saat menyegarkan, daftar tertahan di
-    // posisi indikator sampai muat selesai, lalu meluncur kembali.
-    val ptrHoldPx = with(density) { 64.dp.toPx() }
-    val ptrTarget = if (vm.refreshing) ptrHoldPx else pullPx
-    val ptrAnim by androidx.compose.animation.core.animateFloatAsState(
-        ptrTarget, androidx.compose.animation.core.tween(if (vm.refreshing || pullPx == 0f) 260 else 0), label = "ptrOffset",
+    // Tarik-untuk-segar (perintah user 19 Okt 2026: "saat refresh poster atas
+    // jangan terpotong / ada hitam di atas, poster harus full"). Daftar TIDAK
+    // lagi digeser turun (itu yang membuka celah hitam di atas hero). Poster
+    // hero tetap menempel penuh ke tepi atas layar; saat ditarik ia hanya
+    // membesar halus (efek stretch) dan indikator putar merah melayang di atas
+    // poster, di bawah status bar. Saat menyegarkan, indikator tetap tampil
+    // sampai muat selesai.
+    val stretch by androidx.compose.animation.core.animateFloatAsState(
+        pullPx, androidx.compose.animation.core.tween(if (pullPx == 0f) 280 else 0), label = "ptrStretch",
     )
     Box(Modifier.fillMaxSize()) {
-    if (ptrAnim > 4f) {
-        val frac = (ptrAnim / ptrHoldPx).coerceIn(0f, 1f)
-        Box(
-            Modifier.fillMaxWidth().height(64.dp).offset { androidx.compose.ui.unit.IntOffset(0, (ptrAnim - ptrHoldPx).toInt().coerceAtMost(0)) },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (vm.refreshing) {
-                androidx.compose.material3.CircularProgressIndicator(
-                    modifier = Modifier.size(26.dp), color = Red, trackColor = Line, strokeWidth = 3.dp,
-                )
-            } else {
-                androidx.compose.material3.CircularProgressIndicator(
-                    progress = { frac }, modifier = Modifier.size(26.dp), color = Red, trackColor = Line, strokeWidth = 3.dp,
-                )
-            }
-        }
-    }
     LazyColumn(
-        Modifier.fillMaxSize().offset { androidx.compose.ui.unit.IntOffset(0, ptrAnim.toInt()) }.nestedScroll(ptrConn),
+        Modifier.fillMaxSize().nestedScroll(ptrConn),
         state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding()),
     ) {
-        item(key = "hero", contentType = "hero") { Hero(vm, heroH) }
+        item(key = "hero", contentType = "hero") { Hero(vm, heroH) { stretch } }
 
         if (contItems.isNotEmpty()) {
             item(key = "continue", contentType = "rail") {
@@ -271,6 +253,31 @@ private fun HomeContent(vm: AppVM) {
             }
         }
     }
+    // Indikator tarik-untuk-segar: kapsul gelap kaca dengan putaran merah, melayang di atas poster.
+    if (vm.refreshing || stretch > 4f) {
+        val frac = (stretch / ptrThresholdPx).coerceIn(0f, 1f)
+        val k = if (vm.refreshing) 1f else frac
+        Box(
+            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp)
+                .graphicsLayer {
+                    alpha = k
+                    scaleX = 0.6f + 0.4f * k; scaleY = 0.6f + 0.4f * k
+                    translationY = (k - 1f) * 28.dp.toPx()
+                }
+                .size(42.dp).clip(CircleShape).background(Color(0xE614161F)).border(1.dp, Line, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (vm.refreshing) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp), color = RedText, trackColor = Color.Transparent, strokeWidth = 2.5.dp,
+                )
+            } else {
+                androidx.compose.material3.CircularProgressIndicator(
+                    progress = { frac }, modifier = Modifier.size(22.dp), color = RedText, trackColor = Color.Transparent, strokeWidth = 2.5.dp,
+                )
+            }
+        }
+    }
     }
 }
 
@@ -280,7 +287,7 @@ private fun heroHeight() = (LocalConfiguration.current.screenHeightDp * 0.64f).c
 
 /** Carousel hero: 5 judul teratas, geser manual atau otomatis tiap 5,5 dtk, indikator animasi, parallax saat digulir. */
 @Composable
-private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
+private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Float = { 0f }) {
     // Hero selalu anime TERBARU secara realtime (perintah user 19 Okt 2026):
     // urut updatedAt API terbaru, bukan skor tertinggi — judul lama tamat
     // tidak lagi mendominasi Beranda. Kualitas hero (perintah user 19 Okt
@@ -299,8 +306,15 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
         }
     }
     // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
-    Box(Modifier.fillMaxWidth().height(heroH).clipToBounds()) {
-        HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) { (pager.currentPage - i) + pager.currentPageOffsetFraction } }
+    Box(Modifier.fillMaxWidth().height(heroH).clipToBounds().background(Bg)) {
+        // Saat ditarik, poster membesar dari tepi atas (stretch) — selalu penuh, tidak pernah ada celah hitam.
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            val s = 1f + (pull() / size.height).coerceIn(0f, 0.3f) * 0.6f
+            scaleX = s; scaleY = s
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+        }) {
+            HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) { (pager.currentPage - i) + pager.currentPageOffsetFraction } }
+        }
         // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
         Box(Modifier.fillMaxWidth().height(90.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x40000000), Color.Transparent))) })
         if (items.size > 1) {
