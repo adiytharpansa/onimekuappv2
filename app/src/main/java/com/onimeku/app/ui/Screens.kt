@@ -170,8 +170,39 @@ private fun HomeContent(vm: AppVM) {
             }
         }
     }
+    // Visual tarik-untuk-segar DIKEMBALIKAN (perintah user 19 Okt 2026;
+    // paket Redesign membuang indikator + pergeserannya). Seluruh daftar
+    // bergeser turun sebagai SATU blok mengikuti tarikan — poster hero
+    // ikut bergeser utuh, tidak pernah terpotong — dan indikator putar
+    // merah tampil di celah atas. Saat menyegarkan, daftar tertahan di
+    // posisi indikator sampai muat selesai, lalu meluncur kembali.
+    val ptrHoldPx = with(density) { 64.dp.toPx() }
+    val ptrTarget = if (vm.refreshing) ptrHoldPx else pullPx
+    val ptrAnim by androidx.compose.animation.core.animateFloatAsState(
+        ptrTarget, androidx.compose.animation.core.tween(if (vm.refreshing || pullPx == 0f) 260 else 0), label = "ptrOffset",
+    )
     Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().nestedScroll(ptrConn), state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
+    if (ptrAnim > 4f) {
+        val frac = (ptrAnim / ptrHoldPx).coerceIn(0f, 1f)
+        Box(
+            Modifier.fillMaxWidth().height(64.dp).offset { androidx.compose.ui.unit.IntOffset(0, (ptrAnim - ptrHoldPx).toInt().coerceAtMost(0)) },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (vm.refreshing) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(26.dp), color = Red, trackColor = Line, strokeWidth = 3.dp,
+                )
+            } else {
+                androidx.compose.material3.CircularProgressIndicator(
+                    progress = { frac }, modifier = Modifier.size(26.dp), color = Red, trackColor = Line, strokeWidth = 3.dp,
+                )
+            }
+        }
+    }
+    LazyColumn(
+        Modifier.fillMaxSize().offset { androidx.compose.ui.unit.IntOffset(0, ptrAnim.toInt()) }.nestedScroll(ptrConn),
+        state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding()),
+    ) {
         item(key = "hero", contentType = "hero") { Hero(vm, heroH) }
 
         if (contItems.isNotEmpty()) {
