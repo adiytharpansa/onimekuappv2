@@ -112,13 +112,12 @@ fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modi
     }
 }
 
-/** Gradient + radial glow art, the same look as the CSS posters. */
-fun Modifier.artBackground(a: Anime): Modifier = this.drawBehind {
-    drawRect(Brush.linearGradient(listOf(a.ca, a.cb),
-        start = Offset(size.width * 0.3f, 0f), end = Offset(size.width * 0.7f, size.height)))
-    drawRect(Brush.radialGradient(listOf(a.cc, Color.Transparent),
-        center = Offset(size.width * a.x, size.height * a.y), radius = size.width * 0.6f))
-}
+/**
+ * Latar polos gelap untuk area gambar. Dulu ini gradasi buatan ala poster
+ * contoh — dibuang: aplikasi hanya menampilkan gambar ASLI anime. Selama
+ * poster asli belum termuat, area ini kosong polos, bukan gambar palsu.
+ */
+fun Modifier.artBackground(a: Anime): Modifier = this.background(Bg2)
 
 val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.4f).coerceIn(142f, 230f).dp
 
@@ -149,11 +148,6 @@ fun Poster(
             a.rating?.let { Tag(it, Color.White, Bg, Modifier.align(Alignment.TopStart).padding(12.dp)) }
             if (a.hd) Tag("HD", Red, Color.White, Modifier.align(Alignment.TopEnd).padding(10.dp))
         }
-        if (label && a.label) {
-            Text("DEMON\nSLAYER", Modifier.align(BiasAlignment(0f, 0.25f)).fillMaxWidth(),
-                color = Color.White, textAlign = TextAlign.Center, fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 22.sp)
-        }
         if (rank != null) {
             val big = 72.sp
             Box(Modifier.align(Alignment.BottomStart).padding(start = 12.dp).offset(y = 14.dp)) {
@@ -183,7 +177,7 @@ fun Poster(
 @Composable
 fun Tile(a: Anime, vm: AppVM) {
     Column {
-        Poster(a, null, badges = true, label = true) { vm.go(Route.Detail(a.id)) }
+        Poster(a, null, badges = true) { vm.go(Route.Detail(a.id)) }
         Text(a.title, Modifier.padding(top = 8.dp), fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(a.genres.take(2).joinToString(", "), fontSize = 12.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

@@ -213,8 +213,6 @@ fun SubScreen(vm: AppVM, key: String) {
                         Text(l, Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), fontSize = 16.sp)
                     }
                 }
-                Text("Titles other than Demon Slayer, along with synopses and artwork, are sample content for this preview.",
-                    Modifier.padding(top = 16.dp), fontSize = 12.sp, color = NavOff)
             }
         }
     }

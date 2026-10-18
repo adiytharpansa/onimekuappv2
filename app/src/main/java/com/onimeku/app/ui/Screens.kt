@@ -86,7 +86,7 @@ fun HomeScreen(vm: AppVM) {
         Rail {
             items(Catalog.top.size) { i ->
                 val a = Catalog.byId[Catalog.top[i]]!!
-                Poster(a, railW, badges = true, label = true, rank = i + 1) { vm.go(Route.Detail(a.id)) }
+                Poster(a, railW, badges = true, rank = i + 1) { vm.go(Route.Detail(a.id)) }
             }
         }
 

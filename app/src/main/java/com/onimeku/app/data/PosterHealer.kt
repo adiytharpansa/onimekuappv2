@@ -31,13 +31,21 @@ object PosterHealer {
         }
     }
 
-    private fun isAnilist(url: String?): Boolean =
-        url != null && url.contains("s4.anilist.co")
+    // Host/pola poster bermasalah — cerminan daftar BAD_HOST/BAD_PATH di API:
+    // poster seperti ini tidak ditampilkan mentah, melainkan diganti poster
+    // asli dari Kitsu lewat endpoint resolusi API.
+    private fun isBad(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val u = url.lowercase()
+        return u.contains("anilist.co") || u.contains("samehadaku") ||
+            u.contains("placeholder") || u.contains("placehold") ||
+            u.contains("dummyimage") || u.contains("picsum") || u.contains("ui-avatars")
+    }
 
     fun posterFor(a: Anime): String? {
         val p = a.poster
         if (p.isNullOrBlank()) return null
-        if (!isAnilist(p)) return p
+        if (!isBad(p)) return p
         val aid = a.anilistId ?: return null
         posters[aid]?.let { return it.ifBlank { null } }
         prefs?.getString("p$aid", null)?.let { posters[aid] = it; return it }
@@ -48,7 +56,7 @@ object PosterHealer {
     fun coverFor(a: Anime): String? {
         val b = a.banner
         if (b.isNullOrBlank()) return null
-        if (!isAnilist(b)) return b
+        if (!isBad(b)) return b
         val aid = a.anilistId ?: return null
         covers[aid]?.let { return it.ifBlank { null } }
         prefs?.getString("c$aid", null)?.let { covers[aid] = it; return it }
