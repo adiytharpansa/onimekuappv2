@@ -17,6 +17,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Fullscreen
@@ -184,11 +191,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         }
     }
     if (pbFailed) {
-        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
-            SubHead(a.title, vm)
-            Text(I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Solid) { attempt++ } }
-        }
+        PlayerStatus(vm, a, r, loading = false, message = I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), onRetry = { attempt++ })
         return
     }
     val playback = pb
@@ -197,13 +200,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         // Detail di bawahnya tembus selama transisi rute — "halaman
         // ganda" pada rekaman user. Semua keadaan layar-penuh pemutar
         // (memuat/galat/rantai habis/Wi-Fi) kini mengecat Bg sendiri.
-        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
-            SubHead(a.title, vm)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                CircularProgressIndicator(Modifier.size(28.dp), color = Red, strokeWidth = 3.dp)
-                Text(I18n.t("loading_stream", "Loading stream…"), color = InkSoft)
-            }
-        }
+        PlayerStatus(vm, a, r, loading = true)
         return
     }
     // Sebagian judul hanya menyediakan pemutar embed (streamUrl-nya halaman
@@ -229,20 +226,13 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         mediaUrl
     }
     if (streamUrl == null) {
-        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
-            SubHead(a.title, vm)
-            Text(I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Solid) { attempt++ } }
-        }
+        PlayerStatus(vm, a, r, loading = false, message = I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), onRetry = { attempt++ })
         return
     }
 
     if (chainDead) {
-        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
-            SubHead(a.title, vm)
-            Text(I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Solid) { chainDead = false; useDirect = false; mainRetry = 0; attempt++ } }
-        }
+        PlayerStatus(vm, a, r, loading = false, message = I18n.t("stream_unavailable", "This episode's stream is unavailable right now."),
+            onRetry = { chainDead = false; useDirect = false; mainRetry = 0; attempt++ })
         return
     }
 
@@ -380,7 +370,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var heights by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
     var sleepMin by remember(r) { mutableIntStateOf(0) }
     var locked by remember(r) { mutableStateOf(false) }
-    var showEps by remember(r) { mutableStateOf(false) }
+    var rendered by remember(r) { mutableStateOf(false) }
     val bg by rememberUpdatedState(vm.s.settings.bgPlay)
 
     // ---- Fullscreen, kontrol otomatis sembunyi, subtitle, kualitas ----
@@ -473,6 +463,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     applySub(pick)
                 }
             }
+            override fun onRenderedFirstFrame() { rendered = true }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
                 failed = true; buffering = false
@@ -599,33 +590,22 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val hasPrev = (if (a.available.isNotEmpty()) a.available.firstOrNull() else 1)?.let { r.ep > it } ?: (r.ep > 1)
     val hasNext = (if (a.available.isNotEmpty()) a.available.lastOrNull() else a.eps)?.let { r.ep < it } ?: (r.ep < a.eps)
 
-    if (showEps) {
-        val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
-        AlertDialog(
-            onDismissRequest = { showEps = false },
-            confirmButton = { TextButton(onClick = { showEps = false }) { Text("Close") } },
-            title = { Text(a.title, maxLines = 1) },
-            text = {
-                // Perbaikan agen: items() wajib lewat import, bukan nama
-                // lengkap — resolusi ekstensi LazyListScope gagal sebaliknya.
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    items(nums) { n ->
-                        Text("Episode $n", Modifier.fillMaxWidth().clickable { showEps = false; if (n != r.ep) vm.replaceTop(Route.Player(r.id, n)) }.padding(vertical = 12.dp),
-                            color = if (n == r.ep) RedText else Color.Unspecified, fontWeight = if (n == r.ep) FontWeight.SemiBold else FontWeight.Normal)
-                    }
-                }
-            },
-        )
-    }
     if (vm.inPip) {
         Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize()) }
         return
     }
 
-    val pageScroll = rememberScrollState()
-    Column(if (full) Modifier.fillMaxSize().background(Color.Black) else Modifier.fillMaxSize().verticalScroll(pageScroll).statusBarsPadding().padding(16.dp)) {
+    val epList = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+    val curIdx = epList.indexOf(r.ep)
+    val epListState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val thumbSrc = remember { MutableInteractionSource() }
+
+    Column(Modifier.fillMaxSize().background(if (full) Color.Black else Bg)) {
+      // Area video: penuh lebar, menempel di bawah status bar (tanpa bingkai), hitam pekat.
+      Box(if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
         Box(
-            (if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp))).background(Color.Black)
+            (if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f)).background(Color.Black)
                 .pointerInput(player) {
                     detectTapGestures(
                         onTap = { showUi = !showUi; uiTick++ },
@@ -654,18 +634,23 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 },
         ) {
             VideoSurface(player, Modifier.fillMaxSize())
+            // Sampul anime menutupi layar hitam sampai bingkai video pertama tampil.
+            if (!rendered && !failed) {
+                RealImage(a, Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().background(Color(0xA6080910)))
+            }
             if (vm.s.settings.skipIntro && pos >= 3 && pos < 90) {
-                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 52.dp).clip(CircleShape)
-                    .background(Color(0x800A0B10)).border(1.dp, Color.White, CircleShape).clickable { player.seekTo(90_000L) }
+                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 58.dp).clip(CircleShape)
+                    .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(90_000L) }
                     .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
             hud?.let {
-                Text(it, Modifier.align(Alignment.Center).offset(y = (-44).dp).clip(RoundedCornerShape(14.dp)).background(Color(0xB3000000))
+                Text(it, Modifier.align(Alignment.Center).offset(y = (-58).dp).clip(RoundedCornerShape(14.dp)).background(Color(0xB3000000))
                     .padding(horizontal = 14.dp, vertical = 6.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
             val remain = dur - pos.toInt()
             if (nextEp != null && dur > 60 && remain in 1..20 && !failed) {
-                Row(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 52.dp).clip(RoundedCornerShape(14.dp))
+                Row(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 58.dp).clip(RoundedCornerShape(14.dp))
                     .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column {
@@ -684,96 +669,229 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             val uiVisible = !locked && (showUi || !wantPlay || failed || buffering)
             val uiA by animateFloatAsState(if (uiVisible) 1f else 0f, tween(200), label = "controlsAlpha")
             if (uiA > 0.01f) Box(Modifier.matchParentSize().graphicsLayer { alpha = uiA }) {
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0x8C0A0B10), 0.3f to Color.Transparent, 0.55f to Color.Transparent, 1f to Color(0xCC0A0B10))))
+                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0xB3080910), 0.32f to Color(0x33080910), 0.6f to Color(0x33080910), 1f to Color(0xD9080910))))
 
-            Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    Text("Episode ${r.ep}", fontSize = 12.sp, color = Color(0xFFE6E8F0))
-                }
-                Text(quality, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0x33FFFFFF)).padding(horizontal = 8.dp, vertical = 2.dp))
-                if (subTracks.isNotEmpty()) Text("CC · ${subName(subIdx)}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x33FFFFFF))
-                        .clickable { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); uiTick++; vm.toast("Subtitles: ${subName(n)}") }
-                        .padding(horizontal = 8.dp, vertical = 2.dp))
-                Box(Modifier.padding(start = 4.dp).size(40.dp).clip(CircleShape).clickable { locked = true; showUi = true; uiTick++ }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Lock, "Lock controls", Modifier.size(20.dp))
-                }
-                Box(Modifier.padding(start = 4.dp).size(40.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
-                    Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen")
-                }
-            }
-
-            if (failed) {
-                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Can’t play this video", fontWeight = FontWeight.SemiBold)
-                    if (errMsg != null) {
-                        Text(errMsg!!, Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp), fontSize = 10.sp, color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                // ---- Bar atas: kembali · judul · (kualitas/CC saat penuh) · kunci · layar penuh ----
+                Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 6.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(42.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Chip("Retry") { failed = false; player.prepare(); player.playWhenReady = true }
+                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                        Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("Episode ${r.ep}", fontSize = 12.sp, color = Color(0xFFE6E8F0))
+                    }
+                    if (full) {
+                        Text(quality, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF)).padding(horizontal = 9.dp, vertical = 4.dp))
+                        if (subTracks.isNotEmpty()) Text("CC · ${subName(subIdx)}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF))
+                                .clickable { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); uiTick++; vm.toast("Subtitles: ${subName(n)}") }
+                                .padding(horizontal = 9.dp, vertical = 4.dp))
+                    }
+                    Box(Modifier.padding(start = 2.dp).size(42.dp).clip(CircleShape).clickable { locked = true; showUi = true; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Lock, "Lock controls", Modifier.size(20.dp))
+                    }
+                    Box(Modifier.size(42.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen")
+                    }
                 }
-            } else if (buffering) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center).size(44.dp), color = Red, strokeWidth = 3.dp)
-            } else {
-                Box(Modifier.align(Alignment.Center).size(64.dp).clip(CircleShape).background(Red.copy(alpha = 0.92f))
-                    .clickable { player.playWhenReady = !player.playWhenReady }, contentAlignment = Alignment.Center) {
-                    Icon(if (wantPlay) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", Modifier.size(32.dp))
+
+                // ---- Tengah: -10 · putar/jeda · +10 ----
+                if (failed) {
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Filled.ErrorOutline, null, Modifier.size(30.dp), tint = RedText)
+                        Text("Can’t play this video", Modifier.padding(top = 6.dp), fontWeight = FontWeight.SemiBold)
+                        if (errMsg != null) {
+                            Text(errMsg!!, Modifier.padding(top = 2.dp, start = 32.dp, end = 32.dp), fontSize = 10.sp, color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Chip("Retry", icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
+                    }
+                } else {
+                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(26.dp)) {
+                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { seekBy(-10_000); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Replay10, "Back 10 seconds", Modifier.size(26.dp))
+                        }
+                        Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
+                            if (buffering) {
+                                CircularProgressIndicator(Modifier.size(52.dp), color = Red, trackColor = Color(0x33FFFFFF), strokeWidth = 3.5.dp)
+                            } else {
+                                Box(Modifier.fillMaxSize().clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFFD01632), Red)))
+                                    .pressable { player.playWhenReady = !player.playWhenReady; uiTick++ }, contentAlignment = Alignment.Center) {
+                                    Icon(if (wantPlay) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", Modifier.size(36.dp))
+                                }
+                            }
+                        }
+                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { seekBy(10_000); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Forward10, "Forward 10 seconds", Modifier.size(26.dp))
+                        }
+                    }
+                }
+
+                // ---- Bawah: bilah seek + waktu ----
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = if (full) 28.dp else 14.dp)) {
+                    Slider(pos.coerceIn(0f, dur.toFloat()), { dragging = true; pos = it },
+                        valueRange = 0f..dur.toFloat(), modifier = Modifier.height(24.dp),
+                        onValueChangeFinished = { player.seekTo((pos * 1000).toLong()); dragging = false },
+                        thumb = { SliderDefaults.Thumb(interactionSource = thumbSrc, thumbSize = androidx.compose.ui.unit.DpSize(14.dp, 14.dp), colors = SliderDefaults.colors(thumbColor = Color.White)) },
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Red, inactiveTrackColor = Color(0x55FFFFFF)))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp).padding(bottom = 8.dp)) {
+                        Text(fmt(pos.toInt()), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.weight(1f))
+                        Text(fmt(dur), fontSize = 12.sp, color = Color(0xCCFFFFFF))
+                    }
                 }
             }
+        }
+      }
 
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp)) {
-                Slider(pos.coerceIn(0f, dur.toFloat()), { dragging = true; pos = it },
-                    valueRange = 0f..dur.toFloat(), modifier = Modifier.height(24.dp),
-                    onValueChangeFinished = { player.seekTo((pos * 1000).toLong()); dragging = false },
-                    colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red, inactiveTrackColor = Color(0x55FFFFFF)))
-                Text("${fmt(pos.toInt())} / ${fmt(dur)}", fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
-            }
-            }
-        }
+      if (!full) {
+        // ===== Panel di bawah video: info, navigasi episode, kontrol, daftar episode =====
+        val epStart = 1 + (if (nextEp != null) 1 else 0) + 1
+        LazyColumn(
+            Modifier.weight(1f).fillMaxWidth(), state = epListState,
+            contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
+        ) {
+            item(key = "info") {
+                Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
+                        if (offline) Tag("OFFLINE", Color(0x33FFFFFF), Color.White, small = true)
+                    }
+                    Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp,
+                        letterSpacing = (-0.3).sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.genres.take(2).joinToString(", ").ifBlank { null }, a.status).joinToString("  ·  "),
+                        Modifier.padding(top = 4.dp), fontSize = 13.sp, color = InkSoft, maxLines = 1)
 
-        if (!full) {
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("−10s") { player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)) }
-            Chip("${spdLabel(speed)}×") {
-                val all = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-                speed = all[(all.indexOf(speed).let { if (it < 0) 2 else it } + 1) % all.size]
-                player.setPlaybackSpeed(speed)
-                vm.toast("Speed ${spdLabel(speed)}×")
+                    if (hasPrev || hasNext) Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (hasPrev) Btn("Previous", BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { step(-1) }
+                        if (hasNext) Btn("Next episode", BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { step(1) }
+                    }
+
+                    val tiles = buildList {
+                        add(CtlTile(Icons.Filled.Speed, "Speed", "${spdLabel(speed)}×", speed != 1f) {
+                            val all = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                            speed = all[(all.indexOf(speed).let { if (it < 0) 2 else it } + 1) % all.size]
+                            player.setPlaybackSpeed(speed)
+                            vm.toast("Speed ${spdLabel(speed)}×")
+                        })
+                        add(CtlTile(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), subName(subIdx), subIdx >= 0) {
+                            if (subTracks.isEmpty()) vm.toast("No subtitles for this episode")
+                            else { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); vm.toast("Subtitles: ${subName(n)}") }
+                        })
+                        add(CtlTile(Icons.Filled.HighQuality, I18n.t("quality", "Quality"), quality) {
+                            val opts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p"))
+                            val nx = opts[(opts.indexOf(quality).let { if (it < 0) 0 else it } + 1) % opts.size]
+                            vm.setSettings { it.copy(quality = nx) }; applyQuality(nx); vm.toast("Quality: $nx")
+                        })
+                        if (audioLabels.size > 1) add(CtlTile(Icons.Filled.Audiotrack, "Audio", audioLabels.getOrElse(audioIdx) { "?" }) {
+                            val n = (audioIdx + 1) % audioLabels.size
+                            applyAudio(n); vm.toast("Audio: ${audioLabels[n]}")
+                        })
+                        add(CtlTile(Icons.Filled.Bedtime, "Sleep", if (sleepMin == 0) "Off" else "${sleepMin}m", sleepMin > 0) {
+                            sleepMin = when (sleepMin) { 0 -> 15; 15 -> 30; 30 -> 60; else -> 0 }
+                        })
+                        add(CtlTile(Icons.Filled.PictureInPictureAlt, "PiP", "Mini") {
+                            try { act?.enterPictureInPictureMode(pipParams(wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
+                        })
+                        add(CtlTile(Icons.Filled.Lock, "Lock", "Screen") { locked = true; showUi = true })
+                        add(CtlTile(Icons.Filled.Fullscreen, "Display", "Full") { full = true })
+                    }
+                    Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        tiles.chunked(4).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                row.forEach { t -> ControlTile(t, Modifier.weight(1f)) }
+                                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    }
+
+                    Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Filled.TouchApp, null, Modifier.size(16.dp), tint = NavOff)
+                        Text("Swipe left: brightness · right: volume · double-tap sides: ±10s", fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
+                    }
+                }
             }
-            Chip("+10s") { player.seekTo(player.currentPosition + 10_000) }
-            Chip("${I18n.t("subtitles", "Subtitles")}: ${subName(subIdx)}") {
-                if (subTracks.isEmpty()) vm.toast("No subtitles for this episode")
-                else { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); vm.toast("Subtitles: ${subName(n)}") }
+            if (nextEp != null) item(key = "upnext") {
+                val k = "${r.id}:$nextEp"
+                Column(Modifier.padding(top = 24.dp)) {
+                    SectionTitle("Up next")
+                    Spacer(Modifier.height(12.dp))
+                    EpisodeCard(a, nextEp, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = false,
+                        onOpen = { vm.replaceTop(Route.Player(r.id, nextEp)) }) {}
+                }
             }
-            Chip("${I18n.t("quality", "Quality")}: $quality") {
-                val opts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p"))
-                val nx = opts[(opts.indexOf(quality).let { if (it < 0) 0 else it } + 1) % opts.size]
-                vm.setSettings { it.copy(quality = nx) }; applyQuality(nx); vm.toast("Quality: $nx")
+            item(key = "ephead") {
+                Column(Modifier.padding(top = 12.dp, bottom = 12.dp)) {
+                    SectionTitle(I18n.t("episodes", "Episodes")) {
+                        Text("${epList.size}", fontSize = 13.sp, color = NavOff, modifier = Modifier.padding(end = 10.dp))
+                        if (curIdx > 4) Row(
+                            Modifier.clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
+                                .clickable { scope.launch { epListState.animateScrollToItem(epStart + curIdx) } }.padding(horizontal = 11.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(Icons.Filled.MyLocation, null, Modifier.size(14.dp), tint = RedText)
+                            Text("Current", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
+                        }
+                    }
+                }
             }
-            if (audioLabels.size > 1) Chip("Audio: ${audioLabels.getOrElse(audioIdx) { "?" }}") {
-                val n = (audioIdx + 1) % audioLabels.size
-                applyAudio(n); vm.toast("Audio: ${audioLabels[n]}")
+            items(epList, key = { "pe$it" }) { n ->
+                val k = "${r.id}:$n"
+                EpisodeCard(a, n, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = n == r.ep,
+                    onOpen = { if (n != r.ep) vm.replaceTop(Route.Player(r.id, n)) }) {
+                    if (n == r.ep) Icon(Icons.Filled.GraphicEq, null, Modifier.padding(end = 6.dp), tint = RedText)
+                }
             }
-            Chip(if (sleepMin == 0) "Sleep: Off" else "Sleep: ${sleepMin}m") {
-                sleepMin = when (sleepMin) { 0 -> 15; 15 -> 30; 30 -> 60; else -> 0 }
-            }
-            Chip("Episodes") { showEps = true }
-            Chip("Lock") { locked = true; showUi = true }
-            Chip("Fullscreen", icon = Icons.Filled.Fullscreen) { full = true }
-            if (hasPrev) Chip("Previous") { step(-1) }
-            if (hasNext) Chip("Next") { step(1) }
         }
-        Text("Swipe left: brightness · right: volume · double-tap sides: ±10s", Modifier.padding(top = 12.dp), fontSize = 11.sp, color = InkSoft)
-        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("PiP") {
-                try { act?.enterPictureInPictureMode(pipParams(wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
+      }
+    }
+}
+
+private class CtlTile(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val value: String, val on: Boolean = false, val action: () -> Unit)
+
+/** Ubin kontrol: ikon di atas, nama kecil, nilai saat ini tebal. */
+@Composable
+private fun ControlTile(t: CtlTile, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.height(78.dp).pressable(t.action).clip(shape).background(Bg2)
+            .border(1.dp, if (t.on) Red.copy(alpha = 0.7f) else Line, shape).padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(t.icon, null, Modifier.size(22.dp), tint = if (t.on) RedText else Color.White)
+        Text(t.value, Modifier.padding(top = 6.dp), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+            color = if (t.on) RedText else Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(t.label, fontSize = 10.5.sp, color = NavOff, maxLines = 1)
+    }
+}
+
+/** Keadaan memuat / galat: area video hitam dengan sampul redup, info + tombol coba lagi di bawah. */
+@Composable
+private fun PlayerStatus(vm: AppVM, a: com.onimeku.app.data.Anime, r: Route.Player, loading: Boolean, message: String? = null, onRetry: (() -> Unit)? = null) {
+    Column(Modifier.fillMaxSize().background(Bg)) {
+        Box(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                RealImage(a, Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().background(Color(0xCC080910)))
+                Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (loading) {
+                        CircularProgressIndicator(Modifier.size(40.dp), color = Red, strokeWidth = 3.dp)
+                        Text(I18n.t("loading_stream", "Loading stream…"), Modifier.padding(top = 12.dp), fontSize = 13.sp, color = InkSoft)
+                    } else {
+                        Icon(Icons.Filled.ErrorOutline, null, Modifier.size(34.dp), tint = RedText)
+                        Text("Stream unavailable", Modifier.padding(top = 8.dp), fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
+        Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
+            Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
+            Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
+            if (message != null) Text(message, Modifier.padding(top = 10.dp), color = InkSoft, fontSize = 14.sp, lineHeight = 20.sp)
+            if (onRetry != null) Box(Modifier.padding(top = 18.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Play, Icons.Filled.Refresh, height = 48.dp, onClick = onRetry) }
         }
     }
 }
@@ -794,42 +912,45 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
     val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val idx = nums.indexOf(r.ep)
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
-        SubHead(a.title, vm)
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).background(Color.Black),
-        ) {
-            AndroidView(
-                factory = { c ->
-                    val cm = android.webkit.CookieManager.getInstance()
-                    cm.setAcceptCookie(true)
-                    android.webkit.WebView(c).apply {
-                        cm.setAcceptThirdPartyCookies(this, true)
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.mediaPlaybackRequiresUserGesture = false
-                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        settings.loadWithOverviewMode = true
-                        settings.useWideViewPort = true
-                        settings.javaScriptCanOpenWindowsAutomatically = true
-                        settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
-                        webViewClient = android.webkit.WebViewClient()
-                        webChromeClient = android.webkit.WebChromeClient()
-                        loadUrl(url)
-                    }
-                },
-                update = { wv -> if (wv.url != null && wv.url != url) wv.loadUrl(url) },
-                modifier = Modifier.fillMaxSize(),
+    Column(Modifier.fillMaxSize().background(Bg)) {
+        Box(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
+                AndroidView(
+                    factory = { c ->
+                        val cm = android.webkit.CookieManager.getInstance()
+                        cm.setAcceptCookie(true)
+                        android.webkit.WebView(c).apply {
+                            cm.setAcceptThirdPartyCookies(this, true)
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.mediaPlaybackRequiresUserGesture = false
+                            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
+                            settings.javaScriptCanOpenWindowsAutomatically = true
+                            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+                            webViewClient = android.webkit.WebViewClient()
+                            webChromeClient = android.webkit.WebChromeClient()
+                            loadUrl(url)
+                        }
+                    },
+                    update = { wv -> if (wv.url != null && wv.url != url) wv.loadUrl(url) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
+            }
+        }
+        Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
+            Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
+            Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
+            if (idx > 0 || (idx >= 0 && idx < nums.size - 1)) Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (idx > 0) Btn("Previous", BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
+                if (idx >= 0 && idx < nums.size - 1) Btn("Next episode", BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx + 1])) }
+            }
+            Text(
+                "Judul ini diputar lewat pemutar resmi sumbernya. Ketuk tombol putar di dalam video.",
+                Modifier.padding(top = 14.dp), fontSize = 12.sp, color = InkSoft,
             )
         }
-        Text("Episode ${r.ep}", Modifier.padding(top = 14.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (idx > 0) Chip("Previous") { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
-            if (idx >= 0 && idx < nums.size - 1) Chip("Next") { vm.replaceTop(Route.Player(r.id, nums[idx + 1])) }
-        }
-        Text(
-            "Judul ini diputar lewat pemutar resmi sumbernya. Ketuk tombol putar di dalam video.",
-            Modifier.padding(top = 14.dp), fontSize = 12.sp, color = InkSoft,
-        )
     }
 }

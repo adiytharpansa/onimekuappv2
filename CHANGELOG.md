@@ -1,3 +1,8 @@
+## v1.0.0-debug.34 (belum dirilis — menunggu perintah): Redesain Detail & Pemutar (paket Claude)
+- Claude menamai paket ini "debug.33" (dari ZIP .32); di repo .33 sudah terisi penyegaran katalog otomatis, jadi paket ini masuk sebagai .34 tanpa mengubah isinya.
+- Screens.kt: halaman Detail didesain ulang — komponen khusus baru (PlayButton, GlassButton, ActionTile, EpisodeCard, ScorePill, StatusPill, SectionTitle) + tombol bagikan (share). Beranda/komentar/i18n .31-.32 utuh.
+- PlayerScreen.kt: tampilan pemutar dipoles (ControlTile, PlayerStatus, ikon wildcard, insets) — RANTAI PUTAR TIDAK BERUBAH (proksi/mainRetry/directUrl/chainDead/batas 26 dtk/isolasi cache terverifikasi identik sebelum diterapkan).
+
 ## v1.0.0-debug.33 (belum dirilis — menunggu perintah): Katalog Selalu Segar
 - Permintaan user: semua yang tampil di Beranda dsb. harus selalu ter-update saat ada anime baru. Kini aplikasi menyegarkan katalog DIAM-DIAM (tanpa spinner, tanpa mengosongkan layar) pada tiga pemicu: (1) aplikasi kembali ke depan bila data sudah >5 menit, (2) kembali ke tab Beranda, (3) pemeriksaan berkala tiap 10 menit selama aplikasi terbuka (selaras irama sinkron + cache API 10 menit).
 - Umur data dilacak dari keberhasilan muat terakhir (AppVM.refreshIfStale + lastFetchAt); pemicu tidak menumpuk saat muat berjalan. Detail/episode/pemutar memang sudah selalu diambil segar dari API setiap dibuka — yang berubah sesi panjang yang sebelumnya tidak pernah menyegar kecuali mulai dingin atau tarik manual (tarik-untuk-segar tetap ada).

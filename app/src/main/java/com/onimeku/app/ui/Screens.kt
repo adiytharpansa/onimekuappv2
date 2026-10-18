@@ -419,160 +419,343 @@ private fun DownloadRing(pct: Int, onClick: () -> Unit) {
     }
 }
 
+// ---- Komponen khusus halaman Detail (redesain debug.33) ----
+val Gutter = 20.dp
+private val GoodGreen = Color(0xFF3DDC97)
+
+/** Tombol bulat kaca (blur-look) yang melayang di atas gambar hero. */
+@Composable
+fun GlassButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(42.dp).clip(CircleShape).background(Color(0x66080910))
+            .border(1.dp, Color(0x33FFFFFF), CircleShape).pressable(onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, desc, Modifier.size(22.dp), tint = Color.White) }
+}
+
+/** Skor ber-bintang emas di atas kaca gelap. */
+@Composable
+private fun ScorePill(score: String) {
+    Row(
+        Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x33FFC857)).padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(Icons.Filled.Star, null, Modifier.size(13.dp), tint = Gold)
+        Text(score, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Gold)
+    }
+}
+
+@Composable
+private fun StatusPill(status: String) {
+    val live = status.equals("Airing", ignoreCase = true)
+    Row(
+        Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x26FFFFFF)).padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(if (live) GoodGreen else NavOff))
+        Text(status, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+    }
+}
+
+/** Tombol utama: gradasi crimson, tinggi 56dp, bayangan lembut. */
+@Composable
+private fun PlayButton(label: String, sub: String?, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).pressable(onClick).clip(RoundedCornerShape(18.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFFC8142F), Red)))
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(32.dp).clip(CircleShape).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.PlayArrow, null, Modifier.size(22.dp), tint = Color.White)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+            if (sub != null) Text(sub, fontSize = 12.sp, color = Color(0xCCFFFFFF), maxLines = 1)
+        }
+        Icon(Icons.Filled.ChevronRight, null, tint = Color(0xB3FFFFFF))
+    }
+}
+
+/** Aksi sekunder: ikon di atas, label di bawah, tiga sama lebar. */
+@Composable
+private fun ActionTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier = Modifier,
+    on: Boolean = false, onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.height(68.dp).pressable(onClick).clip(shape).background(if (on) Color(0x26A6122D) else Bg2)
+            .border(1.dp, if (on) Red.copy(alpha = 0.7f) else Line, shape),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, null, Modifier.size(22.dp), tint = if (on) RedText else Color.White)
+        Text(label, Modifier.padding(top = 5.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            color = if (on) RedText else InkSoft, maxLines = 1)
+    }
+}
+
+@Composable
+fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = Gutter), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(4.dp).height(18.dp).clip(CircleShape).background(Red))
+        Text(text, Modifier.weight(1f).padding(start = 10.dp), fontSize = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)
+        trailing?.invoke()
+    }
+}
+
+/** Satu baris episode: thumbnail + progres tonton + status + aksi unduh. */
+@Composable
+fun EpisodeCard(
+    a: Anime, n: Int, seen: Boolean, progSec: Int?, current: Boolean,
+    onOpen: () -> Unit, trailing: @Composable () -> Unit,
+) {
+    val shape = RoundedCornerShape(16.dp)
+    val frac = when { seen -> 1f; progSec != null -> (progSec / 1440f).coerceIn(0.03f, 0.97f); else -> 0f }
+    Row(
+        Modifier.padding(horizontal = Gutter).padding(bottom = 10.dp).fillMaxWidth().pressable(onOpen).clip(shape)
+            .background(if (current) Color(0x1FA6122D) else Bg2)
+            .border(1.dp, if (current) Red.copy(alpha = 0.6f) else Line, shape).padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.width(118.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)) {
+            RealImage(a, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Color(0x40000000)))
+            Box(Modifier.align(Alignment.Center).size(30.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = Color.White)
+            }
+            Text("EP $n", Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
+                .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            if (frac > 0f) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x59FFFFFF))) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(Red))
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text("Episode $n", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                color = if (seen) Color(0xB3FFFFFF) else Color.White)
+            val (txt, col) = when {
+                current -> "Now watching" to RedText
+                seen -> "Watched" to GoodGreen
+                progSec != null -> "Resume at ${fmt(progSec)}" to RedText
+                else -> "Tap to play" to NavOff
+            }
+            Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (seen && !current) Icon(Icons.Filled.CheckCircle, null, Modifier.size(13.dp), tint = col)
+                Text(txt, fontSize = 12.sp, color = col, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        trailing()
+    }
+}
+
 @Composable
 fun DetailScreen(vm: AppVM, id: String) {
     val a = Catalog.byId[id] ?: return
     val on = id in vm.p.myList
-    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var expanded by rememberSaveable(id) { mutableStateOf(false) }
-    val epNums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+    var newestFirst by rememberSaveable(id) { mutableStateOf(false) }
+    val baseEps = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+    val epNums = if (newestFirst) baseEps.reversed() else baseEps
     val sim = Catalog.similar(id)
     val resume = vm.p.last?.takeIf { it.id == id }
     var commentText by remember(id) { mutableStateOf("") }
     LaunchedEffect(id) { if (com.onimeku.app.data.Comments.enabled) vm.loadComments(id) }
     val listState = rememberLazyListState()
-    // LazyColumn: judul panjang (ratusan episode) tidak lagi digambar sekaligus.
-    LazyColumn(
-        Modifier.fillMaxSize(), state = listState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 12.dp, bottom = bottomContentPadding()),
-    ) {
-        item {
-            // Header: gambar parallax (bergeser lebih lambat dari scroll) + tombol kembali melayang.
-            Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(22.dp)).artBackground(a)) {
-                RealImage(a, Modifier.fillMaxSize().graphicsLayer {
-                    val slack = size.height * 0.1f
-                    val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
-                    translationY = minOf(off * 0.4f, slack)
-                    scaleX = 1.2f; scaleY = 1.2f
-                })
-                Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color(0xCC14161F))) })
-                Box(Modifier.align(Alignment.TopStart).padding(12.dp).size(40.dp).clip(CircleShape)
-                    .background(Color(0x9914161F)).pressable { vm.back() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+    val density = LocalDensity.current
+    val heroH = (LocalConfiguration.current.screenHeightDp * 0.5f).coerceIn(320f, 470f).dp
+    val heroPx = with(density) { heroH.toPx() }
+    // 0 = hero terlihat penuh, 1 = hero sudah tergulung -> bilah atas jadi solid + judul muncul.
+    val barA by remember(heroPx) {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else ((listState.firstVisibleItemScrollOffset - heroPx * 0.45f) / (heroPx * 0.3f)).coerceIn(0f, 1f)
+        }
+    }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    fun share() {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/$id")
+        }
+        ctx.startActivity(android.content.Intent.createChooser(send, I18n.t("share", "Share")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // LazyColumn: judul panjang (ratusan episode) tidak digambar sekaligus.
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
+            item(key = "hero") {
+                // ===== HERO: gambar penuh lebar, parallax, judul menempel di bawahnya =====
+                Box(Modifier.fillMaxWidth().height(heroH).artBackground(a)) {
+                    RealImage(a, Modifier.fillMaxSize().graphicsLayer {
+                        val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
+                        translationY = minOf(off * 0.45f, size.height * 0.12f)
+                        scaleX = 1.15f; scaleY = 1.15f
+                    })
+                    // scrim atas (ikon terbaca) + peleburan ke latar di bawah
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                        0f to Color(0x99080910), 0.28f to Color.Transparent, 0.5f to Color(0x2214161F), 0.82f to Color(0xE614161F), 1f to Bg)))
+                    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Gutter)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            a.rating?.let { ScorePill(it) }
+                            if (a.hd) Tag("HD", Red, Color.White)
+                            StatusPill(a.status)
+                        }
+                        Text(a.title, Modifier.padding(top = 10.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold,
+                            lineHeight = 33.sp, letterSpacing = (-0.5).sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.genres.firstOrNull()).joinToString("  ·  "),
+                            Modifier.padding(top = 6.dp), fontSize = 13.sp, color = InkSoft, maxLines = 1)
+                    }
                 }
             }
-            Column(Modifier.fadeSlideIn(40)) {
-                Spacer(Modifier.height(16.dp))
-                Text(a.title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 31.sp)
-                Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    a.rating?.let { Tag(it, Color.White, Bg) }
-                    if (a.hd) Tag("HD", Red, Color.White)
-                    Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.status).joinToString(" · "),
-                        fontSize = 13.sp, color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            item(key = "actions") {
+                Column(Modifier.padding(horizontal = Gutter).fadeSlideIn(60)) {
+                    Spacer(Modifier.height(16.dp))
+                    PlayButton(
+                        label = if (resume != null) "${I18n.t("resume", "Resume Ep")} ${resume.ep}" else I18n.t("play", "Play"),
+                        sub = resume?.let { r -> vm.p.prog["$id:${r.ep}"]?.let { "Continue from ${fmt(it)}" } }
+                            ?: if (resume == null) "Start with Episode ${a.available.firstOrNull() ?: 1}" else null,
+                    ) { vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1)) }
+                    Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ActionTile(if (on) Icons.Filled.Check else Icons.Filled.Add, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
+                            Modifier.weight(1f), on = on) { vm.toggleML(id) }
+                        ActionTile(Icons.Outlined.Download, I18n.t("download_all", "Download all"), Modifier.weight(1f)) { vm.downloadAll(id) }
+                        ActionTile(Icons.Outlined.Share, I18n.t("share", "Share"), Modifier.weight(1f)) { share() }
+                    }
                 }
-                if (a.genres.isNotEmpty()) {
-                    Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        a.genres.forEach { g ->
-                            Text(g, fontSize = 12.sp, color = InkSoft, maxLines = 1,
-                                modifier = Modifier.clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = 12.dp, vertical = 5.dp))
+            }
+            if (a.genres.isNotEmpty()) item(key = "genres") {
+                Row(Modifier.padding(top = 16.dp).horizontalScroll(rememberScrollState()).padding(horizontal = Gutter).fadeSlideIn(110),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    a.genres.forEach { g ->
+                        Text(g, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft, maxLines = 1,
+                            modifier = Modifier.clip(CircleShape).background(Color(0x14FFFFFF)).padding(horizontal = 13.dp, vertical = 6.dp))
+                    }
+                }
+            }
+            item(key = "synopsis") {
+                Column(Modifier.padding(horizontal = Gutter).padding(top = 20.dp).fadeSlideIn(160)) {
+                    Text("Synopsis", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Box(Modifier.padding(top = 8.dp).animateContentSize()) {
+                        Text(a.synopsis, color = InkSoft, fontSize = 14.5.sp, lineHeight = 22.sp,
+                            maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (a.synopsis.length > 180) {
+                        Row(Modifier.padding(top = 6.dp).clip(CircleShape).clickable { expanded = !expanded }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (expanded) I18n.t("read_less", "Show less") else I18n.t("read_more", "Read more"),
+                                color = RedText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, Modifier.size(18.dp), tint = RedText)
                         }
                     }
                 }
             }
-            Column(Modifier.fadeSlideIn(120)) {
-                Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Btn(if (resume != null) "${I18n.t("resume", "Resume Ep")} ${resume.ep}" else I18n.t("play", "Play"), BtnStyle.Play, Icons.Filled.PlayArrow, Modifier.weight(1f)) {
-                        vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1))
-                    }
-                    Btn(if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"), if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
-                        if (on) Icons.Filled.Check else Icons.Filled.Add, Modifier.weight(1f)) { vm.toggleML(id) }
-                }
-                val shareCtx = androidx.compose.ui.platform.LocalContext.current
-                Row(Modifier.padding(top = 10.dp)) {
-                    Chip(I18n.t("share", "Share")) {
-                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/$id")
-                        }
-                        shareCtx.startActivity(android.content.Intent.createChooser(send, I18n.t("share", "Share")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            // ===== Episode lebih dulu: ini alasan orang membuka halaman ini =====
+            item(key = "ep_head") {
+                Spacer(Modifier.height(26.dp))
+                SectionTitle(I18n.t("episodes", "Episodes")) {
+                    Text("${epNums.size}", fontSize = 13.sp, color = NavOff, modifier = Modifier.padding(end = 10.dp))
+                    if (epNums.size > 1) Row(
+                        Modifier.clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
+                            .clickable { newestFirst = !newestFirst }.padding(horizontal = 11.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(Icons.Filled.SwapVert, null, Modifier.size(15.dp), tint = InkSoft)
+                        Text(if (newestFirst) "Newest" else "Oldest", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
                     }
                 }
-                Box(Modifier.padding(top = 14.dp)) { Chip(I18n.t("download_all", "Download all"), icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
+                Spacer(Modifier.height(12.dp))
+                if (epNums.isEmpty()) Text("No episodes available yet.", Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = 14.sp)
             }
-            Column(Modifier.fadeSlideIn(200)) {
-                Text(a.synopsis, Modifier.padding(top = 18.dp).animateContentSize(), color = InkSoft, fontSize = 15.sp, lineHeight = 22.sp,
-                    maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
-                if (a.synopsis.length > 180) {
-                    Text(if (expanded) I18n.t("read_less", "Show less") else I18n.t("read_more", "Read more"), Modifier.padding(top = 6.dp).clickable { expanded = !expanded },
-                        color = RedText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            items(epNums, key = { "ep$it" }) { n ->
+                val k = "$id:$n"
+                val pct = vm.downloading[k]
+                val dl = vm.hasDl(id, n)
+                EpisodeCard(
+                    a, n, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = resume?.ep == n,
+                    onOpen = { vm.go(Route.Player(id, n)) },
+                ) {
+                    when {
+                        pct != null -> DownloadRing(pct) { vm.download(id, n) }
+                        dl -> IconChip(Icons.Filled.Check, "Saved offline", on = true) { vm.download(id, n) }
+                        else -> IconChip(Icons.Outlined.Download, "Download episode $n") { vm.download(id, n) }
+                    }
                 }
             }
             if (sim.isNotEmpty()) {
-                Text("More like this", Modifier.padding(top = 26.dp, bottom = 12.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(sim, key = { it.id }) { x -> PosterCard(x, railW) { vm.go(Route.Detail(x.id)) } }
+                item(key = "similar") {
+                    Spacer(Modifier.height(22.dp))
+                    SectionTitle("More like this")
+                    Spacer(Modifier.height(12.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = Gutter)) {
+                        items(sim, key = { it.id }) { x -> PosterCard(x, railW) { vm.go(Route.Detail(x.id)) } }
+                    }
                 }
             }
-            Row(Modifier.padding(top = 26.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
-                Text(I18n.t("episodes", "Episodes"), Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text("${epNums.size} available", fontSize = 13.sp, color = NavOff)
-            }
-            if (epNums.isEmpty()) Text("No episodes available yet.", color = NavOff, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
-        }
-        items(epNums, key = { it }) { n ->
-            val k = "$id:$n"
-            val seen = k in vm.p.seen
-            val prog = vm.p.prog[k]
-            val pct = vm.downloading[k]
-            val dl = vm.hasDl(id, n)
-            ItemRow(
-                a, "$n", "Episode $n",
-                if (seen) "Watched" else (prog?.let { "Resume at ${fmt(it)}" } ?: ""), subOk = seen,
-                onOpen = { vm.go(Route.Player(id, n)) },
-            ) {
-                when {
-                    pct != null -> DownloadRing(pct) { vm.download(id, n) }
-                    dl -> IconChip(Icons.Filled.Check, "Saved offline", on = true) { vm.download(id, n) }
-                    else -> IconChip(Icons.Outlined.Download, "Download episode $n") { vm.download(id, n) }
-                }
-            }
-        }
-        // ==== Komentar (debug.31): backend Supabase (tabel comments).
-        // Tamu bisa membaca; menulis wajib masuk. Bagian ini hanya
-        // dirender bila backend akun aktif. ====
-        if (com.onimeku.app.data.Comments.enabled) {
-            item(key = "comments_head") {
-                Column(Modifier.padding(top = 28.dp)) {
-                    Text("${I18n.t("comments", "Comments")} (${vm.comments.size})", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    if (vm.s.account != null) {
-                        Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp)) {
-                                androidx.compose.foundation.text.BasicTextField(
-                                    commentText, { if (it.length <= 1000) commentText = it },
-                                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp),
-                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Red),
-                                    decorationBox = { inner -> if (commentText.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = 14.sp); inner() },
-                                )
+            // ==== Komentar (debug.31): backend Supabase (tabel comments).
+            // Tamu bisa membaca; menulis wajib masuk. Hanya dirender bila backend akun aktif. ====
+            if (com.onimeku.app.data.Comments.enabled) {
+                item(key = "comments_head") {
+                    Column(Modifier.padding(top = 28.dp)) {
+                        SectionTitle("${I18n.t("comments", "Comments")} (${vm.comments.size})")
+                        if (vm.s.account != null) {
+                            Row(Modifier.padding(horizontal = Gutter).padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Box(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(16.dp))
+                                    .padding(horizontal = 14.dp, vertical = 13.dp)) {
+                                    androidx.compose.foundation.text.BasicTextField(
+                                        commentText, { if (it.length <= 1000) commentText = it },
+                                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp),
+                                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Red),
+                                        decorationBox = { inner -> if (commentText.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = 14.sp); inner() },
+                                    )
+                                }
+                                Btn(I18n.t("comment_post", "Post"), BtnStyle.Play, height = 46.dp) {
+                                    vm.postComment(id, commentText); commentText = ""
+                                }
                             }
-                            Btn(I18n.t("comment_post", "Post"), BtnStyle.Solid) {
-                                vm.postComment(id, commentText); commentText = ""
+                        } else {
+                            Box(Modifier.padding(horizontal = Gutter).padding(top = 14.dp)) {
+                                Chip(I18n.t("sign_in_to_comment", "Sign in to comment")) { vm.go(Route.Auth(false)) }
                             }
                         }
-                    } else {
-                        Box(Modifier.padding(top = 14.dp)) {
-                            Chip(I18n.t("sign_in_to_comment", "Sign in to comment")) { vm.go(Route.Auth(false)) }
+                    }
+                }
+                if (vm.commentsBusy && vm.comments.isEmpty()) {
+                    item(key = "comments_busy") { Text("…", color = NavOff, modifier = Modifier.padding(horizontal = Gutter, vertical = 16.dp)) }
+                } else if (vm.comments.isEmpty()) {
+                    item(key = "comments_empty") {
+                        Text(I18n.t("comment_empty", "No comments yet. Be the first."), color = NavOff, fontSize = 14.sp,
+                            modifier = Modifier.padding(horizontal = Gutter, vertical = 16.dp))
+                    }
+                }
+                items(vm.comments, key = { "comment:${it.id}" }) { c ->
+                    val mine = c.user_id == vm.s.account?.userId
+                    Row(Modifier.padding(horizontal = Gutter).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(36.dp).clip(CircleShape).background(if (mine) Red else Solid), contentAlignment = Alignment.Center) {
+                            Text(c.author.ifBlank { "U" }.take(1).uppercase(), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(c.author.ifBlank { "User" }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (mine) RedText else Color.White)
+                                Spacer(Modifier.weight(1f))
+                                Text(if (c.created_at.length >= 16) c.created_at.substring(0, 10) + " " + c.created_at.substring(11, 16) else "", fontSize = 11.sp, color = NavOff)
+                            }
+                            Text(c.body, fontSize = 14.sp, color = InkSoft, lineHeight = 20.sp, modifier = Modifier.padding(top = 3.dp))
+                            if (mine) Text(I18n.t("comment_delete", "Delete"), fontSize = 12.sp, color = NavOff,
+                                modifier = Modifier.padding(top = 6.dp).clickable { vm.deleteComment(id, c.id) })
                         }
                     }
                 }
             }
-            if (vm.commentsBusy && vm.comments.isEmpty()) {
-                item(key = "comments_busy") { Text("…", color = NavOff, modifier = Modifier.padding(top = 16.dp)) }
-            } else if (vm.comments.isEmpty()) {
-                item(key = "comments_empty") { Text(I18n.t("comment_empty", "No comments yet. Be the first."), color = NavOff, fontSize = 14.sp, modifier = Modifier.padding(top = 16.dp)) }
-            }
-            items(vm.comments, key = { "comment:${it.id}" }) { c ->
-                Column(Modifier.padding(top = 18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(c.author.ifBlank { "User" }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (c.user_id == vm.s.account?.userId) RedText else Color.White)
-                        Spacer(Modifier.weight(1f))
-                        Text(if (c.created_at.length >= 16) c.created_at.substring(0, 10) + " " + c.created_at.substring(11, 16) else "", fontSize = 12.sp, color = NavOff)
-                    }
-                    Text(c.body, fontSize = 14.sp, color = InkSoft, lineHeight = 20.sp, modifier = Modifier.padding(top = 4.dp))
-                    if (c.user_id == vm.s.account?.userId) {
-                        Text(I18n.t("comment_delete", "Delete"), fontSize = 12.sp, color = NavOff,
-                            modifier = Modifier.padding(top = 6.dp).clickable { vm.deleteComment(id, c.id) })
-                    }
-                }
+        }
+        // ===== Bilah atas melayang: kaca di atas hero, jadi solid + judul saat digulir =====
+        Box(Modifier.fillMaxWidth().height(statusTop + 58.dp).background(Bg.copy(alpha = barA * 0.97f)).padding(top = statusTop)) {
+            Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() }
+                Text(a.title, Modifier.weight(1f).graphicsLayer { alpha = barA }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                GlassButton(if (on) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder, if (on) "Remove from My List" else "Add to My List") { vm.toggleML(id) }
             }
         }
     }
