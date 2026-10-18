@@ -139,7 +139,20 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val player = remember(r, streamUrl) {
         // Transport OkHttp: menyimpan cookie antar-permintaan + UA peramban +
         // Referer dari API. CDN sumber menolak klien tanpa pola ini.
-        val cookieJar = okhttp3.JavaNetCookieJar(java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL))
+        val cookieJar = object : okhttp3.CookieJar {
+            private val store = java.util.concurrent.ConcurrentHashMap<String, MutableList<okhttp3.Cookie>>()
+            override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
+                val list = store.getOrPut(url.host) { mutableListOf() }
+                synchronized(list) {
+                    for (c in cookies) {
+                        list.removeAll { it.name == c.name }
+                        list.add(c)
+                    }
+                }
+            }
+            override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> =
+                store[url.host]?.filter { it.matches(url) } ?: emptyList()
+        }
         val okClient = okhttp3.OkHttpClient.Builder().cookieJar(cookieJar).build()
         val dsFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(okClient)
             .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
