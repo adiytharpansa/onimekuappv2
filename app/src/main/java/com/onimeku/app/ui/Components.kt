@@ -15,6 +15,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -156,20 +164,15 @@ fun Poster(
         // Shimmer halus selama poster asli dimuat (denyut alpha di atas
         // permukaan kartu); hilang begitu gambar tiba atau gagal dimuat
         // (PosterHealer mengganti URL buruk dengan poster asli lain).
-        val imgDone = androidx.compose.runtime.remember(a.id, img) {
-            androidx.compose.runtime.mutableStateOf(false)
-        }
+        val imgDone = remember(a.id, img) { mutableStateOf(false) }
+        val shimmer = rememberInfiniteTransition(label = "posterShimmer")
+        val pulse by shimmer.animateFloat(
+            initialValue = 0.3f, targetValue = 0.85f,
+            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+            label = "posterAlpha",
+        )
         if (!img.isNullOrBlank() && !imgDone.value) {
-            val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "posterShimmer")
-                .animateFloat(
-                    initialValue = 0.3f, targetValue = 0.85f,
-                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                        androidx.compose.animation.core.tween(900),
-                        androidx.compose.animation.core.RepeatMode.Reverse,
-                    ),
-                    label = "posterAlpha",
-                )
-            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = pulse.value * 0.07f)))
+            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = pulse * 0.07f)))
         }
         if (!img.isNullOrBlank()) {
             coil.compose.AsyncImage(
