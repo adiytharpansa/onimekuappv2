@@ -169,7 +169,8 @@ fun HomeScreen(vm: AppVM) {
                             Catalog.byId[id]?.let { a ->
                                 // Judul anime di bawah kartu (dulu kartu hanya bertuliskan "Episode N" tanpa nama anime).
                                 Column(Modifier.width(railW)) {
-                                    Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
+                                    // debug.33: ukuran poster potret SAMA dengan rail lain (dulu kartu lanskap 232:150).
+                                    Poster(a, railW, badges = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
                                     Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
                                         minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }

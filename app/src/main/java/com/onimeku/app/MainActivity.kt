@@ -204,20 +204,20 @@ private fun TopBar(vm: AppVM) {
     // Transisi halus: scrim gradasi di atas hero, solid bertahap mulai ±80px gulir (tanpa lonjakan mendadak).
     // derivedStateOf + kuantisasi 5%: hanya recompose saat nilai benar-benar berubah, bukan tiap piksel gulir.
     // Perbaikan debug.32: dulu solid hanya 97% sehingga judul hero tembus samar di balik bilah; kini 100% + garis halus.
-    val k by remember { derivedStateOf { (((vm.homeScrollPx() - 60) / 160f).coerceIn(0f, 1f) * 20f).toInt() / 20f } }
+    val k by remember { derivedStateOf { (((vm.homeScrollPx() - 24) / 56f).coerceIn(0f, 1f) * 20f).toInt() / 20f } }
     Row(
         Modifier.fillMaxWidth()
             .drawBehind {
-                // Di atas hero: scrim lembut tanpa tepi keras, supaya jam/ikon status terbaca di poster terang.
-                if (k < 1f) drawRect(Brush.verticalGradient(listOf(Bg.copy(alpha = 0.72f * (1f - k)), Bg.copy(alpha = 0f))))
+                // debug.33: scrim hitam transparan di belakang logo DIHAPUS. Bilah polos di atas hero,
+                // lalu cepat menjadi solid saat digulir (tidak ada keadaan setengah tembus).
                 // Setelah digulir: latar solid penuh + garis tipis di tepi bawah.
                 if (k > 0f) drawRect(Bg.copy(alpha = k))
                 if (k >= 1f) drawLine(Line, Offset(0f, size.height - 0.5.dp.toPx()), Offset(size.width, size.height - 0.5.dp.toPx()), 1.dp.toPx())
             }
-            .statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+            .statusBarsPadding().padding(start = 24.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.clickable { vm.setTab(Route.Home) }) { Logo(40.dp) }
+        Box(Modifier.clickable { vm.setTab(Route.Home) }) { Logo(48.dp) }
         Spacer(Modifier.weight(1f))
         IconBtn(Icons.Outlined.Search, "Search") { vm.go(Route.Search) }
         Box {

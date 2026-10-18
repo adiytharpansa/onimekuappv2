@@ -1,3 +1,8 @@
+## v1.0.0-debug.35 (belum dirilis — menunggu perintah): Perbaikan Beranda (paket Claude lanjutan)
+- Bilah atas: scrim hitam di belakang logo DIHAPUS total — di atas hero bilah benar-benar polos, lalu cepat menjadi solid penuh + garis saat digulir (ambang 24px/56px). Logo digeser ke kanan (padding 24dp) dan diperbesar 48dp.
+- Kartu "New Episode Releases": kini POTRET sama seperti rail lain (dulu lanskap 232:150 memakai banner) + lencana rating/HD tampil (Poster badges=true; parameternya memang sudah ada di Components).
+- Berkas PlayerScreen paket ini identik dengan .34 — tidak menimpa perbaikan OptIn agen. Redesain Detail & Pemutar .34 utuh.
+
 ## v1.0.0-debug.34 (belum dirilis — menunggu perintah): Redesain Detail & Pemutar (paket Claude)
 - Claude menamai paket ini "debug.33" (dari ZIP .32); di repo .33 sudah terisi penyegaran katalog otomatis, jadi paket ini masuk sebagai .34 tanpa mengubah isinya.
 - Screens.kt: halaman Detail didesain ulang — komponen khusus baru (PlayButton, GlassButton, ActionTile, EpisodeCard, ScorePill, StatusPill, SectionTitle) + tombol bagikan (share). Beranda/komentar/i18n .31-.32 utuh.
