@@ -87,6 +87,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var attempt by remember(r) { mutableIntStateOf(0) }
     var pb by remember(r) { mutableStateOf<com.onimeku.app.data.Playback?>(null) }
     var pbFailed by remember(r) { mutableStateOf(false) }
+    var forceEmbed by remember(r) { mutableStateOf(false) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false
         val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
@@ -116,7 +117,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     val mediaUrl = playback.streamUrl?.takeIf { isMediaUrl(it) }
         ?: playback.streamProxyUrl?.takeIf { isMediaUrl(it) }
     val embedUrl = playback.embedUrl ?: playback.streamUrl?.takeIf { !isMediaUrl(it) }
-    if (mediaUrl == null && !embedUrl.isNullOrBlank()) {
+    if ((mediaUrl == null || forceEmbed) && !embedUrl.isNullOrBlank()) {
         EmbedPlayer(vm, r, a, embedUrl)
         return
     }
@@ -130,12 +131,12 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         return
     }
 
-    PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl)
+    PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, onFatalError = { forceEmbed = true })
 
 }
 
 @Composable
-private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String) {
+private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, onFatalError: () -> Unit = {}) {
     val player = remember(r, streamUrl) {
         // Transport OkHttp: menyimpan cookie antar-permintaan + UA peramban +
         // Referer dari API. CDN sumber menolak klien tanpa pola ini.
@@ -167,7 +168,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 "720p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
                 "480p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
             }
-            val subs = playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
+            // Subtitle hanya dipasang bila CC aktif di Pengaturan — trek teks
+            // yang gagal dimuat tidak boleh ikut menggagalkan video.
+            val subs = if (vm.settings.value.cc) playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
                 val mime = when {
                     s.url.contains(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
                     s.url.contains(".ass") || s.url.contains(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
@@ -175,7 +178,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
                     .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase()).build()
-            }
+            } else emptyList()
             setMediaItem(
                 MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
                     .setSubtitleConfigurations(subs).build()
@@ -191,6 +194,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var wantPlay by remember(r) { mutableStateOf(true) }
     var buffering by remember(r) { mutableStateOf(true) }
     var failed by remember(r) { mutableStateOf(false) }
+    var errMsg by remember(r) { mutableStateOf<String?>(null) }
     var dragging by remember(r) { mutableStateOf(false) }
     var speed by remember(r) { mutableFloatStateOf(1f) }
     var br by remember { mutableFloatStateOf(1f) }
@@ -210,7 +214,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
-            override fun onPlayerError(error: PlaybackException) { failed = true; buffering = false }
+            override fun onPlayerError(error: PlaybackException) {
+                failed = true; buffering = false
+                errMsg = error.errorCodeName
+                // Bila judul ini punya embed resmi, alihkan ke sana otomatis.
+                if (!playback.embedUrl.isNullOrBlank()) onFatalError()
+            }
         }
         player.addListener(l)
         vm.playing = true
@@ -308,6 +317,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             if (failed) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Can’t play this video", fontWeight = FontWeight.SemiBold)
+                    if (errMsg != null) {
+                        Text(errMsg!!, Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp), fontSize = 10.sp, color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
                     Spacer(Modifier.height(8.dp))
                     Chip("Retry") { failed = false; player.prepare(); player.playWhenReady = true }
                 }
@@ -380,10 +392,19 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         ) {
             AndroidView(
                 factory = { c ->
+                    val cm = android.webkit.CookieManager.getInstance()
+                    cm.setAcceptCookie(true)
                     android.webkit.WebView(c).apply {
+                        cm.setAcceptThirdPartyCookies(this, true)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.mediaPlaybackRequiresUserGesture = false
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        settings.javaScriptCanOpenWindowsAutomatically = true
+                        settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+                        webViewClient = android.webkit.WebViewClient()
                         webChromeClient = android.webkit.WebChromeClient()
                         loadUrl(url)
                     }

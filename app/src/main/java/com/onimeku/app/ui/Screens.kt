@@ -107,7 +107,9 @@ private fun Hero(vm: AppVM) {
     val on = a.id in vm.p.myList
     val firstEp = a.available.firstOrNull() ?: 1
     Box(Modifier.fillMaxWidth().height(560.dp).artBackground(a)) {
-        val img = com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
+        // Hero menampilkan POSTER ASLI judul (portrait), bukan cover/banner —
+        // banner lebar ter-crop parah di layar portrait dan bukan posternya.
+        val img = com.onimeku.app.data.PosterHealer.posterFor(a)
         if (!img.isNullOrBlank()) {
             coil.compose.AsyncImage(
                 model = img, contentDescription = null,
