@@ -51,6 +51,6 @@ jobs:
             APK debug Onimeku (Kotlin / Jetpack Compose) dari branch main.
 
             - Build debug resmi dari GitHub Actions repo ini (ditandatangani kunci debug Android, siap pasang untuk pengujian).
-            - Catatan: sesuai desain sumbernya, API_URL build debug masih placeholder — katalog/API produksi diatur pada build rilis terpisah.
+            - Aplikasi sudah tersambung ke API katalog Onimeku (onimekuappv2-api): daftar, detail, dan stream episode diambil langsung dari API.
           files: app/build/outputs/apk/debug/*.apk
           fail_on_unmatched_files: true

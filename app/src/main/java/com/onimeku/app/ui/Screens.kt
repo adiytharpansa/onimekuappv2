@@ -43,6 +43,19 @@ import java.util.Locale
 @Composable
 fun HomeScreen(vm: AppVM) {
     val p = vm.p
+    if (Catalog.all.isEmpty()) {
+        Page {
+            RootTitle("Home")
+            if (Catalog.loading) {
+                Text("Loading catalog…", color = InkSoft, modifier = Modifier.padding(top = 12.dp))
+            } else {
+                EmptyBox("Catalog unavailable", "The catalog could not be loaded. Check your connection, then try again.") {
+                    Btn("Try again", BtnStyle.Play) { vm.reloadCatalog() }
+                }
+            }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 110.dp)) {
         Hero(vm)
 
@@ -90,27 +103,28 @@ fun HomeScreen(vm: AppVM) {
 
 @Composable
 private fun Hero(vm: AppVM) {
-    val slayer = Catalog.byId["a2"]!!
-    val on = "a2" in vm.p.myList
-    Box(
-        Modifier.fillMaxWidth().height(560.dp).drawBehind {
-            drawRect(Brush.linearGradient(listOf(Color(0xFF3B0C1A), Color(0xFF8C1736), Color(0xFF2A0A16)),
-                start = Offset.Zero, end = Offset(size.width * 0.35f, size.height)))
-            fun glow(c: Long, cx: Float, cy: Float, r: Float) = drawRect(
-                Brush.radialGradient(listOf(Color(c), Color.Transparent), Offset(size.width * cx, size.height * cy), size.width * r))
-            glow(0xFFB85548, .42f, .38f, .55f)
-            glow(0xFFD11E4D, .88f, .12f, .70f)
-            glow(0xFF5A1220, .04f, .58f, .60f)
+    val a = Catalog.top.firstOrNull()?.let { Catalog.byId[it] } ?: Catalog.all.firstOrNull() ?: return
+    val on = a.id in vm.p.myList
+    val firstEp = a.available.firstOrNull() ?: 1
+    Box(Modifier.fillMaxWidth().height(560.dp).artBackground(a)) {
+        val img = a.banner ?: a.poster
+        if (!img.isNullOrBlank()) {
+            coil.compose.AsyncImage(
+                model = img, contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        }
+        Box(Modifier.fillMaxSize().drawBehind {
             drawRect(Brush.verticalGradient(0f to Color(0x5914161F), 0.3f to Color.Transparent, 0.72f to Color(0xB814161F), 1f to Bg))
-        },
-    ) {
+        })
         Column(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = 28.dp)) {
-            Text(slayer.title, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp)
-            Text(slayer.genres.joinToString(", "), Modifier.padding(top = 10.dp), fontSize = 14.sp, color = Color(0xFFF1E8EE))
+            Text(a.title, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp)
+            Text(a.genres.joinToString(", "), Modifier.padding(top = 10.dp), fontSize = 14.sp, color = Color(0xFFF1E8EE))
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Btn("Play", BtnStyle.Play, Icons.Filled.PlayCircleFilled) { vm.go(Route.Player("a2", 1)) }
+                Btn("Play", BtnStyle.Play, Icons.Filled.PlayCircleFilled) { vm.go(Route.Player(a.id, firstEp)) }
                 Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
-                    if (on) Icons.Filled.Check else Icons.Filled.Add) { vm.toggleML("a2") }
+                    if (on) Icons.Filled.Check else Icons.Filled.Add) { vm.toggleML(a.id) }
             }
         }
     }
@@ -145,7 +159,7 @@ fun CalendarScreen(vm: AppVM) {
         else list.forEach { a ->
             val on = a.id in vm.p.remind
             ItemRow(
-                a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres[0]}",
+                a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                 onOpen = { vm.go(Route.Detail(a.id)) },
             ) { Chip(if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
         }
@@ -226,7 +240,7 @@ fun DetailScreen(vm: AppVM, id: String) {
             Text("${a.eps} episodes · ${a.genres.joinToString(", ")}", fontSize = 13.sp, color = InkSoft, modifier = Modifier.weight(1f))
         }
         Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Btn("Play", BtnStyle.Play, Icons.Filled.PlayArrow) { vm.go(Route.Player(id, 1)) }
+            Btn("Play", BtnStyle.Play, Icons.Filled.PlayArrow) { vm.go(Route.Player(id, a.available.firstOrNull() ?: 1)) }
             Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
                 if (on) Icons.Filled.Check else Icons.Filled.Add) { vm.toggleML(id) }
         }
@@ -241,7 +255,8 @@ fun DetailScreen(vm: AppVM, id: String) {
             }
         }
         Text("Episodes", Modifier.padding(top = 26.dp, bottom = 4.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        for (n in 1..a.eps) {
+        val epNums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+        for (n in epNums) {
             val k = "$id:$n"
             val seen = k in vm.p.seen
             val prog = vm.p.prog[k]

@@ -83,14 +83,70 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     val audio = remember { ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val quality = vm.s.settings.quality
 
-    val player = remember(r) {
-        ExoPlayer.Builder(ctx).build().apply {
+    // Data putar diambil dari API per episode (stream + referer + subtitle).
+    var attempt by remember(r) { mutableIntStateOf(0) }
+    var pb by remember(r) { mutableStateOf<com.onimeku.app.data.Playback?>(null) }
+    var pbFailed by remember(r) { mutableStateOf(false) }
+    LaunchedEffect(r, attempt) {
+        pb = null; pbFailed = false
+        val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
+        if (res == null || (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank())) pbFailed = true else pb = res
+    }
+    if (pbFailed) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+            SubHead(a.title, vm)
+            Text("This episode's stream is unavailable right now.", color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { attempt++ } }
+        }
+        return
+    }
+    val playback = pb
+    if (playback == null) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+            SubHead(a.title, vm)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CircularProgressIndicator(Modifier.size(28.dp), color = Red, strokeWidth = 3.dp)
+                Text("Loading stream…", color = InkSoft)
+            }
+        }
+        return
+    }
+    val streamUrl = playback.streamUrl ?: playback.streamProxyUrl ?: return
+
+    PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl)
+
+}
+
+@Composable
+private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String) {
+    val player = remember(r, streamUrl) {
+        val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+        if (!playback.referer.isNullOrBlank()) {
+            httpFactory.setDefaultRequestProperties(mapOf("Referer" to playback.referer))
+        }
+        val dsFactory = androidx.media3.datasource.DefaultDataSource.Factory(ctx, httpFactory)
+        ExoPlayer.Builder(ctx)
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsFactory))
+            .build().apply {
             when (quality) {
                 "1080p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1920, 1080).build()
                 "720p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
                 "480p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
             }
-            setMediaItem(MediaItem.fromUri(Catalog.streamUrl(r.id, r.ep)))
+            val subs = playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
+                val mime = when {
+                    s.url.contains(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
+                    s.url.contains(".ass") || s.url.contains(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
+                    else -> androidx.media3.common.MimeTypes.TEXT_VTT
+                }
+                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
+                    .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase()).build()
+            }
+            setMediaItem(
+                MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
+                    .setSubtitleConfigurations(subs).build()
+            )
             seekTo((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L)
             playWhenReady = true
             prepare()
@@ -116,7 +172,8 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 if (state == Player.STATE_READY) failed = false
                 if (state == Player.STATE_ENDED) {
                     vm.saveProg(r.id, r.ep, durNow, durNow)
-                    if (vm.s.settings.autoplay && r.ep < a.eps) vm.replaceTop(Route.Player(r.id, r.ep + 1))
+                    val nxt = a.available.firstOrNull { it > r.ep } ?: if (r.ep < a.eps) r.ep + 1 else null
+                    if (vm.s.settings.autoplay && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
                 }
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
@@ -163,7 +220,14 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     }
     LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null } }
 
-    fun step(d: Int) { val n = r.ep + d; if (n in 1..a.eps) vm.replaceTop(Route.Player(r.id, n)) }
+    fun step(d: Int) {
+        val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+        val i = nums.indexOf(r.ep)
+        val n = if (i >= 0) nums.getOrNull(i + d) else if (r.ep + d in 1..a.eps) r.ep + d else null
+        if (n != null) vm.replaceTop(Route.Player(r.id, n))
+    }
+    val hasPrev = (if (a.available.isNotEmpty()) a.available.firstOrNull() else 1)?.let { r.ep > it } ?: (r.ep > 1)
+    val hasNext = (if (a.available.isNotEmpty()) a.available.lastOrNull() else a.eps)?.let { r.ep < it } ?: (r.ep < a.eps)
 
     if (vm.inPip) {
         Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize()) }
@@ -249,8 +313,8 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 vm.toast("Speed ${if (speed == 1.5f) "1.5" else speed.toInt()}×")
             }
             Chip("+10s") { player.seekTo(player.currentPosition + 10_000) }
-            if (r.ep > 1) Chip("Previous") { step(-1) }
-            if (r.ep < a.eps) Chip("Next") { step(1) }
+            if (hasPrev) Chip("Previous") { step(-1) }
+            if (hasNext) Chip("Next") { step(1) }
         }
         Text("Swipe left side: brightness · right side: volume", Modifier.padding(top = 12.dp), fontSize = 11.sp, color = InkSoft)
         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -259,7 +323,5 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             }
             Chip("Cast") { vm.toast("Cast belum tersedia di versi ini") }
         }
-        Text("Video contoh diputar dari Catalog.SAMPLE_STREAM. Ganti dengan URL stream Anda.",
-            Modifier.padding(top = 16.dp), fontSize = 12.sp, color = NavOff)
     }
 }

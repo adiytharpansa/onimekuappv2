@@ -41,7 +41,31 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var inPip by mutableStateOf(false)
     var playing by mutableStateOf(false)
 
-    init { Reminders.rescheduleAll(app, s) }
+    init {
+        Reminders.rescheduleAll(app, s)
+        reloadCatalog()
+    }
+
+    /** Muat katalog dari API Onimeku; dipanggil saat aplikasi dibuka dan dari tombol coba lagi. */
+    fun reloadCatalog() {
+        viewModelScope.launch {
+            Catalog.loading = true
+            try {
+                val items = ApiClient.fetchCatalog()
+                if (items.isNotEmpty()) {
+                    Catalog.all = items
+                    Catalog.loadFailed = false
+                } else {
+                    Catalog.loadFailed = Catalog.all.isEmpty()
+                }
+            } catch (e: Exception) {
+                Catalog.loadFailed = Catalog.all.isEmpty()
+            } finally {
+                Catalog.loading = false
+                Reminders.rescheduleAll(app, s)
+            }
+        }
+    }
 
     private val jobs = HashMap<String, Job>()
     private var toastJob: Job? = null
@@ -109,7 +133,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun downloadAll(id: String) {
         val a = Catalog.byId[id] ?: return
-        val add = (1..a.eps).filter { !hasDl(id, it) }.map { Dl(id, it) }
+        val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+        val add = nums.filter { !hasDl(id, it) }.map { Dl(id, it) }
         upd { it.copy(downloads = it.downloads + add) }
         toast(if (add.isNotEmpty()) "${add.size} episodes saved" else "All episodes already saved")
     }

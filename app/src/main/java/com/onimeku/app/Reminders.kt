@@ -54,7 +54,9 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         val st = Store(applicationContext).load()
         val still = st.settings.alerts && st.profiles.getOrNull(pi)?.remind?.contains(id) == true
         if (!still) return Result.success()
-        val c = Catalog.byId[id] ?: return Result.success()
+        // Katalog tidak dimuat di proses worker; ambil detail judul ini dari API.
+        val c = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }
+            ?: return Result.success()
         Notifier.show(applicationContext, "New episode: ${c.title}", "Episode ${c.ep} is out now")
         Reminders.schedule(applicationContext, pi, id) // jadwalkan minggu depan
         return Result.success()

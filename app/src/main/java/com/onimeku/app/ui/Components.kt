@@ -133,6 +133,14 @@ fun Poster(
         sized.aspectRatio(if (ep) 232f / 150f else 232f / 311f).clip(RoundedCornerShape(18.dp))
             .artBackground(a).clickable(onClick = onClick),
     ) {
+        val img = if (ep) (a.banner ?: a.poster) else a.poster
+        if (!img.isNullOrBlank()) {
+            coil.compose.AsyncImage(
+                model = img, contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        }
         if (badges) {
             a.rating?.let { Tag(it, Color.White, Bg, Modifier.align(Alignment.TopStart).padding(12.dp)) }
             if (a.hd) Tag("HD", Red, Color.White, Modifier.align(Alignment.TopEnd).padding(10.dp))
