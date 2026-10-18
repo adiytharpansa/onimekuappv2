@@ -132,15 +132,19 @@ object ApiClient {
     }
 
     /**
-     * Ambil seluruh katalog dalam SATU respons (hulu tidak berpaginasi;
-     * ringkasan ~900KB untuk ~900 judul). onProgress/onRaw dipanggil
-     * sekali dengan hasil final demi kompatibilitas pemanggil.
+     * Ambil seluruh katalog dalam SATU respons (hulu tidak berpaginasi).
+     * Memakai bentuk LITE (?lite=1, ~27% lebih kecil): sinopsis dipotong
+     * 240 karakter dan episodeNumbers dibuang — cukup untuk daftar/hero.
+     * Sinopsis penuh + nomor episode asli diambil per judul dari
+     * fetchDetail saat Detail dibuka (lihat AppVM.loadDetail).
+     * onProgress/onRaw dipanggil sekali dengan hasil final demi
+     * kompatibilitas pemanggil.
      */
     suspend fun fetchCatalog(
         onProgress: (List<Anime>) -> Unit = {},
         onRaw: (List<ApiAnime>) -> Unit = {},
     ): List<Anime> {
-        val text = getTextRetry("$BASE/api/anime")
+        val text = getTextRetry("$BASE/api/anime?lite=1")
         // ±900 KB JSON: parse + pemetaan di thread latar agar UI tidak tersendat.
         val (raw, mapped) = withContext(Dispatchers.Default) {
             val r = json.decodeFromString<ListResp>(text)

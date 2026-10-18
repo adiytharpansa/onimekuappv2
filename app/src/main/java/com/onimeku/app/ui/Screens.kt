@@ -692,6 +692,9 @@ fun DetailScreen(vm: AppVM, id: String) {
     val resume = vm.p.last?.takeIf { it.id == id }
     var commentText by remember(id) { mutableStateOf("") }
     LaunchedEffect(id) { if (com.onimeku.app.data.Comments.enabled) vm.loadComments(id) }
+    // Katalog daftar berbentuk lite: perkaya judul ini dari endpoint
+    // detail (sinopsis penuh + nomor episode asli) sekali per sesi.
+    LaunchedEffect(id) { vm.loadDetail(id) }
     // Pemanasan data putar (debug.37): ambil info stream episode sasaran
     // tombol Play (dan episode lanjutan terakhir) SEKARANG, selagi user
     // membaca Detail. Di HP user, resolusi dingin endpoint putar ~5 dtk+

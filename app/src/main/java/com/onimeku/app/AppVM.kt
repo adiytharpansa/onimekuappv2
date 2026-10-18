@@ -100,6 +100,22 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         if (System.currentTimeMillis() - lastFetchAt > maxAgeMs) reloadCatalog()
     }
 
+    // Judul yang sudah/sedang diperkaya dari endpoint detail sesi ini.
+    private val detailEnriched = mutableSetOf<String>()
+
+    /**
+     * Perbaiki entri katalog-lite sebuah judul dari endpoint detail
+     * (sinopsis penuh + daftar episode asli) saat layar Detail dibuka.
+     * Sekali per judul per sesi; gagal jaringan boleh dicoba lagi.
+     */
+    fun loadDetail(id: String) {
+        if (!detailEnriched.add(id)) return
+        viewModelScope.launch {
+            val full = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }
+            if (full != null) com.onimeku.app.data.Catalog.enrich(full) else detailEnriched.remove(id)
+        }
+    }
+
     /** Jadwal tayang asli dari API: id katalog -> episode berikutnya + waktu. */
     var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())
         private set

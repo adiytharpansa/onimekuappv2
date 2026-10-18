@@ -53,6 +53,18 @@ object Catalog {
     var loading by mutableStateOf(true)
     var loadFailed by mutableStateOf(false)
 
+    /**
+     * Ganti satu entri katalog dengan versi LENGKAP dari endpoint detail
+     * (sinopsis utuh + nomor episode asli). Katalog daftar kini berbentuk
+     * lite (?lite=1), jadi judul yang dibuka Detail-nya diperkaya lewat
+     * fungsi ini. Entri yang tidak lebih lengkap tidak menimpa apa pun.
+     */
+    fun enrich(full: Anime) {
+        val cur = all.find { it.id == full.id } ?: return
+        if (full.synopsis.length <= cur.synopsis.length && full.available.isEmpty()) return
+        all = all.map { if (it.id == full.id) full else it }
+    }
+
     private val byScore = compareByDescending<Anime> { it.score ?: -1.0 }.thenBy { it.title.lowercase() }
 
     private fun relLabel(iso: String?): String {
