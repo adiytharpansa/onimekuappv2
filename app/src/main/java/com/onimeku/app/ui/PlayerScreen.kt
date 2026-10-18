@@ -364,6 +364,20 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         .setArtworkUri(a.poster?.let { android.net.Uri.parse(it) }).build()
                 )
                 .setSubtitleConfigurations(subs)
+            // AKAR KEGAGALAN PUTAR DI HP (debug.39; terbukti telemetri
+            // .38 di emulator): URL proksi ber-path "/api/proxy" —
+            // ekstensi .m3u8 hanya ada di dalam parameter terenkode —
+            // sehingga ExoPlayer gagal mengenali item sebagai HLS dan
+            // memperlakukannya sebagai media progresif:
+            // ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED untuk SEMUA
+            // judul berproksi. Di emulator kaki langsung (CDN mentah)
+            // diam-diam menyelamatkan putar; di HP user kaki itu
+            // terblokir operator sehingga tak ada yang tersisa.
+            // Nyatakan tipe HLS secara eksplisit untuk stream playlist.
+            val looksHls = streamUrl.contains(".m3u8") ||
+                (playback.directUrl?.contains(".m3u8") ?: false) ||
+                (playback.streamUrl?.contains(".m3u8") ?: false)
+            if (looksHls) itemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
             // Kunci cache unduhan HANYA untuk putar offline (lihat
             // playFactory): item streaming tidak menyentuh cache bersama.
             if (offline) itemBuilder.setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
