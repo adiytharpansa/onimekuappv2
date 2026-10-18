@@ -275,7 +275,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         }
         if (hasDl(id, ep)) { toast("Already saved offline"); return }
         viewModelScope.launch {
-            val pb = try { ApiClient.fetchPlayback(id, ep) } catch (e: Exception) { null }
+            val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
             val url = pb?.streamUrl
             if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
                 toast("This title can't be downloaded")

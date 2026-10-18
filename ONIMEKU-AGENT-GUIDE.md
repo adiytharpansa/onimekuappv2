@@ -233,6 +233,14 @@ Semua ditulis tanpa Android SDK: **belum diukur dan belum dikompilasi**. Ukur du
 - **Pemutar**: mode **fullscreen/landscape** (kunci landscape, sembunyikan bilah sistem, Back keluar dari fullscreen), **kontrol otomatis sembunyi** (3,5 dtk) dengan ketuk untuk memunculkan, **ketuk dua kali** sisi kiri/kanan untuk ±10 dtk, **pemilih subtitle** (otomatis memilih Indonesia → Inggris → pertama; tombol "CC" di bar atas dan chip), **pemilih kualitas** langsung di pemutar (tersimpan ke Settings). Chip "Cast" yang cuma menampilkan toast dihapus.
 - **Spanduk offline** + **muat ulang katalog otomatis** saat koneksi kembali (`AppVM.online`, `registerDefaultNetworkCallback`).
 
+### 7.6 Performa streaming video (19 Okt 2026, putaran 3)
+Ditulis tanpa Android SDK: **belum dikompilasi dan belum diukur**. Ukur dulu: waktu tekan Play → frame pertama, jumlah rebuffer per jam, `adb shell dumpsys gfxinfo`.
+- `data/Net.kt`: satu `OkHttpClient` bersama (`Net.client`). Pemutar, subtitle, `ApiClient.getText`, dan `Downloads.httpFactory` memakainya. Jangan membuat `OkHttpClient` baru untuk media.
+- `PlayerScreen`: subtitle paralel + batas 4 dtk; `DefaultLoadControl` (20/50/1,5/4 dtk, back buffer 20 dtk); `DefaultLoadErrorHandlingPolicy(5)`; `setEnableDecoderFallback(true)`; `SeekParameters.CLOSEST_SYNC`; cache unduhan **baca-saja** untuk streaming (`setCacheWriteDataSinkFactory(null)`).
+- Polling posisi 1 dtk, state hanya ditulis saat detik berubah; `saveProg` tiap 10 dtk.
+- `ApiClient.prefetchPlayback` dipanggil pada 60 dtk terakhir bila autoplay aktif; `fetchPlayback(fresh = true)` untuk unduhan.
+- Belum diubah (butuh keputusan pemilik): jalur utama MegaPlay lewat proksi worker (`/api/proxy`) menambah satu lompatan + kena batas 600 GET/menit per IP; URL langsung hanya cadangan.
+
 ---
 
 ## 8. Pekerjaan tersisa (urut prioritas)

@@ -52,7 +52,10 @@ import androidx.media3.ui.PlayerView
 import com.onimeku.app.AppVM
 import com.onimeku.app.Route
 import com.onimeku.app.data.Catalog
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private fun pipParams(auto: Boolean): PictureInPictureParams {
@@ -124,28 +127,38 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // bila server teksnya menolak permintaan pemutar.
             var ready = res
             if (ready.subtitles.isNotEmpty()) {
+                // Unduh semua trek PARALEL dengan batas waktu total 4 dtk dan
+                // pakai ulang berkas yang sudah ada. Sebelumnya berurutan
+                // (timeout 10+15 dtk per trek) sehingga start video bisa
+                // tertahan puluhan detik hanya karena server subtitle lambat.
                 val dir = java.io.File(ctx.cacheDir, "subs").apply { mkdirs() }
-                val localized = ready.subtitles.mapIndexedNotNull { i, s ->
-                    try {
-                        val ext = listOf(".vtt", ".srt", ".ass", ".ssa").firstOrNull { s.url.contains(it) } ?: ".vtt"
-                        val fname = "${r.id}_${r.ep}_${s.lang}_$i$ext".replace(Regex("[^A-Za-z0-9._-]"), "_")
-                        val f = java.io.File(dir, fname)
-                        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            val conn = (java.net.URL(s.url).openConnection() as java.net.HttpURLConnection).apply {
-                                connectTimeout = 10000
-                                readTimeout = 15000
-                                setRequestProperty("Referer", s.referer ?: ready.referer ?: "")
-                                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
+                val loaded = kotlinx.coroutines.withTimeoutOrNull(4_000) {
+                    kotlinx.coroutines.coroutineScope {
+                        ready.subtitles.mapIndexed { i, s ->
+                            async(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    val ext = listOf(".vtt", ".srt", ".ass", ".ssa").firstOrNull { s.url.contains(it) } ?: ".vtt"
+                                    val fname = "${r.id}_${r.ep}_${s.lang}_$i$ext".replace(Regex("[^A-Za-z0-9._-]"), "_")
+                                    val f = java.io.File(dir, fname)
+                                    if (!f.exists() || f.length() == 0L) {
+                                        val req = okhttp3.Request.Builder().url(s.url)
+                                            .header("Referer", s.referer ?: ready.referer ?: "")
+                                            .header("User-Agent", com.onimeku.app.data.Net.UA).build()
+                                        com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
+                                            if (!resp.isSuccessful) return@async null
+                                            val bytes = resp.body?.bytes() ?: return@async null
+                                            f.writeBytes(bytes)
+                                        }
+                                    }
+                                    s.copy(url = android.net.Uri.fromFile(f).toString())
+                                } catch (e: Exception) {
+                                    null
+                                }
                             }
-                            conn.inputStream.use { it.readBytes() }
-                        }
-                        f.writeBytes(bytes)
-                        s.copy(url = android.net.Uri.fromFile(f).toString())
-                    } catch (e: Exception) {
-                        null
+                        }.awaitAll().filterNotNull()
                     }
-                }
-                ready = ready.copy(subtitles = localized)
+                } ?: emptyList()
+                ready = ready.copy(subtitles = loaded)
             }
             pb = ready
         }
@@ -211,25 +224,11 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 @Composable
 private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, onFatalError: () -> Unit = {}) {
     val player = remember(r, streamUrl) {
-        // Transport OkHttp: menyimpan cookie antar-permintaan + UA peramban +
-        // Referer dari API. CDN sumber menolak klien tanpa pola ini.
-        val cookieJar = object : okhttp3.CookieJar {
-            private val store = java.util.concurrent.ConcurrentHashMap<String, MutableList<okhttp3.Cookie>>()
-            override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
-                val list = store.getOrPut(url.host) { mutableListOf() }
-                synchronized(list) {
-                    for (c in cookies) {
-                        list.removeAll { it.name == c.name }
-                        list.add(c)
-                    }
-                }
-            }
-            override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> =
-                store[url.host]?.filter { it.matches(url) } ?: emptyList()
-        }
-        val okClient = okhttp3.OkHttpClient.Builder().cookieJar(cookieJar).build()
-        val dsFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(okClient)
-            .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
+        // Transport OkHttp BERSAMA (Net): pool koneksi + cookie dipakai ulang
+        // antar-episode; UA peramban + Referer dari API (CDN menolak klien
+        // tanpa pola ini).
+        val dsFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(com.onimeku.app.data.Net.client)
+            .setUserAgent(com.onimeku.app.data.Net.UA)
         // CDN MegaPlay hanya menerima Referer akar origin; URL halaman embed
         // lengkap dibalas halaman error (HTTP 403). Paksa akar origin untuk
         // stream ber-host nexabloom apa pun nilai dari API.
@@ -242,20 +241,37 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (!effReferer.isNullOrBlank()) {
             dsFactory.setDefaultRequestProperties(mapOf("Referer" to effReferer))
         }
-        // Pemutar membaca cache unduhan yang sama (kunci cache stabil per
-        // episode): episode yang sudah terunduh diputar dari disk, sisanya
-        // mengalir dari jaringan seperti biasa.
+        // Pemutar MEMBACA cache unduhan (episode terunduh diputar dari disk)
+        // tetapi TIDAK menulis ke dalamnya: sebelumnya tiap segmen yang
+        // di-stream ikut ditulis ke SimpleCache ber-NoOpCacheEvictor, yaitu
+        // beban I/O disk saat memutar dan penyimpanan yang tumbuh tanpa batas.
         val cacheFactory = androidx.media3.datasource.cache.CacheDataSource.Factory()
             .setCache(com.onimeku.app.data.Downloads.cache(ctx))
+            .setCacheWriteDataSinkFactory(null)
             .setUpstreamDataSourceFactory(
                 androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
             )
             .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        ExoPlayer.Builder(ctx)
-            .setMediaSourceFactory(
-                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cacheFactory)
-            )
+        // Start cepat + tahan jaringan seluler goyah: mulai putar setelah 1,5 dtk
+        // terbuffer (bawaan 2,5), pulih dari rebuffer di 4 dtk (bawaan 5), buffer
+        // maju hingga 50 dtk, sisakan 20 dtk ke belakang agar seek mundur/ketuk
+        // dua kali -10 dtk tidak mengunduh ulang segmen.
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(20_000, 50_000, 1_500, 4_000)
+            .setBackBuffer(20_000, true)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        val sourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cacheFactory)
+            // 5 percobaan ulang per segmen (bawaan 3) sebelum dianggap galat fatal.
+            .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(5))
+        val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(ctx)
+            .setEnableDecoderFallback(true) // dekoder utama gagal -> coba dekoder lain, bukan error
+        ExoPlayer.Builder(ctx, renderers)
+            .setMediaSourceFactory(sourceFactory)
+            .setLoadControl(loadControl)
             .build().apply {
+            // Seek ke keyframe terdekat: ketuk dua kali/geser bilah jauh lebih cepat.
+            setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
             when (quality) {
                 "1080p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1920, 1080).build()
                 "720p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
@@ -304,15 +320,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     fun subName(i: Int): String = if (i < 0) "Off" else subTracks.getOrNull(i)?.let { it.label.ifBlank { it.lang.uppercase() }.ifBlank { "Sub ${i + 1}" } } ?: "Off"
 
     fun applySub(i: Int) {
-        // Perbaikan agen saat build v5: konstanta statis Java C tidak bisa
-        // disimpan ke val dari Kotlin; pakai nama lengkap sebagai qualifier.
+        val C = androidx.media3.common.C
         val b = player.trackSelectionParameters.buildUpon()
-        val groups = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+        val groups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
         if (i < 0 || groups.isEmpty()) {
-            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
         } else {
             val g = groups.getOrNull(i) ?: groups.first()
-            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0))
         }
         player.trackSelectionParameters = b.build()
@@ -374,14 +389,29 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
 
+    // Polling posisi 1 dtk dan HANYA menulis state saat detiknya berubah
+    // (sebelumnya tiap 500 ms -> seluruh PlayerReady recompose 2x/dtk).
+    // Simpan progres tiap 10 dtk (tiap simpan = serialisasi seluruh AppState).
+    val nextEp = remember(r, a) { a.available.firstOrNull { it > r.ep } ?: if (r.ep < a.eps) r.ep + 1 else null }
     LaunchedEffect(player) {
         var n = 0
+        var prefetched = false
         while (true) {
-            if (!dragging) pos = player.currentPosition / 1000f
+            val sec = (player.currentPosition / 1000).toInt()
+            if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
             val d = player.duration
-            if (d > 0) dur = (d / 1000).toInt()
-            if (++n % 10 == 0 && wantPlay) vm.saveProg(r.id, r.ep, pos.toInt(), durNow)
-            delay(500)
+            if (d > 0) {
+                val ds = (d / 1000).toInt()
+                if (ds != dur) dur = ds
+                // 60 dtk terakhir: ambil data putar episode berikutnya di latar,
+                // supaya autoplay langsung mulai tanpa menunggu API.
+                if (!prefetched && nextEp != null && vm.s.settings.autoplay && ds - sec in 1..60) {
+                    prefetched = true
+                    launch { com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp) }
+                }
+            }
+            if (++n % 10 == 0 && wantPlay) vm.saveProg(r.id, r.ep, sec, durNow)
+            delay(1000)
         }
     }
 

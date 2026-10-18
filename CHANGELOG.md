@@ -1,3 +1,13 @@
+# Putaran 3 (19 Okt 2026) — performa streaming video
+
+- Start lebih cepat: subtitle diunduh PARALEL dengan batas 4 dtk (sebelumnya berurutan, timeout 10+15 dtk per trek, menahan video); berkas subtitle dipakai ulang; `LoadControl` mulai putar di 1,5 dtk buffer (bawaan 2,5) dan pulih rebuffer di 4 dtk.
+- Lancar: buffer maju 50 dtk + 20 dtk ke belakang; 5 percobaan ulang per segmen (bawaan 3); fallback dekoder; seek `CLOSEST_SYNC`.
+- Jaringan: `data/Net.kt` — satu `OkHttpClient` bersama (pool koneksi, HTTP/2, cookie) untuk API, subtitle, pemutar, unduhan. Sebelumnya pemutar membuat klien baru tiap episode dan API memakai `HttpURLConnection` (handshake TLS baru tiap panggilan).
+- Cache: pemutar kini MEMBACA cache unduhan tetapi tidak menulis segmen streaming ke dalamnya (sebelumnya `NoOpCacheEvictor` = disk tumbuh tanpa batas + I/O saat putar + risiko playlist terpotong tersimpan).
+- Autoplay: data putar episode berikutnya di-prefetch saat 60 dtk terakhir (`ApiClient.prefetchPlayback`, TTL 120 dtk, sekali pakai). `fetchPlayback` retry cepat 1x; unduhan memakai `fresh = true`.
+- Recompose: polling posisi 1 dtk dan hanya menulis state saat detik berubah (sebelumnya 500 ms); simpan progres tiap 10 dtk (sebelumnya 5 dtk).
+- Belum dikompilasi/diukur di sini (tanpa Android SDK).
+
 # Putaran 2 (19 Okt 2026) — performa + fungsi modern
 
 Performa: Home jadi LazyColumn; TopBar derivedStateOf; decode/parse katalog dan baca/tulis cache di luar main thread; Coil global (cache 256 MB); `Anime` @Immutable; R8 + shrinkResources; Baseline Profile + profileinstaller; predictive back; ikon bertema.

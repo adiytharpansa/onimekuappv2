@@ -15,3 +15,5 @@ HSPLcom/onimeku/app/ui/ComponentsKt;->**(**)**
 HSPLcom/onimeku/app/ui/MotionKt;->**(**)**
 HSPLcom/onimeku/app/ui/ThemeKt;->**(**)**
 HSPLcom/onimeku/app/ui/WelcomeScreenKt;->**(**)**
+HSPLcom/onimeku/app/data/Net;->**(**)**
+HSPLcom/onimeku/app/ui/PlayerScreenKt;->**(**)**

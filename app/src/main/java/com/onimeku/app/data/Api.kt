@@ -4,7 +4,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.time.OffsetDateTime
@@ -99,18 +98,17 @@ object ApiClient {
         null
     }
 
-    private suspend fun getText(url: String): String = withContext(Dispatchers.IO) {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 20_000
-            conn.readTimeout = 60_000
-            conn.setRequestProperty("Accept", "application/json")
-            conn.setRequestProperty("User-Agent", "OnimekuApp/1.0 (Android)")
-            if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
-            conn.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            conn.disconnect()
+    private suspend fun getText(url: String, readTimeoutSec: Long = 60): String = withContext(Dispatchers.IO) {
+        // OkHttp bersama (Net): koneksi HTTP/2 ke worker dipakai ulang antar
+        // permintaan, jadi playback/detail tidak mengulang handshake TLS.
+        val req = okhttp3.Request.Builder().url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", "OnimekuApp/1.0 (Android)")
+            .build()
+        val client = Net.client.newBuilder().readTimeout(readTimeoutSec, java.util.concurrent.TimeUnit.SECONDS).build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
+            resp.body?.string() ?: throw java.io.IOException("respons kosong")
         }
     }
 
@@ -191,8 +189,41 @@ object ApiClient {
         return r.data?.takeIf { it.id.isNotBlank() }?.toAnime()
     }
 
-    suspend fun fetchPlayback(id: String, ep: Int): Playback? {
-        val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime?id=${enc(id)}&ep=$ep"))
+    // Data putar yang diambil lebih dulu (episode berikutnya). URL stream
+    // bertoken kedaluwarsa, jadi hanya dipakai sekali dan dalam TTL pendek.
+    private class Prefetched(val at: Long, val pb: Playback)
+    private val prefetched = java.util.concurrent.ConcurrentHashMap<String, Prefetched>()
+    private const val PREFETCH_TTL_MS = 120_000L
+
+    /** Panggil saat episode hampir habis: episode berikutnya langsung siap diputar. */
+    suspend fun prefetchPlayback(id: String, ep: Int) {
+        val k = "$id:$ep"
+        if (prefetched[k]?.let { System.currentTimeMillis() - it.at < PREFETCH_TTL_MS } == true) return
+        val pb = try { fetchPlaybackNet(id, ep) } catch (e: Exception) { null } ?: return
+        prefetched[k] = Prefetched(System.currentTimeMillis(), pb)
+    }
+
+    /**
+     * [fresh] = true mengabaikan hasil prefetch (mis. untuk unduhan, yang
+     * butuh URL segar). Satu percobaan ulang cepat menutup gangguan sesaat
+     * tanpa membuat pengguna menunggu 3 kali seperti katalog.
+     */
+    suspend fun fetchPlayback(id: String, ep: Int, fresh: Boolean = false): Playback? {
+        val k = "$id:$ep"
+        val hit = prefetched.remove(k)
+        if (!fresh && hit != null && System.currentTimeMillis() - hit.at < PREFETCH_TTL_MS) return hit.pb
+        return try {
+            fetchPlaybackNet(id, ep)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            kotlinx.coroutines.delay(400)
+            fetchPlaybackNet(id, ep)
+        }
+    }
+
+    private suspend fun fetchPlaybackNet(id: String, ep: Int): Playback? {
+        val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime?id=${enc(id)}&ep=$ep", readTimeoutSec = 20))
         val pb = r.data ?: return null
         // Normalisasi label subtitle hulu ({label, lang, url}) ke lang.
         val subs = pb.subtitles.map { s -> if (s.lang.isBlank() && s.label.isNotBlank()) s.copy(lang = s.label) else s }

@@ -116,7 +116,7 @@ object Downloads {
 
     private fun httpFactory(ctx: Context): OkHttpDataSource.Factory {
         val app = ctx.applicationContext
-        val client = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+        val client = Net.client.newBuilder().addInterceptor { chain ->
             val req = chain.request()
             val b = req.newBuilder().header("User-Agent", UA)
             if (req.header("Referer") == null) {
