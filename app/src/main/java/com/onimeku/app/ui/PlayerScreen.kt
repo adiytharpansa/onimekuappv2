@@ -304,14 +304,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     fun subName(i: Int): String = if (i < 0) "Off" else subTracks.getOrNull(i)?.let { it.label.ifBlank { it.lang.uppercase() }.ifBlank { "Sub ${i + 1}" } } ?: "Off"
 
     fun applySub(i: Int) {
-        val C = androidx.media3.common.C
+        // Perbaikan agen saat build v5: konstanta statis Java C tidak bisa
+        // disimpan ke val dari Kotlin; pakai nama lengkap sebagai qualifier.
         val b = player.trackSelectionParameters.buildUpon()
-        val groups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+        val groups = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
         if (i < 0 || groups.isEmpty()) {
-            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
         } else {
             val g = groups.getOrNull(i) ?: groups.first()
-            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0))
         }
         player.trackSelectionParameters = b.build()
