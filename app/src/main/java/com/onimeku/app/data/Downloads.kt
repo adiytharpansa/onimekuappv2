@@ -75,8 +75,15 @@ object Downloads {
     private fun registerRef(ctx: Context, streamUrl: String, referer: String?) {
         if (referer.isNullOrBlank()) return
         val k = refKey(streamUrl) ?: return
+        // Stream MegaPlay: CDN-nya hanya menerima Referer akar origin.
+        val host = runCatching { java.net.URL(streamUrl).host }.getOrNull().orEmpty()
+        val eff = if (host == "nexabloom.top" || host.endsWith(".nexabloom.top")) {
+            "https://megaplay.buzz/"
+        } else {
+            referer
+        }
         ctx.applicationContext.getSharedPreferences("dl_refs", Context.MODE_PRIVATE)
-            .edit().putString(k, referer).apply()
+            .edit().putString(k, eff).apply()
     }
 
     private fun refFor(ctx: Context, url: String): String? {

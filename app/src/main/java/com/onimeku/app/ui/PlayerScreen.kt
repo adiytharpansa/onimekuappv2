@@ -202,8 +202,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         val okClient = okhttp3.OkHttpClient.Builder().cookieJar(cookieJar).build()
         val dsFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(okClient)
             .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
-        if (!playback.referer.isNullOrBlank()) {
-            dsFactory.setDefaultRequestProperties(mapOf("Referer" to playback.referer))
+        // CDN MegaPlay hanya menerima Referer akar origin; URL halaman embed
+        // lengkap dibalas halaman error (HTTP 403). Paksa akar origin untuk
+        // stream ber-host nexabloom apa pun nilai dari API.
+        val streamHost = runCatching { java.net.URL(streamUrl).host }.getOrNull().orEmpty()
+        val effReferer = if (streamHost == "nexabloom.top" || streamHost.endsWith(".nexabloom.top")) {
+            "https://megaplay.buzz/"
+        } else {
+            playback.referer
+        }
+        if (!effReferer.isNullOrBlank()) {
+            dsFactory.setDefaultRequestProperties(mapOf("Referer" to effReferer))
         }
         // Pemutar membaca cache unduhan yang sama (kunci cache stabil per
         // episode): episode yang sudah terunduh diputar dari disk, sisanya
