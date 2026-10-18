@@ -68,7 +68,7 @@ object Downloads {
      * penulisan) yang dipakai ulang pemutar sebagai kunci cache yang sama,
      * sehingga episode tetap gagal diputar walau stream-nya sudah sehat.
      * Buang isi cache + kosongkan indeks unduhan lama. Wajib dipanggil
-     * SEBELUM ensureInit/cache pertama kali disentuh dalam proses ini.
+     * SEBELUM manager/cache pertama kali disentuh dalam proses ini.
      */
     fun oneTimeResetV13(ctx: Context) {
         val app = ctx.applicationContext
