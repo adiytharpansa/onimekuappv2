@@ -125,7 +125,9 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // per-trek dari API), lalu diputar dari file. Trek subtitle yang
             // ditautkan mentah ke pemutar bisa menggagalkan seluruh putar
             // bila server teksnya menolak permintaan pemutar.
-            var ready = res
+            // Perbaikan agen saat build v6: tipe eksplisit non-null — var
+            // yang ditangkap closure + diubah isinya tidak bisa smart-cast.
+            var ready: com.onimeku.app.data.Playback = res
             if (ready.subtitles.isNotEmpty()) {
                 // Unduh semua trek PARALEL dengan batas waktu total 4 dtk dan
                 // pakai ulang berkas yang sudah ada. Sebelumnya berurutan
@@ -320,14 +322,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     fun subName(i: Int): String = if (i < 0) "Off" else subTracks.getOrNull(i)?.let { it.label.ifBlank { it.lang.uppercase() }.ifBlank { "Sub ${i + 1}" } } ?: "Off"
 
     fun applySub(i: Int) {
-        val C = androidx.media3.common.C
+        // Perbaikan agen (sama seperti build v5): konstanta statis Java C
+        // dipakai sebagai qualifier nama lengkap, tidak disimpan ke val.
         val b = player.trackSelectionParameters.buildUpon()
-        val groups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+        val groups = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
         if (i < 0 || groups.isEmpty()) {
-            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
         } else {
             val g = groups.getOrNull(i) ?: groups.first()
-            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0))
         }
         player.trackSelectionParameters = b.build()
