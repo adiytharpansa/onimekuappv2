@@ -147,11 +147,19 @@ object Catalog {
     val statuses = listOf("Airing", "Completed")
 
     fun similar(id: String): List<Anime> {
-        val g = byId[id]?.genres ?: return emptyList()
+        val base = byId[id] ?: return emptyList()
+        val g = base.genres
+        // Kemiripan: tumpang-tindih genre dulu, lalu negara/jenis yang sama
+        // (donghua tidak lagi mendominasi rekomendasi anime Jepang hanya
+        // karena genre-nya kebetulan sama), lalu skor tertinggi.
         return all.filter { it.id != id }
             .map { it to it.genres.count { x -> x in g } }
             .filter { it.second > 0 }
-            .sortedByDescending { it.second }
+            .sortedWith(
+                compareByDescending<Pair<Anime, Int>> { it.second }
+                    .thenByDescending { if (it.first.country == base.country) 1 else 0 }
+                    .thenByDescending { it.first.score ?: -1.0 },
+            )
             .take(8).map { it.first }
     }
 }
