@@ -10,11 +10,19 @@ import java.net.URLEncoder
 import java.time.OffsetDateTime
 
 // ---------------------------------------------------------------------------
-// Klien API katalog Onimeku (onimekuappv2-api).
+// Klien API katalog Onimeku — LANGSUNG ke my-anime-app (perintah user
+// 18 Okt 2026: "ganti pakai api ini saja", tanpa perantara onimekuappv2-api).
 // Kontrak terverifikasi live:
-//   GET /api/anime?limit=&page=     -> { ok, total, page, limit, totalPages, data: [Anime] }
-//   GET /api/anime/:id              -> { ok, data: Anime }
-//   GET /api/anime/:id/episode/:ep  -> { ok, data: Playback }
+//   GET /api/anime                  -> { ok, provider, data: [Anime] } (ringkasan, ~900KB)
+//   GET /api/anime?id=<slug>        -> { ok, provider, data: Anime (+episodes[]) }
+//   GET /api/anime?id=<slug>&ep=<n> -> { ok, provider, data: Playback }
+// Hulu TIDAK punya endpoint jadwal maupun poster pengganti; fungsi yang
+// bersangkutan dinonaktifkan dengan anggun di bawah.
+// Tugas yang dulu dikerjakan API perantara kini dikerjakan di klien:
+// stream MegaPlay (CDN nexabloom) dibungkus proksi media hulu
+// (/api/proxy?u=&ref=) dengan Referer akar origin — pola yang sama yang
+// membuat putar bekerja (host segmen acak tak terjangkau dari jaringan
+// sebagian pengguna; Referer halaman penuh ditolak CDN).
 // ---------------------------------------------------------------------------
 
 @Serializable
@@ -39,7 +47,6 @@ data class ApiAnime(
 @Serializable
 private data class ListResp(
     val ok: Boolean = false,
-    val totalPages: Int = 0,
     val data: List<ApiAnime> = emptyList(),
 )
 
@@ -52,6 +59,7 @@ private data class DetailResp(
 @Serializable
 data class ApiSubtitle(
     val lang: String = "",
+    val label: String = "",
     val url: String = "",
     val referer: String? = null,
 )
@@ -79,17 +87,24 @@ private data class PlaybackResp(
 )
 
 object ApiClient {
-    const val BASE = "https://onimekuappv2-api.adiyth-arpansa.workers.dev"
+    const val BASE = "https://my-anime-app.adiyth-arpansa.workers.dev"
     private val json = Json { ignoreUnknownKeys = true }
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+
+    private fun originOf(url: String?): String? = try {
+        val u = URL(url ?: "")
+        "${u.protocol}://${u.host}/"
+    } catch (e: Exception) {
+        null
+    }
 
     private suspend fun getText(url: String): String = withContext(Dispatchers.IO) {
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "GET"
             conn.connectTimeout = 20_000
-            conn.readTimeout = 45_000
+            conn.readTimeout = 60_000
             conn.setRequestProperty("Accept", "application/json")
             conn.setRequestProperty("User-Agent", "OnimekuApp/1.0 (Android)")
             if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
@@ -114,31 +129,20 @@ object ApiClient {
     }
 
     /**
-     * Ambil seluruh katalog (per halaman 100, sesuai batas API). Hasil
-     * dilaporkan PROGRESIF lewat onProgress supaya layar terisi dari
-     * halaman pertama dan tidak kosong total hanya karena satu halaman
-     * di tengah gagal; onRaw menerima data mentah final untuk di-cache.
+     * Ambil seluruh katalog dalam SATU respons (hulu tidak berpaginasi;
+     * ringkasan ~900KB untuk ~900 judul). onProgress/onRaw dipanggil
+     * sekali dengan hasil final demi kompatibilitas pemanggil.
      */
     suspend fun fetchCatalog(
         onProgress: (List<Anime>) -> Unit = {},
         onRaw: (List<ApiAnime>) -> Unit = {},
     ): List<Anime> {
-        fun mapped(raw: List<ApiAnime>): List<Anime> =
-            raw.filter { it.id.isNotBlank() && it.title.isNotBlank() }
-                .distinctBy { it.id }
-                .map { it.toAnime() }
-        val first = json.decodeFromString<ListResp>(getTextRetry("$BASE/api/anime?limit=100&page=1"))
-        val acc = ArrayList<ApiAnime>(first.data)
-        onProgress(mapped(acc))
-        val pages = first.totalPages.coerceIn(1, 20)
-        for (p in 2..pages) {
-            val r = json.decodeFromString<ListResp>(getTextRetry("$BASE/api/anime?limit=100&page=$p"))
-            acc += r.data
-            onProgress(mapped(acc))
-        }
-        val raw = acc.filter { it.id.isNotBlank() && it.title.isNotBlank() }.distinctBy { it.id }
+        val r = json.decodeFromString<ListResp>(getTextRetry("$BASE/api/anime"))
+        val raw = r.data.filter { it.id.isNotBlank() && it.title.isNotBlank() }.distinctBy { it.id }
+        val mapped = raw.map { it.toAnime() }
+        onProgress(mapped)
         onRaw(raw)
-        return mapped(raw)
+        return mapped
     }
 
     /** Katalog terakhir yang berhasil dimuat, disimpan di disk oleh aplikasi. */
@@ -171,31 +175,50 @@ object ApiClient {
         }
     }
 
-    /** Jadwal tayang asli dari API (episode berikutnya per judul). */
-    suspend fun fetchSchedule(): List<ApiScheduleItem> {
-        val r = json.decodeFromString<ScheduleResp>(getTextRetry("$BASE/api/schedule"))
-        return if (r.ok) r.data.filter { it.id.isNotBlank() && it.airingAt > 0 } else emptyList()
-    }
+    /**
+     * Hulu tidak menyediakan endpoint jadwal tayang. Kalender aplikasi
+     * otomatis jatuh ke turunan hari/jam dari katalog (jalur cadangan
+     * yang memang sudah ada di AppVM).
+     */
+    suspend fun fetchSchedule(): List<ApiScheduleItem> = emptyList()
 
     suspend fun fetchDetail(id: String): Anime? {
-        val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime/${enc(id)}"))
+        val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime?id=${enc(id)}"))
         return r.data?.takeIf { it.id.isNotBlank() }?.toAnime()
     }
 
     suspend fun fetchPlayback(id: String, ep: Int): Playback? {
-        val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime/${enc(id)}/episode/$ep"))
-        return r.data
-    }
-
-    /** Poster/cover pengganti (Kitsu) untuk judul berposter AniList. */
-    suspend fun resolvePoster(anilistId: Int): PosterResp? {
-        return try {
-            val r = json.decodeFromString<PosterResp>(getText("$BASE/api/poster/$anilistId"))
-            if (r.ok) r else null
-        } catch (e: Exception) {
-            null
+        val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime?id=${enc(id)}&ep=$ep"))
+        val pb = r.data ?: return null
+        // Normalisasi label subtitle hulu ({label, lang, url}) ke lang.
+        val subs = pb.subtitles.map { s -> if (s.lang.isBlank() && s.label.isNotBlank()) s.copy(lang = s.label) else s }
+        val raw = pb.streamUrl
+        // Stream MegaPlay (CDN nexabloom): bungkus lewat proksi media
+        // hulu dengan Referer akar origin (CDN menolak Referer halaman
+        // penuh); simpan URL asli + halaman putar untuk rantai cadangan
+        // di pemutar (langsung -> embed), persis perilaku era API v2.
+        return if (raw != null && raw.contains("nexabloom", ignoreCase = true)) {
+            val origin = originOf(pb.referer) ?: "https://megaplay.buzz/"
+            val proxied = "$BASE/api/proxy?u=${enc(raw)}&ref=${enc(origin)}"
+            pb.copy(
+                streamUrl = proxied,
+                streamProxyUrl = proxied,
+                directUrl = raw,
+                pageUrl = pb.referer?.takeIf { it.contains("/stream/") },
+                referer = origin,
+                subtitles = subs,
+            )
+        } else {
+            pb.copy(subtitles = subs)
         }
     }
+
+    /**
+     * Hulu tidak menyediakan endpoint poster pengganti; pengobat poster
+     * aplikasi memakai poster katalog apa adanya (cache lokal hasil
+     * resolusi lama tetap berlaku di PosterHealer).
+     */
+    suspend fun resolvePoster(anilistId: Int): PosterResp? = null
 }
 
 @Serializable
@@ -203,12 +226,6 @@ data class ApiScheduleItem(
     val id: String = "",
     val ep: Int = 0,
     val airingAt: Long = 0,
-)
-
-@Serializable
-private data class ScheduleResp(
-    val ok: Boolean = false,
-    val data: List<ApiScheduleItem> = emptyList(),
 )
 
 @Serializable

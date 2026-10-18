@@ -126,7 +126,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         // menyegarkannya di latar — katalog tidak boleh kosong hanya karena
         // satu permintaan jaringan goyah.
         if (Catalog.all.isEmpty()) {
-            ApiClient.loadCachedCatalog(java.io.File(app.filesDir, "catalog_cache.json"))?.let {
+            ApiClient.loadCachedCatalog(java.io.File(app.filesDir, "catalog_cache_direct.json"))?.let {
                 Catalog.all = it
             }
         }
@@ -150,7 +150,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                         }
                     },
                     onRaw = { raw ->
-                        ApiClient.saveCachedCatalog(java.io.File(app.filesDir, "catalog_cache.json"), raw)
+                        ApiClient.saveCachedCatalog(java.io.File(app.filesDir, "catalog_cache_direct.json"), raw)
                     },
                 )
                 if (items.isNotEmpty()) {
