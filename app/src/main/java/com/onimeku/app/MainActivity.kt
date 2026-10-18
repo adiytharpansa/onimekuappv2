@@ -138,7 +138,18 @@ fun App(vm: AppVM) {
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.
             var lastToast by remember { mutableStateOf("") }
             LaunchedEffect(vm.toastMsg) { vm.toastMsg?.let { lastToast = it } }
-            val bottom = if (vm.route is Route.Player || vm.route is Route.Auth || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp
+            val offlineBar = !vm.online && !vm.welcomeOpen && vm.route !is Route.Player
+            AnimatedVisibility(
+                visible = offlineBar,
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                    .padding(bottom = if (vm.route is Route.Auth) 0.dp else TabBarHeight),
+                enter = fadeIn(tween(200)) + slideInVertically(tween(250)) { it },
+                exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it },
+            ) {
+                Text("You're offline · downloads still work", Modifier.fillMaxWidth().background(RedDeep).padding(vertical = 6.dp),
+                    color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+            val bottom = (if (vm.route is Route.Player || vm.route is Route.Auth || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp) + (if (offlineBar) 30.dp else 0.dp)
             AnimatedVisibility(
                 visible = vm.toastMsg != null,
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = bottom, start = 16.dp, end = 16.dp),
@@ -157,7 +168,8 @@ private fun TopBar(vm: AppVM) {
     // Transparan di atas hero; setelah digulir menjadi latar solid supaya ikon
     // tidak bertabrakan dengan poster di bawahnya.
     // Transisi halus: scrim gradasi di atas hero, solid bertahap mulai ±80px gulir (tanpa lonjakan mendadak).
-    val k = ((vm.homeScroll.value - 80) / 220f).coerceIn(0f, 1f)
+    // derivedStateOf + kuantisasi 5%: hanya recompose saat nilai benar-benar berubah, bukan tiap piksel gulir.
+    val k by remember { derivedStateOf { (((vm.homeScrollPx() - 80) / 220f).coerceIn(0f, 1f) * 20f).toInt() / 20f } }
     val scrim = Brush.verticalGradient(listOf(Color(0xCC14161F).copy(alpha = 0.80f * (1f - k) + 0.97f * k), Color(0x0014161F).copy(alpha = 0.97f * k)))
     Row(Modifier.fillMaxWidth().background(scrim).statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {

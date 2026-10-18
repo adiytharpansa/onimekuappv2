@@ -137,9 +137,13 @@ object ApiClient {
         onProgress: (List<Anime>) -> Unit = {},
         onRaw: (List<ApiAnime>) -> Unit = {},
     ): List<Anime> {
-        val r = json.decodeFromString<ListResp>(getTextRetry("$BASE/api/anime"))
-        val raw = r.data.filter { it.id.isNotBlank() && it.title.isNotBlank() }.distinctBy { it.id }
-        val mapped = raw.map { it.toAnime() }
+        val text = getTextRetry("$BASE/api/anime")
+        // ±900 KB JSON: parse + pemetaan di thread latar agar UI tidak tersendat.
+        val (raw, mapped) = withContext(Dispatchers.Default) {
+            val r = json.decodeFromString<ListResp>(text)
+            val rw = r.data.filter { it.id.isNotBlank() && it.title.isNotBlank() }.distinctBy { it.id }
+            rw to rw.map { it.toAnime() }
+        }
         onProgress(mapped)
         onRaw(raw)
         return mapped

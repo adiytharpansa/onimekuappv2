@@ -1,0 +1,17 @@
+# Baseline Profile Onimeku: kompilasi AOT untuk jalur startup dan Home.
+HSPLcom/onimeku/app/MainActivity;->**(**)**
+HSPLcom/onimeku/app/AppVM;->**(**)**
+HSPLcom/onimeku/app/OnimekuApp;->**(**)**
+HSPLcom/onimeku/app/data/Catalog;->**(**)**
+HSPLcom/onimeku/app/data/Catalog$Derived;->**(**)**
+HSPLcom/onimeku/app/data/Anime;->**(**)**
+HSPLcom/onimeku/app/data/ApiClient;->**(**)**
+HSPLcom/onimeku/app/data/ApiAnime;->**(**)**
+HSPLcom/onimeku/app/data/ApiAnime$$serializer;->**(**)**
+HSPLcom/onimeku/app/data/Store;->**(**)**
+HSPLcom/onimeku/app/data/PosterHealer;->**(**)**
+HSPLcom/onimeku/app/ui/ScreensKt;->**(**)**
+HSPLcom/onimeku/app/ui/ComponentsKt;->**(**)**
+HSPLcom/onimeku/app/ui/MotionKt;->**(**)**
+HSPLcom/onimeku/app/ui/ThemeKt;->**(**)**
+HSPLcom/onimeku/app/ui/WelcomeScreenKt;->**(**)**

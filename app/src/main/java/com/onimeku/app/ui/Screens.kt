@@ -64,7 +64,7 @@ private val SectionGap = 26.dp
 private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: String?, ranked: Boolean = false, delayMs: Int = 0) {
     val items = ids.mapNotNull { Catalog.byId[it] }
     if (items.isEmpty()) return
-    Column(Modifier.fadeSlideIn(delayMs)) {
+    Column(if (delayMs >= 0) Modifier.fadeSlideIn(delayMs) else Modifier) {
         Spacer(Modifier.height(SectionGap))
         SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
         Rail {
@@ -99,41 +99,39 @@ fun HomeScreen(vm: AppVM) {
     // menembus LazyLayoutPrefetch; PullToRefreshBox (material3 1.3) adalah
     // tersangka utama (state-nya ditulis saat layout). Tarik-untuk-segarkan
     // dikorbankan sementara demi Home yang stabil; vm.refresh() dipertahankan.
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(vm.homeScroll).padding(bottom = bottomContentPadding())) {
-            Hero(vm, heroH)
+    // LazyColumn: hanya baris yang terlihat (+ prefetch) yang dikomposisi. Dulu seluruh baris
+    // (belasan rail genre) digambar sekaligus saat Home dibuka.
+    val base = p.base?.let { Catalog.byId[it] }
+    val similar = remember(base?.id, Catalog.all) { base?.let { b -> Catalog.similar(b.id).map { it.id } }.orEmpty() }
+    val last = p.last
+    val lastT = last?.let { p.prog["${it.id}:${it.ep}"] }
+    val lastAnime = last?.let { Catalog.byId[it.id] }
+    val fresh = Catalog.new
+    LazyColumn(Modifier.fillMaxSize(), state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
+        item(key = "hero", contentType = "hero") { Hero(vm, heroH) }
 
-            val last = p.last
-            val t = last?.let { p.prog["${it.id}:${it.ep}"] }
-            val lastAnime = last?.let { Catalog.byId[it.id] }
-            if (last != null && t != null && lastAnime != null) {
+        if (last != null && lastT != null && lastAnime != null) {
+            item(key = "continue", contentType = "rail") {
                 Column(Modifier.fadeSlideIn(0)) {
                     Spacer(Modifier.height(SectionGap))
                     SectionHead("Continue Watching")
                     Rail {
                         item {
-                            Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(t)}") {
+                            Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(lastT)}") {
                                 vm.go(Route.Player(last.id, last.ep))
                             }
                         }
                     }
                 }
             }
-
-            // Jeda bertahap (maks. 4 langkah) supaya baris muncul berurutan, bukan serentak.
-            var n = 0
-            fun d() = minOf(n++, 4) * 70
-
-            val base = p.base?.let { Catalog.byId[it] }
-            if (base != null) {
-                PosterRow("Because you watched ${base.title}", Catalog.similar(base.id).map { it.id }, vm, seeAll = null, delayMs = d())
-            }
-
-            PosterRow("Top Hits Anime", Catalog.top, vm, seeAll = "top", ranked = true, delayMs = d())
-
-            val fresh = Catalog.new
-            if (fresh.isNotEmpty()) {
-                Column(Modifier.fadeSlideIn(d())) {
+        }
+        if (base != null && similar.isNotEmpty()) {
+            item(key = "because", contentType = "rail") { PosterRow("Because you watched ${base.title}", similar, vm, seeAll = null, delayMs = 0) }
+        }
+        item(key = "top", contentType = "rail") { PosterRow("Top Hits Anime", Catalog.top, vm, seeAll = "top", ranked = true, delayMs = 0) }
+        if (fresh.isNotEmpty()) {
+            item(key = "new", contentType = "rail") {
+                Column(Modifier.fadeSlideIn(70)) {
                     Spacer(Modifier.height(SectionGap))
                     SectionHead("New Episode Releases") { vm.go(Route.SeeAll("new")) }
                     Rail {
@@ -145,19 +143,23 @@ fun HomeScreen(vm: AppVM) {
                     }
                 }
             }
-
-            PosterRow("Airing Now", Catalog.airing.take(12), vm, seeAll = "airing", delayMs = d())
-            PosterRow("Popular", Catalog.popular.take(12), vm, seeAll = "popular", delayMs = d())
-            PosterRow("Latest Releases", Catalog.latest.take(12), vm, seeAll = "latest", delayMs = d())
-            PosterRow("Donghua", Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = d())
-            Catalog.topGenres.forEach { g -> PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g", delayMs = d()) }
-
-            // Pintu masuk ke SELURUH katalog (grid lazy, tanpa batas 12 judul).
-            Spacer(Modifier.height(SectionGap))
-            SectionHead("All Anime") { vm.go(Route.SeeAll("all")) }
-            Box(Modifier.padding(horizontal = 16.dp)) {
-                Btn("Browse all ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView,
-                    Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
+        }
+        // delayMs = -1: tanpa animasi masuk (baris di bawah layar tidak mengulang animasi saat digulir kembali).
+        item(key = "airing", contentType = "rail") { PosterRow("Airing Now", Catalog.airing.take(12), vm, seeAll = "airing", delayMs = 140) }
+        item(key = "popular", contentType = "rail") { PosterRow("Popular", Catalog.popular.take(12), vm, seeAll = "popular", delayMs = -1) }
+        item(key = "latest", contentType = "rail") { PosterRow("Latest Releases", Catalog.latest.take(12), vm, seeAll = "latest", delayMs = -1) }
+        item(key = "donghua", contentType = "rail") { PosterRow("Donghua", Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = -1) }
+        items(Catalog.topGenres, key = { "genre:$it" }, contentType = { "rail" }) { g ->
+            PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g", delayMs = -1)
+        }
+        // Pintu masuk ke SELURUH katalog (grid lazy, tanpa batas 12 judul).
+        item(key = "all", contentType = "all") {
+            Column {
+                Spacer(Modifier.height(SectionGap))
+                SectionHead("All Anime") { vm.go(Route.SeeAll("all")) }
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    Btn("Browse all ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView, Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
+                }
             }
         }
     }
@@ -203,7 +205,7 @@ private fun HeroPage(vm: AppVM, a: Anime) {
         else coil.compose.AsyncImage(
             model = req, contentDescription = a.title,
             // Parallax: gambar bergeser 35% dari jarak scroll.
-            modifier = Modifier.fillMaxSize().graphicsLayer { translationY = vm.homeScroll.value * 0.35f },
+            modifier = Modifier.fillMaxSize().graphicsLayer { translationY = vm.homeScrollPx().coerceAtMost(4000) * 0.35f },
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             alignment = Alignment.TopCenter,
         )
@@ -230,7 +232,7 @@ fun CalendarScreen(vm: AppVM) {
     val ensure = LocalEnsureNotif.current
     val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
     val dow = days[vm.calDay].dayOfWeek.value % 7
-    val list = Catalog.all.filter { it.day == dow }.sortedBy { it.time }
+    val list = remember(dow, Catalog.all) { Catalog.all.filter { it.day == dow }.sortedBy { it.time } }
     // Jadwal ASLI dari API bila sudah termuat: hanya judul dengan episode
     // berikutnya yang benar-benar terjadwal pada tanggal terpilih.
     val sched = vm.schedule

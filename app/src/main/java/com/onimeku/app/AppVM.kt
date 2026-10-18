@@ -1,7 +1,10 @@
 package com.onimeku.app
 
 import android.app.Application
-import androidx.compose.foundation.ScrollState
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -42,7 +45,36 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     val downloading = mutableStateMapOf<String, Int>()
 
     /** Posisi scroll Home disimpan di sini agar tidak kembali ke atas setelah membuka Detail lalu Back. */
-    val homeScroll = ScrollState(0)
+    val homeScroll = LazyListState()
+
+    /** Jarak gulir Home dalam piksel (0 di puncak; besar bila item pertama sudah lewat). Dibaca di lambda graphicsLayer/derivedStateOf, bukan di komposisi. */
+    fun homeScrollPx(): Int = if (homeScroll.firstVisibleItemIndex == 0) homeScroll.firstVisibleItemScrollOffset else Int.MAX_VALUE / 2
+
+    /** Status koneksi internet (untuk spanduk offline dan muat-ulang otomatis). */
+    var online by mutableStateOf(true); private set
+    private var netCb: ConnectivityManager.NetworkCallback? = null
+
+    private fun watchNetwork() {
+        val cm = app.getSystemService(ConnectivityManager::class.java) ?: return
+        fun now() = cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        online = now()
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                viewModelScope.launch {
+                    val was = !online
+                    online = true
+                    if (was && (Catalog.all.isEmpty() || Catalog.loadFailed)) reloadCatalog()
+                }
+            }
+            override fun onLost(network: Network) { viewModelScope.launch { online = now() } }
+        }
+        try { cm.registerDefaultNetworkCallback(cb); netCb = cb } catch (_: Exception) {}
+    }
+
+    override fun onCleared() {
+        netCb?.let { try { app.getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(it) } catch (_: Exception) {} }
+        super.onCleared()
+    }
 
     /** True saat pull-to-refresh sedang berjalan. */
     var refreshing by mutableStateOf(false); private set
@@ -59,6 +91,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         PosterHealer.init(app)
         Reminders.rescheduleAll(app, s)
         initDownloads()
+        watchNetwork()
         reloadCatalog()
     }
 
@@ -126,13 +159,17 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         // Tampilkan dulu katalog terakhir dari disk (seketika), jaringan
         // menyegarkannya di latar — katalog tidak boleh kosong hanya karena
         // satu permintaan jaringan goyah.
-        if (Catalog.all.isEmpty()) {
-            ApiClient.loadCachedCatalog(java.io.File(app.filesDir, "catalog_cache_direct.json"))?.let {
-                Catalog.all = it
-            }
-        }
         Catalog.loading = Catalog.all.isEmpty()
         Catalog.loadFailed = false
+        if (Catalog.all.isEmpty()) {
+            // Baca + parse cache disk di thread latar: tidak menahan frame pertama.
+            viewModelScope.launch {
+                val cached = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    ApiClient.loadCachedCatalog(java.io.File(app.filesDir, "catalog_cache_direct.json"))
+                }
+                if (cached != null && Catalog.all.isEmpty()) { Catalog.all = cached; Catalog.loading = false }
+            }
+        }
         viewModelScope.launch {
             try {
                 schedule = ApiClient.fetchSchedule().associateBy { it.id }
@@ -151,7 +188,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                         }
                     },
                     onRaw = { raw ->
-                        ApiClient.saveCachedCatalog(java.io.File(app.filesDir, "catalog_cache_direct.json"), raw)
+                        // Tulis ke disk di thread IO (bukan main).
+                        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            ApiClient.saveCachedCatalog(java.io.File(app.filesDir, "catalog_cache_direct.json"), raw)
+                        }
                     },
                 )
                 if (items.isNotEmpty()) {

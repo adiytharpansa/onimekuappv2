@@ -1,3 +1,9 @@
+# Putaran 2 (19 Okt 2026) — performa + fungsi modern
+
+Performa: Home jadi LazyColumn; TopBar derivedStateOf; decode/parse katalog dan baca/tulis cache di luar main thread; Coil global (cache 256 MB); `Anime` @Immutable; R8 + shrinkResources; Baseline Profile + profileinstaller; predictive back; ikon bertema.
+Fungsi: pemutar fullscreen/landscape, kontrol auto-sembunyi, ketuk dua kali ±10 dtk, pemilih subtitle (default Indonesia) dan kualitas; spanduk offline + muat ulang otomatis saat online; chip Cast placeholder dihapus.
+Belum dikompilasi/diukur di sini (tanpa Android SDK).
+
 # Perubahan terbaru (19 Okt 2026) — tema crimson, halaman baru, rapikan posisi
 
 - Warna: merah terang #E50914 diganti merah tua modern (crimson). Token: `Red #A6122D`, `RedDeep #6E0F1F`, `RedText #E8566F` (teks/ikon merah di latar gelap). Logo, ikon launcher, ikon Play Store, welcome, avatar, tombol putar ikut diganti.

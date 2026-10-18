@@ -45,6 +45,7 @@ AppVM (satu-satunya ViewModel)
 
 | File | Isi |
 |---|---|
+| `OnimekuApp.kt` | **BARU** `Application` + pemuat gambar Coil global (cache memori 20%, disk 256 MB) |
 | `MainActivity.kt` | Activity, edge-to-edge, PiP, izin notifikasi, `App()`, `TopBar`, `TabBar`, toast |
 | `AppVM.kt` | `Route`, navigasi, My List, progres tonton, unduhan, profil, **akun (BARU)** |
 | `Notifier.kt`, `Reminders.kt` | Notifikasi dan pengingat episode (WorkManager) |
@@ -216,6 +217,22 @@ gradle :app:bundleRelease        # butuh signing (di bawah)
 - `TabBar`: sebelumnya gradasi transparan sehingga judul baris tembus ("Airing Now" terlihat di balik tab). Sekarang solid `Bg` + garis atas 1 dp `Line`.
 - Toast turun ke 24 dp di halaman Auth (tanpa tab bar).
 
+### 7.4 Performa (19 Okt 2026, putaran 2)
+Semua ditulis tanpa Android SDK: **belum diukur dan belum dikompilasi**. Ukur dulu sebelum mengklaim hasil (Macrobenchmark/Perfetto, `adb shell dumpsys gfxinfo`).
+- **Home → `LazyColumn`** (`Screens.kt`): sebelumnya `Column` + `verticalScroll` mengomposisi semua rail (belasan genre) sekaligus. Kini hanya baris terlihat (+prefetch). `vm.homeScroll` kini `LazyListState`; gunakan `vm.homeScrollPx()` untuk membaca jarak gulir (di lambda `graphicsLayer`/`derivedStateOf`, jangan di komposisi). Baris di bawah layar tanpa animasi masuk (`delayMs = -1`) agar tidak mengulang saat digulir kembali.
+- **TopBar**: membaca gulir lewat `derivedStateOf` dengan kuantisasi 5% → tidak recompose tiap piksel.
+- **Decode di luar main thread**: parse JSON katalog (±900 KB) di `Dispatchers.Default` (`ApiClient.fetchCatalog`), baca cache disk dan tulis cache di `Dispatchers.IO` (`AppVM.reloadCatalog`). Sebelumnya semua di main thread.
+- **Coil global** (`OnimekuApp`): cache memori 20% + disk 256 MB, `respectCacheHeaders(false)` (proksi gambar sering `no-cache` sehingga poster diunduh ulang).
+- **Stabilitas Compose**: `Anime` diberi `@Immutable` (berisi `List` yang dianggap tidak stabil → rail recompose berlebihan).
+- **Memo**: "Because you watched" (`Catalog.similar`) dan filter hari Calendar dibungkus `remember`.
+- **R8 + shrinkResources** untuk rilis, aturan keep di `proguard-rules.pro` (serialization, model data, Media3, OkHttp). **Wajib uji build rilis** (`bundleRelease`) di perangkat: R8 sering merusak refleksi/serialisasi diam-diam.
+- **Baseline Profile** (`src/main/baseline-prof.txt`) + `profileinstaller`. Ini profil aturan tulis-tangan; ganti dengan profil hasil Macrobenchmark bila tersedia.
+- **Predictive back** (`enableOnBackInvokedCallback`) dan **ikon bertema** Android 13 (`<monochrome>`).
+
+### 7.5 Fungsi modern
+- **Pemutar**: mode **fullscreen/landscape** (kunci landscape, sembunyikan bilah sistem, Back keluar dari fullscreen), **kontrol otomatis sembunyi** (3,5 dtk) dengan ketuk untuk memunculkan, **ketuk dua kali** sisi kiri/kanan untuk ±10 dtk, **pemilih subtitle** (otomatis memilih Indonesia → Inggris → pertama; tombol "CC" di bar atas dan chip), **pemilih kualitas** langsung di pemutar (tersimpan ke Settings). Chip "Cast" yang cuma menampilkan toast dihapus.
+- **Spanduk offline** + **muat ulang katalog otomatis** saat koneksi kembali (`AppVM.online`, `registerDefaultNetworkCallback`).
+
 ---
 
 ## 8. Pekerjaan tersisa (urut prioritas)
@@ -227,9 +244,10 @@ gradle :app:bundleRelease        # butuh signing (di bawah)
 5. **Sinkronisasi** My List/progres ke akun (tabel Supabase dengan RLS per `auth.uid()`); sekarang semua lokal.
 6. **Bahasa** — "Bahasa Indonesia" dan "日本語" masih "Coming soon". String masih tertanam di kode; pindahkan ke `strings.xml` sebelum menambah bahasa.
 7. **Teks legal** — tinjau oleh penasihat hukum, tambahkan kontak resmi dan URL kebijakan publik untuk Play Console.
-8. **Pull-to-refresh Home** dimatikan (crash `PullToRefreshBox` di emulator CI). `vm.refresh()` masih ada; coba lagi setelah naik versi Compose.
-9. `README.md` masih menyebut API `onimekuappv2-api` dan Firebase Auth; selaraskan dengan `CATATAN-ARSITEKTUR.md` (API langsung) dan Supabase.
-10. `isMinifyEnabled = false` di rilis; aktifkan R8 dan uji.
+8. **Ukur performa** (Macrobenchmark: startup dingin, jank scroll Home, memori) dan ganti baseline profile tulis-tangan dengan hasil ukur.
+9. **Pull-to-refresh Home** dimatikan (crash `PullToRefreshBox` di emulator CI). `vm.refresh()` masih ada; coba lagi setelah naik versi Compose.
+10. `README.md` masih menyebut API `onimekuappv2-api` dan Firebase Auth; selaraskan dengan `CATATAN-ARSITEKTUR.md` (API langsung) dan Supabase.
+11. Uji build rilis ber-R8 (lihat 7.4).
 
 ---
 

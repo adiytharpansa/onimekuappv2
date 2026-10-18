@@ -7,6 +7,7 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 
+@androidx.compose.runtime.Immutable
 data class Anime(
     val id: String,
     val title: String,

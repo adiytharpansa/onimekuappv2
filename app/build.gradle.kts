@@ -21,7 +21,10 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: kode lebih kecil + start lebih cepat. Aturan keep ada di proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
     compileOptions {
@@ -52,4 +55,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // Memasang Baseline Profile (src/main/baseline-prof.txt) saat instalasi: start dan scroll pertama lebih mulus.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 }
