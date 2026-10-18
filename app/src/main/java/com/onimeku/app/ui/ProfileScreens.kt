@@ -29,7 +29,7 @@ import com.onimeku.app.AppVM
 import com.onimeku.app.Notifier
 import com.onimeku.app.Route
 
-private val avatarColors = listOf(Color(0xFFE50914), Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B))
+private val avatarColors = listOf(Color(0xFFA6122D), Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B))
 
 @Composable
 fun ProfileScreen(vm: AppVM) {
@@ -69,25 +69,29 @@ fun ProfileScreen(vm: AppVM) {
             }
         }
 
+        val acc = vm.s.account
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.size(64.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Person, null, Modifier.size(32.dp), tint = NavOff)
+            Box(Modifier.size(64.dp).clip(CircleShape).background(if (acc != null) Red else Bg2).border(1.dp, if (acc != null) Red else Line, CircleShape), contentAlignment = Alignment.Center) {
+                if (acc != null) Text(acc.email.take(1).uppercase(), fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                else Icon(Icons.Outlined.Person, null, Modifier.size(32.dp), tint = NavOff)
             }
-            Column {
-                Text("Guest", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-                Text("Not signed in", fontSize = 14.sp, color = InkSoft)
+            Column(Modifier.weight(1f)) {
+                Text(if (acc != null) "Signed in" else "Guest", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                Text(acc?.email ?: "Not signed in", fontSize = 14.sp, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
 
-        CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(120)) {
+        if (acc == null) CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(120)) {
             Column(Modifier.padding(20.dp)) {
                 Text("Sign in to Onimeku", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Text("Save your watchlist and pick up where you left off on any device.", Modifier.padding(top = 6.dp), color = InkSoft, fontSize = 14.sp)
                 Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f)) { vm.openWelcome() }
-                    Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f)) { vm.openWelcome() }
+                    Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(false)) }
+                    Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(true)) }
                 }
             }
+        } else Box(Modifier.padding(top = 20.dp)) {
+            Btn("Sign out", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.signOut() }
         }
 
         CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(200)) {
@@ -127,7 +131,8 @@ fun SubScreen(vm: AppVM, key: String) {
     val ensure = LocalEnsureNotif.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val set = vm.s.settings
-    val titles = mapOf("settings" to "Settings", "language" to "Language", "help" to "Help Center", "about" to "About Onimeku")
+    val titles = mapOf("settings" to "Settings", "language" to "Language", "help" to "Help Center", "about" to "About Onimeku",
+        "terms" to "Terms of Service", "privacy" to "Privacy Policy", "licenses" to "Licenses")
     Page {
         SubHead(titles[key] ?: "", vm)
         when (key) {
@@ -209,12 +214,17 @@ fun SubScreen(vm: AppVM, key: String) {
                 Text("Onimeku is a place to watch anime online. Browse top hits, follow new episodes, and keep a list of what you want to watch next.",
                     Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
                 CardBox {
-                    listOf("Terms of Service", "Privacy Policy", "Licenses").forEachIndexed { i, l ->
+                    listOf("terms" to "Terms of Service", "privacy" to "Privacy Policy", "licenses" to "Licenses").forEachIndexed { i, (k2, l) ->
                         if (i > 0) HLine()
-                        Text(l, Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), fontSize = 16.sp)
+                        Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k2)) }.padding(horizontal = 18.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(l, Modifier.weight(1f), fontSize = 16.sp)
+                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
+                        }
                     }
                 }
             }
+            "terms", "privacy", "licenses" -> LegalContent(key)
         }
     }
 }

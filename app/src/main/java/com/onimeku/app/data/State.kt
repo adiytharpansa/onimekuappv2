@@ -8,6 +8,9 @@ import kotlinx.serialization.json.Json
 @Serializable data class Dl(val id: String, val ep: Int)
 @Serializable data class Last(val id: String, val ep: Int)
 
+/** Sesi akun yang sedang masuk (null = tamu). */
+@Serializable data class Account(val userId: String, val email: String, val accessToken: String, val refreshToken: String)
+
 @Serializable
 data class Profile(
     val name: String,
@@ -38,6 +41,7 @@ data class AppState(
     val settings: Settings = Settings(),
     val profiles: List<Profile> = listOf(Profile("Me")),
     val pi: Int = 0,
+    val account: Account? = null,
 )
 
 class Store(ctx: Context) {

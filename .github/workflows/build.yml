@@ -32,6 +32,10 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build debug APK
+        env:
+          # Opsional: aktifkan Sign in/Sign up (secret repo; kunci PUBLIK saja)
+          ORG_GRADLE_PROJECT_ONIMEKU_SUPABASE_URL: ${{ secrets.ONIMEKU_SUPABASE_URL }}
+          ORG_GRADLE_PROJECT_ONIMEKU_SUPABASE_KEY: ${{ secrets.ONIMEKU_SUPABASE_KEY }}
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload debug APK

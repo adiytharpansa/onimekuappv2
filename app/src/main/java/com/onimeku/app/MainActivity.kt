@@ -35,6 +35,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -127,15 +129,16 @@ fun App(vm: AppVM) {
                         Route.Notif -> NotifScreen(vm)
                         Route.Search -> SearchScreen(vm)
                         is Route.Player -> PlayerScreen(vm, r)
+                        is Route.Auth -> AuthScreen(vm, r.signUp)
                     }
                 }
                 if (vm.route == Route.Home) TopBar(vm)
-                if (vm.route !is Route.Player) TabBar(vm, Modifier.align(Alignment.BottomCenter))
+                if (vm.route !is Route.Player && vm.route !is Route.Auth) TabBar(vm, Modifier.align(Alignment.BottomCenter))
             }
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.
             var lastToast by remember { mutableStateOf("") }
             LaunchedEffect(vm.toastMsg) { vm.toastMsg?.let { lastToast = it } }
-            val bottom = if (vm.route is Route.Player || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp
+            val bottom = if (vm.route is Route.Player || vm.route is Route.Auth || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp
             AnimatedVisibility(
                 visible = vm.toastMsg != null,
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = bottom, start = 16.dp, end = 16.dp),
@@ -153,8 +156,10 @@ fun App(vm: AppVM) {
 private fun TopBar(vm: AppVM) {
     // Transparan di atas hero; setelah digulir menjadi latar solid supaya ikon
     // tidak bertabrakan dengan poster di bawahnya.
-    val solid by animateColorAsState(if (vm.homeScroll.value > 360) Color(0xF214161F) else Color.Transparent, label = "topBarBg")
-    Row(Modifier.fillMaxWidth().background(solid).statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+    // Transisi halus: scrim gradasi di atas hero, solid bertahap mulai ±80px gulir (tanpa lonjakan mendadak).
+    val k = ((vm.homeScroll.value - 80) / 220f).coerceIn(0f, 1f)
+    val scrim = Brush.verticalGradient(listOf(Color(0xCC14161F).copy(alpha = 0.80f * (1f - k) + 0.97f * k), Color(0x0014161F).copy(alpha = 0.97f * k)))
+    Row(Modifier.fillMaxWidth().background(scrim).statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.clickable { vm.setTab(Route.Home) }) { Logo(40.dp) }
         Spacer(Modifier.weight(1f))
@@ -185,7 +190,9 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
         T(Route.ProfileTab, "Profile", Icons.Outlined.Person, Icons.Filled.Person),
     )
     Row(
-        modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xE6141621), Color(0xFF141621))))
+        // Solid + garis tipis di atas, supaya konten yang digulir tidak tembus di balik tab bar.
+        modifier.fillMaxWidth().background(Bg)
+            .drawBehind { drawLine(Line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
             .navigationBarsPadding().height(TabBarHeight).padding(horizontal = 8.dp),
     ) {
         tabs.forEach { t ->

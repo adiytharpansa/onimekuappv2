@@ -50,7 +50,7 @@ fun WelcomeScreen(vm: AppVM) {
             fun strip(top: Float, hh: Float, brush: Brush) =
                 rotate(-12f, Offset(w / 2, top + hh / 2)) { drawRect(brush, Offset(-0.15f * w, top), Size(1.3f * w, hh)) }
             strip(h * 0.06f, h * 0.36f, Brush.linearGradient(listOf(Color(0xFF6F8A4A), Color(0xFFD6B46A), Color(0xFF2D6A9F)), Offset.Zero, Offset(w, h * 0.3f)))
-            strip(h * 0.34f, h * 0.30f, Brush.linearGradient(listOf(Color(0xFF8A1218), Color(0xFFC0151D), Color(0xFF3A0B0F)), Offset.Zero, Offset(w, h * 0.3f)))
+            strip(h * 0.34f, h * 0.30f, Brush.linearGradient(listOf(Color(0xFF6E0F1F), Color(0xFFA6122D), Color(0xFF2E0710)), Offset.Zero, Offset(w, h * 0.3f)))
             strip(h * 0.58f, h * 0.46f, Brush.linearGradient(listOf(Color(0xFF4A2C26), Color(0xFFB7653C), Color(0xFF7B3B2A)), Offset.Zero, Offset(w, h * 0.3f)))
             drawCircle(Color(0xFFF4C28A), w * 0.07f, Offset(w * 0.38f, h * 0.20f))
             drawCircle(Color(0xFFE9A58B), w * 0.08f, Offset(w * 0.62f, h * 0.72f))
@@ -86,8 +86,8 @@ fun WelcomeScreen(vm: AppVM) {
                 }
             }
             Row(Modifier.padding(top = 22.dp).fadeSlideIn(150), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome() }
-                Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome() }
+                Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(false)) }
+                Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(true)) }
             }
         }
     }

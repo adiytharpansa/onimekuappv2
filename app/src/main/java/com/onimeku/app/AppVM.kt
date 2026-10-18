@@ -28,6 +28,7 @@ sealed interface Route {
     data object Notif : Route
     data object Search : Route
     data class Player(val id: String, val ep: Int) : Route
+    data class Auth(val signUp: Boolean) : Route
 }
 
 class AppVM(private val app: Application) : AndroidViewModel(app) {
@@ -308,6 +309,52 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             st.copy(profiles = st.profiles.filterIndexed { k, _ -> k != i }, pi = if (i < st.pi) st.pi - 1 else st.pi)
         }
         Reminders.rescheduleAll(app, s)
+    }
+
+    // ---------- akun ----------
+    var authBusy by mutableStateOf(false); private set
+    var authError by mutableStateOf<String?>(null)
+
+    private fun runAuth(block: suspend () -> Unit) {
+        if (authBusy) return
+        authBusy = true; authError = null
+        viewModelScope.launch {
+            try { block() }
+            catch (e: AuthException) { authError = e.message }
+            catch (e: Exception) { authError = "Network problem. Check your connection and try again." }
+            finally { authBusy = false }
+        }
+    }
+
+    fun signIn(email: String, password: String) = runAuth {
+        val acc = AuthClient.signIn(email.trim(), password)
+        upd { it.copy(account = acc) }
+        toast("Welcome back")
+        setTab(Route.ProfileTab)
+    }
+
+    fun signUp(email: String, password: String) = runAuth {
+        val acc = AuthClient.signUp(email.trim(), password)
+        if (acc == null) {
+            toast("Check your email to confirm your account")
+            replaceTop(Route.Auth(false))
+        } else {
+            upd { it.copy(account = acc) }
+            toast("Account created")
+            setTab(Route.ProfileTab)
+        }
+    }
+
+    fun resetPassword(email: String) = runAuth {
+        AuthClient.recover(email.trim())
+        toast("Reset link sent if the email exists")
+    }
+
+    fun signOut() {
+        val acc = s.account ?: return
+        upd { it.copy(account = null) }
+        toast("Signed out")
+        viewModelScope.launch { try { AuthClient.signOut(acc.accessToken) } catch (_: Exception) {} }
     }
 
     // ---------- welcome ----------

@@ -68,7 +68,7 @@ fun Logo(size: Dp) {
     androidx.compose.foundation.Canvas(Modifier.size(size)) {
         val k = this.size.width / 60f
         rotate(45f) {
-            drawRoundRect(Color(0xFFE0202E), Offset(6 * k, 6 * k), Size(48 * k, 48 * k), CornerRadius(16 * k))
+            drawRoundRect(Red, Offset(6 * k, 6 * k), Size(48 * k, 48 * k), CornerRadius(16 * k))
         }
         drawCircle(Color.White, radius = 10 * k, style = Stroke(6 * k))
     }

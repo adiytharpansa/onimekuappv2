@@ -14,6 +14,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        // Kunci publik Supabase untuk Sign in/Sign up (isi di gradle.properties; kosong = fitur akun nonaktif anggun)
+        fun prop(n: String) = (project.findProperty(n) as String?)?.replace("\"", "") ?: ""
+        buildConfigField("String", "SUPABASE_URL", "\"${prop("ONIMEKU_SUPABASE_URL")}\"")
+        buildConfigField("String", "SUPABASE_KEY", "\"${prop("ONIMEKU_SUPABASE_KEY")}\"")
     }
     buildTypes {
         release {
@@ -25,7 +29,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 }
 
 dependencies {

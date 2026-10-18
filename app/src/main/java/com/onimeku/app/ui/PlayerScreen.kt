@@ -408,7 +408,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             } else if (buffering) {
                 CircularProgressIndicator(Modifier.align(Alignment.Center).size(44.dp), color = Red, strokeWidth = 3.dp)
             } else {
-                Box(Modifier.align(Alignment.Center).size(64.dp).clip(CircleShape).background(Color(0xEBE50914))
+                Box(Modifier.align(Alignment.Center).size(64.dp).clip(CircleShape).background(Red.copy(alpha = 0.92f))
                     .clickable { player.playWhenReady = !player.playWhenReady }, contentAlignment = Alignment.Center) {
                     Icon(if (wantPlay) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", Modifier.size(32.dp))
                 }
