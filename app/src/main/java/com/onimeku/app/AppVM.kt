@@ -90,7 +90,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                             toast("Download failed: Episode $ep")
                         }
                     }
-                    androidx.media3.exoplayer.offline.Download.STATE_REMOVED -> downloading.remove(k)
+                    androidx.media3.exoplayer.offline.Download.STATE_REMOVING -> downloading.remove(k)
                 }
             }
 

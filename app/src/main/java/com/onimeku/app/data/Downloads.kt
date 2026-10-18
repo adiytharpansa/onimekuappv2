@@ -112,16 +112,19 @@ object Downloads {
             .setCache(cache(app))
             .setUpstreamDataSourceFactory(httpFactory(app))
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        val dm = DownloadManager(app, db(app), cache(app), dsFactory)
+        val dm = DownloadManager(
+            app, db(app), cache(app), dsFactory,
+            java.util.concurrent.Executors.newFixedThreadPool(4),
+        )
         dm.maxParallelDownloads = 3
         return dm
     }
 
     /** Hormati pengaturan "Wi-Fi only": unduhan menunggu jaringan tak terukur. */
     fun setWifiOnly(ctx: Context, wifiOnly: Boolean) {
-        manager(ctx).requirements = androidx.media3.exoplayer.offline.Requirements(
-            if (wifiOnly) androidx.media3.exoplayer.offline.Requirements.NETWORK_UNMETERED
-            else androidx.media3.exoplayer.offline.Requirements.NETWORK
+        manager(ctx).requirements = androidx.media3.exoplayer.scheduler.Requirements(
+            if (wifiOnly) androidx.media3.exoplayer.scheduler.Requirements.NETWORK_UNMETERED
+            else androidx.media3.exoplayer.scheduler.Requirements.NETWORK
         )
     }
 
@@ -141,10 +144,10 @@ object Downloads {
         // DownloadHelper memilih satu set trek bawaan (bukan semua rendisi)
         // dan mengambil manifes lewat factory kita (UA + Referer ikut).
         val helper = DownloadHelper.forMediaItem(
+            app,
             mediaItem,
             DefaultRenderersFactory(app),
             httpFactory(app),
-            null,
         )
         helper.prepare(object : DownloadHelper.Callback {
             override fun onPrepared(h: DownloadHelper) {
@@ -186,4 +189,11 @@ class OnimekuDownloadService : DownloadService(
 ) {
     override fun getDownloadManager(): DownloadManager = Downloads.manager(this)
     override fun getScheduler(): Scheduler? = null
+    override fun getForegroundNotification(
+        downloads: MutableList<Download>, notMetRequirements: Int,
+    ): android.app.Notification =
+        androidx.media3.exoplayer.offline.DownloadNotificationHelper(this, Downloads.CHANNEL_ID)
+            .buildProgressNotification(
+                this, android.R.drawable.stat_sys_download, null, null, downloads, notMetRequirements,
+            )
 }
