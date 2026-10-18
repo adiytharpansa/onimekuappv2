@@ -84,7 +84,7 @@ private fun VideoSurface(player: Player, modifier: Modifier) {
 fun PlayerScreen(vm: AppVM, r: Route.Player) {
     val ctx = LocalContext.current
     if (vm.s.settings.wifi && !onWifi(ctx)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead("Wi-Fi only is on", vm)
             Text("Streaming over mobile data is turned off in Settings. Connect to Wi-Fi or turn the option off.", color = InkSoft)
             Box(Modifier.padding(top = 16.dp)) { Btn("Open Settings", BtnStyle.Solid) { vm.openSettings() } }
@@ -112,7 +112,15 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var mainRetry by remember(r) { mutableIntStateOf(0) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false; pbOffline = false
-        val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
+        // Batas waktu TOTAL memuat data putar (debug.30): endpoint hulu
+        // kadang lambat/flaky (terukur 4,6 dtk dan sesekali 503 untuk
+        // Bleach ep1) dan timeout baca per percobaan 12 dtk x 2 putaran
+        // bisa membuat "Loading stream..." menggantung ~25-40 dtk di
+        // jaringan seluler. Lewat 26 dtk: tampilkan galat jujur + tombol
+        // coba lagi, jangan menggantung tanpa kepastian.
+        val res = kotlinx.coroutines.withTimeoutOrNull(26_000) {
+            try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
+        }
         if (res == null) {
             // API tak terjangkau (offline): bila episode ini sudah terunduh
             // penuh, putar dari cache unduhan — unduhan harus benar-benar
@@ -175,7 +183,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         }
     }
     if (pbFailed) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
             Text("This episode's stream is unavailable right now.", color = InkSoft)
             Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { attempt++ } }
@@ -184,7 +192,11 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     }
     val playback = pb
     if (playback == null) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+        // Latar PEKAT sejak bingkai pertama (debug.30): tanpa ini halaman
+        // Detail di bawahnya tembus selama transisi rute — "halaman
+        // ganda" pada rekaman user. Semua keadaan layar-penuh pemutar
+        // (memuat/galat/rantai habis/Wi-Fi) kini mengecat Bg sendiri.
+        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 CircularProgressIndicator(Modifier.size(28.dp), color = Red, strokeWidth = 3.dp)
@@ -216,7 +228,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         mediaUrl
     }
     if (streamUrl == null) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
             Text("This episode's stream is unavailable right now.", color = InkSoft)
             Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { attempt++ } }
@@ -225,7 +237,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     }
 
     if (chainDead) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
             Text("This episode's stream is unavailable right now.", color = InkSoft)
             Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { chainDead = false; useDirect = false; mainRetry = 0; attempt++ } }

@@ -223,7 +223,10 @@ object ApiClient {
     }
 
     private suspend fun fetchPlaybackNet(id: String, ep: Int): Playback? {
-        val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime?id=${enc(id)}&ep=$ep", readTimeoutSec = 20))
+        // Timeout baca 12 dtk (debug.30): endpoint ini normalnya menjawab
+        // <5 dtk; 20 dtk x 2 putaran membuat layar memuat menggantung
+        // terlalu lama di jaringan seluler saat hulu goyah.
+        val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime?id=${enc(id)}&ep=$ep", readTimeoutSec = 12))
         val pb = r.data ?: return null
         // Normalisasi label subtitle hulu ({label, lang, url}) ke lang.
         val subs = pb.subtitles.map { s -> if (s.lang.isBlank() && s.label.isNotBlank()) s.copy(lang = s.label) else s }
