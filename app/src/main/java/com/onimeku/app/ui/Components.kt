@@ -115,8 +115,8 @@ fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modi
         BtnStyle.OutlineOn -> Triple(Color.White, Bg, Color.White)
     }
     Row(
-        modifier.height(height).clip(CircleShape).background(bg).border(3.dp, bd, CircleShape)
-            .clickable(onClick = onClick).padding(horizontal = 22.dp),
+        modifier.pressable(onClick).height(height).clip(CircleShape).background(bg).border(3.dp, bd, CircleShape)
+            .padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
@@ -139,9 +139,10 @@ fun Modifier.artBackground(a: Anime): Modifier = this.background(Bg2)
 @Composable
 fun RealImage(a: Anime, modifier: Modifier = Modifier) {
     val img = com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
-    if (!img.isNullOrBlank()) {
+    val req = rememberImg(img)
+    if (req != null) {
         coil.compose.AsyncImage(
-            model = img, contentDescription = null,
+            model = req, contentDescription = null,
             modifier = modifier,
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
         )
@@ -158,30 +159,23 @@ fun Poster(
 ) {
     val sized = if (w != null) modifier.width(w) else modifier.fillMaxWidth()
     Box(
-        sized.aspectRatio(if (ep) 232f / 150f else 232f / 311f).clip(RoundedCornerShape(if (compact) 12.dp else 18.dp))
-            .artBackground(a).clickable(onClick = onClick),
+        sized.pressable(onClick).aspectRatio(if (ep) 232f / 150f else 232f / 311f)
+            .clip(RoundedCornerShape(if (compact) 12.dp else 18.dp)).artBackground(a),
     ) {
         val img = if (ep) {
             com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
         } else {
             com.onimeku.app.data.PosterHealer.posterFor(a)
         }
-        // Shimmer halus selama poster asli dimuat (denyut alpha di atas
-        // permukaan kartu); hilang begitu gambar tiba atau gagal dimuat
-        // (PosterHealer mengganti URL buruk dengan poster asli lain).
+        // Kilau selama poster dimuat; hilang saat gambar tiba atau gagal. Crossfade 350 ms saat tampil.
         val imgDone = remember(a.id, img) { mutableStateOf(false) }
-        val shimmer = rememberInfiniteTransition(label = "posterShimmer")
-        val pulse by shimmer.animateFloat(
-            initialValue = 0.3f, targetValue = 0.85f,
-            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-            label = "posterAlpha",
-        )
-        if (!img.isNullOrBlank() && !imgDone.value) {
-            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = pulse * 0.07f)))
+        val req = rememberImg(img)
+        if (!imgDone.value && (req != null || !a.poster.isNullOrBlank())) {
+            Box(Modifier.fillMaxSize().shimmer())
         }
-        if (!img.isNullOrBlank()) {
+        if (req != null) {
             coil.compose.AsyncImage(
-                model = img, contentDescription = null,
+                model = req, contentDescription = a.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 onSuccess = { imgDone.value = true },

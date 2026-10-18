@@ -43,6 +43,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     /** Posisi scroll Home disimpan di sini agar tidak kembali ke atas setelah membuka Detail lalu Back. */
     val homeScroll = ScrollState(0)
 
+    /** True saat pull-to-refresh sedang berjalan. */
+    var refreshing by mutableStateOf(false); private set
+    fun refresh() { refreshing = true; reloadCatalog() }
+
     /** Jadwal tayang asli dari API: id katalog -> episode berikutnya + waktu. */
     var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())
         private set
@@ -139,7 +143,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             try {
                 val items = ApiClient.fetchCatalog(
                     onProgress = { part ->
-                        if (part.isNotEmpty()) {
+                        // Jangan menyusutkan daftar saat refresh: halaman awal lebih pendek dari katalog yang sudah tampil.
+                        if (part.isNotEmpty() && (Catalog.all.isEmpty() || part.size >= Catalog.all.size)) {
                             Catalog.all = part
                             Catalog.loading = false
                         }
@@ -158,6 +163,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                 Catalog.loadFailed = Catalog.all.isEmpty()
             } finally {
                 Catalog.loading = false
+                refreshing = false
                 Reminders.rescheduleAll(app, s)
             }
         }

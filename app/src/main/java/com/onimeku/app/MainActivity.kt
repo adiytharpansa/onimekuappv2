@@ -10,7 +10,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -100,18 +107,24 @@ fun App(vm: AppVM) {
     Surface(Modifier.fillMaxSize(), color = Bg, contentColor = Color.White) {
         Box(Modifier.fillMaxSize()) {
             if (vm.welcomeOpen) WelcomeScreen(vm) else {
-                when (val r = vm.route) {
-                    Route.Home -> HomeScreen(vm)
-                    Route.Calendar -> CalendarScreen(vm)
-                    Route.MyList -> MyListScreen(vm)
-                    Route.Downloads -> DownloadsScreen(vm)
-                    Route.ProfileTab -> ProfileScreen(vm)
-                    is Route.Sub -> SubScreen(vm, r.key)
-                    is Route.Detail -> DetailScreen(vm, r.id)
-                    is Route.SeeAll -> SeeAllScreen(vm, r.key)
-                    Route.Notif -> NotifScreen(vm)
-                    Route.Search -> SearchScreen(vm)
-                    is Route.Player -> PlayerScreen(vm, r)
+                AnimatedContent(
+                    targetState = vm.route,
+                    transitionSpec = { (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.98f)) togetherWith fadeOut(tween(160)) },
+                    label = "route",
+                ) { r ->
+                    when (r) {
+                        Route.Home -> HomeScreen(vm)
+                        Route.Calendar -> CalendarScreen(vm)
+                        Route.MyList -> MyListScreen(vm)
+                        Route.Downloads -> DownloadsScreen(vm)
+                        Route.ProfileTab -> ProfileScreen(vm)
+                        is Route.Sub -> SubScreen(vm, r.key)
+                        is Route.Detail -> DetailScreen(vm, r.id)
+                        is Route.SeeAll -> SeeAllScreen(vm, r.key)
+                        Route.Notif -> NotifScreen(vm)
+                        Route.Search -> SearchScreen(vm)
+                        is Route.Player -> PlayerScreen(vm, r)
+                    }
                 }
                 if (vm.route == Route.Home) TopBar(vm)
                 if (vm.route !is Route.Player) TabBar(vm, Modifier.align(Alignment.BottomCenter))
@@ -169,8 +182,10 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
             val sel = vm.tab == t.r
             Column(Modifier.weight(1f).fillMaxHeight().clickable { vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-                Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(26.dp), tint = if (sel) RedText else NavOff)
-                Text(t.label, fontSize = 12.sp, color = if (sel) RedText else NavOff, maxLines = 1)
+                val tint by animateColorAsState(if (sel) RedText else NavOff, tween(200), label = "tabTint")
+                val sc by androidx.compose.animation.core.animateFloatAsState(if (sel) 1.12f else 1f, tween(200), label = "tabScale")
+                Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(26.dp).graphicsLayer { scaleX = sc; scaleY = sc }, tint = tint)
+                Text(t.label, fontSize = 12.sp, color = tint, maxLines = 1)
             }
         }
     }

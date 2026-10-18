@@ -1,6 +1,13 @@
 package com.onimeku.app.ui
 
 import androidx.compose.foundation.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -49,30 +56,31 @@ private val SectionGap = 26.dp
 
 /** Satu baris poster bergulir horizontal dengan judul bagian + "See all". */
 @Composable
-private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: String?, ranked: Boolean = false) {
+private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: String?, ranked: Boolean = false, delayMs: Int = 0) {
     val items = ids.mapNotNull { Catalog.byId[it] }
     if (items.isEmpty()) return
-    Spacer(Modifier.height(SectionGap))
-    SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
-    Rail {
-        itemsIndexed(items, key = { _, a -> a.id }) { i, a ->
-            PosterCard(a, railW, rank = if (ranked) i + 1 else null) { vm.go(Route.Detail(a.id)) }
+    Column(Modifier.fadeSlideIn(delayMs)) {
+        Spacer(Modifier.height(SectionGap))
+        SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
+        Rail {
+            itemsIndexed(items, key = { _, a -> a.id }) { i, a ->
+                PosterCard(a, railW, rank = if (ranked) i + 1 else null) { vm.go(Route.Detail(a.id)) }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(vm: AppVM) {
     val p = vm.p
+    val heroH = heroHeight()
     if (Catalog.all.isEmpty()) {
-        Page(extraTop = 64.dp) {
-            RootTitle("Home")
-            if (Catalog.loading) {
-                Box(Modifier.fillMaxWidth().padding(top = 56.dp), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.CircularProgressIndicator(color = Red)
-                }
-                Text("Loading catalog…", Modifier.fillMaxWidth().padding(top = 16.dp), color = InkSoft, textAlign = TextAlign.Center)
-            } else {
+        if (Catalog.loading) {
+            HomeSkeleton(heroH, railW, bottomContentPadding())
+        } else {
+            Page(extraTop = 64.dp) {
+                RootTitle("Home")
                 EmptyBox("Catalog unavailable", "The catalog could not be loaded. Check your connection, then try again.") {
                     Btn("Try again", BtnStyle.Play) { vm.reloadCatalog() }
                 }
@@ -80,82 +88,118 @@ fun HomeScreen(vm: AppVM) {
         }
         return
     }
-    Column(Modifier.fillMaxSize().verticalScroll(vm.homeScroll).padding(bottom = bottomContentPadding())) {
-        Hero(vm)
+    PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh() }, modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(vm.homeScroll).padding(bottom = bottomContentPadding())) {
+            Hero(vm, heroH)
 
-        val last = p.last
-        val t = last?.let { p.prog["${it.id}:${it.ep}"] }
-        val lastAnime = last?.let { Catalog.byId[it.id] }
-        if (last != null && t != null && lastAnime != null) {
-            Spacer(Modifier.height(SectionGap))
-            SectionHead("Continue Watching")
-            Rail {
-                item {
-                    Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(t)}") {
-                        vm.go(Route.Player(last.id, last.ep))
+            val last = p.last
+            val t = last?.let { p.prog["${it.id}:${it.ep}"] }
+            val lastAnime = last?.let { Catalog.byId[it.id] }
+            if (last != null && t != null && lastAnime != null) {
+                Column(Modifier.fadeSlideIn(0)) {
+                    Spacer(Modifier.height(SectionGap))
+                    SectionHead("Continue Watching")
+                    Rail {
+                        item {
+                            Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(t)}") {
+                                vm.go(Route.Player(last.id, last.ep))
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        val base = p.base?.let { Catalog.byId[it] }
-        if (base != null) {
-            PosterRow("Because you watched ${base.title}", Catalog.similar(base.id).map { it.id }, vm, seeAll = null)
-        }
+            // Jeda bertahap (maks. 4 langkah) supaya baris muncul berurutan, bukan serentak.
+            var n = 0
+            fun d() = minOf(n++, 4) * 70
 
-        PosterRow("Top Hits Anime", Catalog.top, vm, seeAll = "top", ranked = true)
+            val base = p.base?.let { Catalog.byId[it] }
+            if (base != null) {
+                PosterRow("Because you watched ${base.title}", Catalog.similar(base.id).map { it.id }, vm, seeAll = null, delayMs = d())
+            }
 
-        val fresh = Catalog.new
-        if (fresh.isNotEmpty()) {
-            Spacer(Modifier.height(SectionGap))
-            SectionHead("New Episode Releases") { vm.go(Route.SeeAll("new")) }
-            Rail {
-                items(fresh, key = { it.first }) { (id, ep, whenTxt) ->
-                    Catalog.byId[id]?.let { a ->
-                        Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
+            PosterRow("Top Hits Anime", Catalog.top, vm, seeAll = "top", ranked = true, delayMs = d())
+
+            val fresh = Catalog.new
+            if (fresh.isNotEmpty()) {
+                Column(Modifier.fadeSlideIn(d())) {
+                    Spacer(Modifier.height(SectionGap))
+                    SectionHead("New Episode Releases") { vm.go(Route.SeeAll("new")) }
+                    Rail {
+                        items(fresh, key = { it.first }) { (id, ep, whenTxt) ->
+                            Catalog.byId[id]?.let { a ->
+                                Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
+                            }
+                        }
                     }
                 }
             }
+
+            PosterRow("Airing Now", Catalog.airing.take(12), vm, seeAll = "airing", delayMs = d())
+            PosterRow("Popular", Catalog.popular.take(12), vm, seeAll = "popular", delayMs = d())
+            PosterRow("Latest Releases", Catalog.latest.take(12), vm, seeAll = "latest", delayMs = d())
+            PosterRow("Donghua", Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = d())
+            Catalog.topGenres.forEach { g -> PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g", delayMs = d()) }
+
+            // Pintu masuk ke SELURUH katalog (grid lazy, tanpa batas 12 judul).
+            Spacer(Modifier.height(SectionGap))
+            SectionHead("All Anime") { vm.go(Route.SeeAll("all")) }
+            Box(Modifier.padding(horizontal = 16.dp)) {
+                Btn("Browse all ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView,
+                    Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
+            }
         }
+    }
+}
 
-        PosterRow("Airing Now", Catalog.airing.take(12), vm, seeAll = "airing")
-        PosterRow("Popular", Catalog.popular.take(12), vm, seeAll = "popular")
-        PosterRow("Latest Releases", Catalog.latest.take(12), vm, seeAll = "latest")
-        PosterRow("Donghua", Catalog.donghua.take(12), vm, seeAll = "donghua")
-        Catalog.topGenres.forEach { g -> PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g") }
+/** Tinggi hero mengikuti layar (±64%), bukan angka tetap. */
+@Composable
+private fun heroHeight() = (LocalConfiguration.current.screenHeightDp * 0.64f).coerceIn(420f, 640f).dp
 
-        // Pintu masuk ke SELURUH katalog (grid lazy, tanpa batas 12 judul).
-        Spacer(Modifier.height(SectionGap))
-        SectionHead("All Anime") { vm.go(Route.SeeAll("all")) }
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            Btn("Browse all ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView,
-                Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
+/** Carousel hero: 5 judul teratas, geser manual atau otomatis tiap 5,5 dtk, indikator animasi, parallax saat digulir. */
+@Composable
+private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
+    val items = Catalog.top.take(5).mapNotNull { Catalog.byId[it] }.ifEmpty { Catalog.all.take(1) }
+    if (items.isEmpty()) return
+    val pager = rememberPagerState { items.size }
+    LaunchedEffect(pager, items.size) {
+        if (items.size > 1) while (true) {
+            delay(5500)
+            if (!pager.isScrollInProgress) pager.animateScrollToPage((pager.currentPage + 1) % items.size)
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(heroH)) {
+        HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) }
+        if (items.size > 1) {
+            Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items.indices.forEach { i ->
+                    val sel = pager.currentPage == i
+                    val w by animateDpAsState(if (sel) 22.dp else 6.dp, label = "dotW")
+                    Box(Modifier.height(6.dp).width(w).clip(CircleShape).background(if (sel) Red else Color(0x66FFFFFF)))
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun Hero(vm: AppVM) {
-    val a = Catalog.top.firstOrNull()?.let { Catalog.byId[it] } ?: Catalog.all.firstOrNull() ?: return
+private fun HeroPage(vm: AppVM, a: Anime) {
     val on = a.id in vm.p.myList
     val firstEp = a.available.firstOrNull() ?: 1
-    // Tinggi mengikuti layar (±64%), bukan angka tetap, supaya rapi di ponsel kecil maupun tablet.
-    val heroH = (LocalConfiguration.current.screenHeightDp * 0.64f).coerceIn(420f, 640f).dp
-    Box(Modifier.fillMaxWidth().height(heroH).artBackground(a).clickable { vm.go(Route.Detail(a.id)) }) {
-        // Hero menampilkan POSTER ASLI judul (portrait), bukan cover/banner.
-        val img = com.onimeku.app.data.PosterHealer.posterFor(a)
-        if (!img.isNullOrBlank()) {
-            coil.compose.AsyncImage(
-                model = img, contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                alignment = Alignment.TopCenter,
-            )
-        }
+    Box(Modifier.fillMaxSize().artBackground(a).clickable { vm.go(Route.Detail(a.id)) }) {
+        val req = rememberImg(com.onimeku.app.data.PosterHealer.posterFor(a))
+        if (req == null) Box(Modifier.fillMaxSize().shimmer())
+        else coil.compose.AsyncImage(
+            model = req, contentDescription = a.title,
+            // Parallax: gambar bergeser 35% dari jarak scroll.
+            modifier = Modifier.fillMaxSize().graphicsLayer { translationY = vm.homeScroll.value * 0.35f },
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            alignment = Alignment.TopCenter,
+        )
         Box(Modifier.fillMaxSize().drawBehind {
             drawRect(Brush.verticalGradient(0f to Color(0x8014161F), 0.28f to Color.Transparent, 0.68f to Color(0xC014161F), 1f to Bg))
         })
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = 28.dp)) {
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = 40.dp)) {
             Text(a.title, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp,
                 maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(a.genres.take(4).joinToString(", "), Modifier.padding(top = 10.dp), fontSize = 14.sp,
