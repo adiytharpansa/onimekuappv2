@@ -67,9 +67,11 @@ object Sync {
             val prog = (l.prog.keys + r.prog.keys)
                 .filter { it !in seen }
                 .associateWith { k -> maxOf(l.prog[k] ?: 0, r.prog[k] ?: 0) }
+            val watch = (l.watch + r.watch).groupBy { it.id }.values
+                .map { g -> g.maxBy { it.at } }.sortedByDescending { it.at }.take(24)
             l.copy(
                 myList = (l.myList + r.myList).distinct(),
-                prog = prog, seen = seen,
+                prog = prog, seen = seen, watch = watch,
                 remind = (l.remind + r.remind).distinct(),
                 last = l.last ?: r.last, base = l.base ?: r.base,
             )

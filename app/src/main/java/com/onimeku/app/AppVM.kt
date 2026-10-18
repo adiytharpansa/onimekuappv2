@@ -427,11 +427,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun saveProg(id: String, ep: Int, t: Int, dur: Int) {
         val k = "$id:$ep"
         updP { pr ->
-            var base = pr.base; var prog = pr.prog; var seen = pr.seen; var last = pr.last
+            var base = pr.base; var prog = pr.prog; var seen = pr.seen; var last = pr.last; var watch = pr.watch
             if (t >= 5) base = id
             if (t >= dur * 0.9) { prog = prog - k; if (k !in seen) seen = seen + k }
             else if (t >= 5) { prog = prog + (k to t); last = Last(id, ep) }
-            pr.copy(base = base, prog = prog, seen = seen, last = last)
+            // Catatan tontonan (untuk Continue Watching): hanya putar yang
+            // benar-benar berjalan (>=5 dtk), terbaru di depan, maks 24 judul.
+            if (t >= 5) watch = (listOf(Watch(id, ep, System.currentTimeMillis(), dur)) + watch.filter { it.id != id }).take(24)
+            pr.copy(base = base, prog = prog, seen = seen, last = last, watch = watch)
         }
     }
 

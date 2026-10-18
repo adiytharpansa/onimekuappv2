@@ -8,6 +8,9 @@ import kotlinx.serialization.json.Json
 @Serializable data class Dl(val id: String, val ep: Int)
 @Serializable data class Last(val id: String, val ep: Int)
 
+/** Satu catatan tontonan: judul + episode terakhir diputar, kapan (epoch ms), dan durasi episode itu (detik). */
+@Serializable data class Watch(val id: String, val ep: Int, val at: Long = 0, val dur: Int = 0)
+
 /** Sesi akun yang sedang masuk (null = tamu). */
 @Serializable data class Account(val userId: String, val email: String, val accessToken: String, val refreshToken: String)
 
@@ -18,6 +21,7 @@ data class Profile(
     val prog: Map<String, Int> = emptyMap(),
     val seen: List<String> = emptyList(),
     val last: Last? = null,
+    val watch: List<Watch> = emptyList(),
     val base: String? = null,
     val remind: List<String> = emptyList(),
 )

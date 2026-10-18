@@ -90,6 +90,9 @@ fun HomeScreen(vm: AppVM) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+/** Satu kartu Continue Watching: anime, episode untuk dilanjutkan, posisi (detik), durasi episode (detik, 0 = tak diketahui). */
+private data class ContItem(val a: Anime, val ep: Int, val pos: Int, val dur: Int)
+
 private fun HomeContent(vm: AppVM) {
     val p = vm.p
     val heroH = heroHeight()
@@ -116,9 +119,30 @@ private fun HomeContent(vm: AppVM) {
     // (belasan rail genre) digambar sekaligus saat Home dibuka.
     val base = p.base?.let { Catalog.byId[it] }
     val similar = remember(base?.id, Catalog.all) { base?.let { b -> Catalog.similar(b.id).map { it.id } }.orEmpty() }
-    val last = p.last
-    val lastT = last?.let { p.prog["${it.id}:${it.ep}"] }
-    val lastAnime = last?.let { Catalog.byId[it.id] }
+    // Continue Watching = anime yang BENAR-BENAR sudah ditonton (perintah
+    // user 19 Okt 2026), terbaru dulu, realtime dari catatan tontonan +
+    // progres tersimpan. Yang tampil hanya judul dengan progres aktif
+    // (sudah diputar >=5 dtk, belum tuntas) atau episode lanjutan tepat
+    // sesudah episode yang dituntaskan. Progres warisan (belum ada di
+    // catatan tontonan) ikut di belakang agar tak ada yang hilang.
+    val contItems = remember(p.watch, p.prog, p.seen, Catalog.all) {
+        val out = mutableListOf<ContItem>()
+        val covered = mutableSetOf<String>()
+        fun consider(id: String, ep: Int, durHint: Int) {
+            if (id in covered) return
+            val a = Catalog.byId[id] ?: return
+            val pos = p.prog["$id:$ep"]
+            when {
+                pos != null && pos >= 5 -> { out += ContItem(a, ep, pos, durHint); covered += id }
+                "$id:$ep" in p.seen && ep + 1 <= a.ep -> { out += ContItem(a, ep + 1, 0, 0); covered += id }
+            }
+        }
+        p.watch.forEach { w -> consider(w.id, w.ep, w.dur) }
+        p.prog.keys.forEach { k ->
+            consider(k.substringBeforeLast(':'), k.substringAfterLast(':').toIntOrNull() ?: return@forEach, 0)
+        }
+        out.take(12)
+    }
     val fresh = Catalog.new
     val allRows = remember(Catalog.all) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.chunked(3) }
     var pullPx by remember { mutableFloatStateOf(0f) }
@@ -150,16 +174,22 @@ private fun HomeContent(vm: AppVM) {
     LazyColumn(Modifier.fillMaxSize().nestedScroll(ptrConn), state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
         item(key = "hero", contentType = "hero") { Hero(vm, heroH) }
 
-        if (last != null && lastT != null && lastAnime != null) {
+        if (contItems.isNotEmpty()) {
             item(key = "continue", contentType = "rail") {
                 Column(Modifier.fadeSlideIn(0)) {
                     Spacer(Modifier.height(SectionGap))
                     SectionHead(I18n.t("sec_continue", "Continue Watching"))
                     Rail {
-                        item {
-                            Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(lastT)}", progress = (lastT / 1440f).coerceIn(0.03f, 0.97f)) {
-                                vm.go(Route.Player(last.id, last.ep))
-                            }
+                        items(contItems, key = { it.a.id }) { c ->
+                            Poster(
+                                c.a, railW, ep = true,
+                                meta = c.a.title to ("Episode ${c.ep}" + if (c.pos > 0) " · ${fmt(c.pos)}" else ""),
+                                progress = when {
+                                    c.pos > 0 && c.dur > 0 -> (c.pos.toFloat() / c.dur).coerceIn(0.03f, 0.97f)
+                                    c.pos > 0 -> (c.pos / 1440f).coerceIn(0.03f, 0.97f)
+                                    else -> null
+                                },
+                            ) { vm.go(Route.Player(c.a.id, c.ep)) }
                         }
                     }
                 }
