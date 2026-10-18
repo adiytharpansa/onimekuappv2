@@ -33,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -166,7 +167,12 @@ fun HomeScreen(vm: AppVM) {
                     Rail {
                         items(fresh, key = { it.first }) { (id, ep, whenTxt) ->
                             Catalog.byId[id]?.let { a ->
-                                Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
+                                // Judul anime di bawah kartu (dulu kartu hanya bertuliskan "Episode N" tanpa nama anime).
+                                Column(Modifier.width(railW)) {
+                                    Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
+                                    Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
+                                        minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
                     }
@@ -217,7 +223,8 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
             if (!pager.isScrollInProgress) pager.animateScrollToPage((pager.currentPage + 1) % items.size)
         }
     }
-    Box(Modifier.fillMaxWidth().height(heroH)) {
+    // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
+    Box(Modifier.fillMaxWidth().height(heroH).clipToBounds()) {
         HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) }
         if (items.size > 1) {
             Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -249,11 +256,20 @@ private fun HeroPage(vm: AppVM, a: Anime) {
             drawRect(Brush.verticalGradient(0f to Color(0x8014161F), 0.28f to Color.Transparent, 0.68f to Color(0xC014161F), 1f to Bg))
         })
         Column(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = 40.dp)) {
-            Text(a.title, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp,
-                maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Text(a.genres.take(4).joinToString(", "), Modifier.padding(top = 10.dp), fontSize = 14.sp,
-                color = Color(0xFFF1E8EE), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(a.title, fontSize = 30.sp, fontWeight = FontWeight.Bold, lineHeight = 35.sp, letterSpacing = (-0.4).sp,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val meta = listOfNotNull(
+                a.year.takeIf { it > 0 }?.toString(),
+                a.eps.takeIf { it > 0 }?.let { "$it ${if (it == 1) "episode" else "episodes"}" },
+                a.status,
+            ).joinToString("  ·  ")
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                a.rating?.let { Text(it, Modifier.padding(end = 10.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Gold) }
+                Text(meta, fontSize = 14.sp, color = Color(0xFFE3E5EE), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(a.genres.take(4).joinToString(", "), Modifier.padding(top = 4.dp), fontSize = 14.sp,
+                color = Color(0xFFB9BDCB), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Btn(I18n.t("play", "Play"), BtnStyle.Play, Icons.Filled.PlayCircleFilled) { vm.go(Route.Player(a.id, firstEp)) }
                 Btn(if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"), if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
                     if (on) Icons.Filled.Check else Icons.Filled.Add) { vm.toggleML(a.id) }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.onimeku.app.AppVM
+import com.onimeku.app.I18n
 import com.onimeku.app.Route
 import com.onimeku.app.data.Anime
 
@@ -111,17 +113,18 @@ fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modi
     val (bg, fg, bd) = when (style) {
         BtnStyle.Play -> Triple(Red, Color.White, Red)
         BtnStyle.Solid -> Triple(Solid, Color.White, Solid)
-        BtnStyle.Outline -> Triple(Color.Transparent, Color.White, Color.White)
+        // Outline: kaca gelap tipis + garis halus (dulu cincin putih tebal 3dp yang terasa kasar).
+        BtnStyle.Outline -> Triple(Color(0x40000000), Color.White, Color(0xB3FFFFFF))
         BtnStyle.OutlineOn -> Triple(Color.White, Bg, Color.White)
     }
     Row(
-        modifier.pressable(onClick).height(height).clip(CircleShape).background(bg).border(3.dp, bd, CircleShape)
+        modifier.pressable(onClick).height(height).clip(CircleShape).background(bg).border(1.5.dp, bd, CircleShape)
             .padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        if (icon != null) Icon(icon, null, Modifier.size(22.dp), tint = fg)
-        Text(text, color = fg, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = fg)
+        Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -275,11 +278,16 @@ fun Rail(content: LazyListScope.() -> Unit) {
 
 @Composable
 fun SectionHead(title: String, onAll: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 14.dp), verticalAlignment = Alignment.Bottom) {
-        Text(title, Modifier.weight(1f).padding(end = 12.dp), fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (onAll != null) Text("See all", color = RedText, fontWeight = FontWeight.Medium, fontSize = 15.sp,
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onAll).padding(horizontal = 6.dp, vertical = 4.dp))
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f).padding(end = 12.dp), fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.2).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (onAll != null) Row(
+            Modifier.clip(CircleShape).clickable(onClick = onAll).padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(I18n.t("see_all", "See all"), color = RedText, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            Icon(Icons.Filled.ChevronRight, null, Modifier.size(18.dp), tint = RedText)
+        }
     }
 }
 

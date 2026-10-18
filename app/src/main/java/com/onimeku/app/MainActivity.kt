@@ -186,10 +186,20 @@ private fun TopBar(vm: AppVM) {
     // tidak bertabrakan dengan poster di bawahnya.
     // Transisi halus: scrim gradasi di atas hero, solid bertahap mulai ±80px gulir (tanpa lonjakan mendadak).
     // derivedStateOf + kuantisasi 5%: hanya recompose saat nilai benar-benar berubah, bukan tiap piksel gulir.
-    val k by remember { derivedStateOf { (((vm.homeScrollPx() - 80) / 220f).coerceIn(0f, 1f) * 20f).toInt() / 20f } }
-    val scrim = Brush.verticalGradient(listOf(Color(0xCC14161F).copy(alpha = 0.80f * (1f - k) + 0.97f * k), Color(0x0014161F).copy(alpha = 0.97f * k)))
-    Row(Modifier.fillMaxWidth().background(scrim).statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically) {
+    // Perbaikan debug.32: dulu solid hanya 97% sehingga judul hero tembus samar di balik bilah; kini 100% + garis halus.
+    val k by remember { derivedStateOf { (((vm.homeScrollPx() - 60) / 160f).coerceIn(0f, 1f) * 20f).toInt() / 20f } }
+    Row(
+        Modifier.fillMaxWidth()
+            .drawBehind {
+                // Di atas hero: scrim lembut tanpa tepi keras, supaya jam/ikon status terbaca di poster terang.
+                if (k < 1f) drawRect(Brush.verticalGradient(listOf(Bg.copy(alpha = 0.72f * (1f - k)), Bg.copy(alpha = 0f))))
+                // Setelah digulir: latar solid penuh + garis tipis di tepi bawah.
+                if (k > 0f) drawRect(Bg.copy(alpha = k))
+                if (k >= 1f) drawLine(Line, Offset(0f, size.height - 0.5.dp.toPx()), Offset(size.width, size.height - 0.5.dp.toPx()), 1.dp.toPx())
+            }
+            .statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(Modifier.clickable { vm.setTab(Route.Home) }) { Logo(40.dp) }
         Spacer(Modifier.weight(1f))
         IconBtn(Icons.Outlined.Search, "Search") { vm.go(Route.Search) }
@@ -229,9 +239,12 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
             Column(Modifier.weight(1f).fillMaxHeight().clickable { vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                 val tint by animateColorAsState(if (sel) RedText else NavOff, tween(200), label = "tabTint")
-                val sc by androidx.compose.animation.core.animateFloatAsState(if (sel) 1.12f else 1f, tween(200), label = "tabScale")
-                Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(26.dp).graphicsLayer { scaleX = sc; scaleY = sc }, tint = tint)
-                Text(t.label, fontSize = 12.sp, color = tint, maxLines = 1)
+                val pill by animateColorAsState(if (sel) Red.copy(alpha = 0.28f) else Color.Transparent, tween(200), label = "tabPill")
+                // Indikator "pil" di belakang ikon aktif (gaya Material 3), lebih jelas daripada hanya warna.
+                Box(Modifier.size(width = 58.dp, height = 30.dp).clip(CircleShape).background(pill), contentAlignment = Alignment.Center) {
+                    Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(24.dp), tint = tint)
+                }
+                Text(t.label, fontSize = 11.5.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, color = tint, maxLines = 1)
             }
         }
     }

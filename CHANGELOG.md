@@ -1,3 +1,10 @@
+## v1.0.0-debug.32 (belum dirilis — menunggu perintah): Poles Tampilan Beranda (paket Claude)
+- Hero: gambar parallax kini dipotong (clipToBounds) — tidak bocor lagi ke bawah hero; judul Bold; baris meta baru (skor emas Gold + tahun + jumlah episode + status); genre lebih redup; tombol lebih ramping.
+- Bilah atas: solid 100% saat digulir + garis tipis (dulu 97% sehingga judul hero tembus samar); scrim atas tanpa tepi keras.
+- Kartu "New Episode Releases" kini menampilkan nama anime di bawah kartu (dulu hanya "Episode N / Today").
+- Tombol Outline ("My List"): kaca gelap + garis 1,5dp (dulu cincin putih 3dp). Judul bagian 20sp + "See all" ber-chevron. Tab bar: indikator pil di belakang ikon aktif.
+- Token baru Gold (#FFC857) khusus skor. Catatan agen: "See all" di SectionHead kini lewat I18n (mode id = "Lihat semua"); a.status ternyata properti hitung yang sudah ada di Anime — diff diterapkan apa adanya selain itu.
+
 ## v1.0.0-debug.31 (belum dirilis — menunggu perintah): "bereskan sisanya"
 - AKUN AKTIF: secret CI ONIMEKU_SUPABASE_URL/KEY terpasang (proyek user sendiri); backend Supabase (user_state + RLS + fungsi delete-account) dideploy. Masuk/daftar/sinkron/hapus akun kini berfungsi.
 - KOMENTAR per judul di halaman Detail (tabel comments + RLS: baca publik, tulis/hapus milik sendiri, wajib masuk).
