@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.net.URL
 import java.net.URLEncoder
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.OffsetDateTime
 
 // ---------------------------------------------------------------------------
@@ -267,6 +269,23 @@ object ApiClient {
      * menampilkan gradasi untuk poster yang memang belum sembuh.
      */
     suspend fun resolvePoster(anilistId: Int): PosterResp? = null
+
+    /**
+     * Kirim log diagnostik lokal ke server (debug.38): kegagalan putar di
+     * HP user tak terlihat dari server (permintaan varian/segmen tak
+     * pernah tiba), jadi aplikasi melaporkan lognya sendiri ke
+     * /api/app-log (KV app_log_v1) untuk dibaca agen dari server.
+     * Usaha terbaik — kegagalan kirim diabaikan.
+     */
+    suspend fun uploadDiag(tag: String) {
+        try {
+            val text = CrashLog.read()
+            val body = org.json.JSONObject().put("tag", tag).put("msg", text).toString()
+                .toRequestBody("application/json".toMediaType())
+            val req = okhttp3.Request.Builder().url("$BASE/api/app-log").post(body).build()
+            withContext(Dispatchers.IO) { Net.client.newCall(req).execute().use { } }
+        } catch (e: Exception) { /* abaikan */ }
+    }
 }
 
 @Serializable

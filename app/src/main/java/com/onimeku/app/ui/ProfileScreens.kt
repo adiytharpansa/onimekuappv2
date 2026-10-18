@@ -248,6 +248,7 @@ fun SubScreen(vm: AppVM, key: String) {
                 CardBox {
                     val ctxA = androidx.compose.ui.platform.LocalContext.current
                     Row(Modifier.fillMaxWidth().clickable {
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("manual") }
                         val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(android.content.Intent.EXTRA_SUBJECT, "Onimeku diagnostics")

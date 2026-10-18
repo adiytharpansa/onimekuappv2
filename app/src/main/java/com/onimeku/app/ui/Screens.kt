@@ -448,7 +448,7 @@ private fun ScorePill(score: String) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(Icons.Filled.Star, null, Modifier.size(13.dp), tint = Gold)
-        Text(score, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Gold)
+        Text(score.replace("★", "").trim(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Gold)
     }
 }
 

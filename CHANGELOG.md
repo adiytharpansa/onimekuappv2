@@ -1,3 +1,7 @@
+## v1.0.0-debug.38 (belum dirilis — menunggu perintah): Telemetri pemutar (alat diagnosis)
+- Bukti probe server: HP user mengambil playlist MASTER 6x (200) tetapi varian+segmen TIDAK PERNAH diminta — kegagalan ada di dalam aplikasi/perangkat sesudah master, tak terlihat dari server. .38 memasang alat ukur di aplikasi: (1) uji mandiri diagStreamProbe — GET polos OkHttp meniru langkah pemutar (master -> varian -> 128KB segmen 1) mencatat status/waktu tiap langkah; (2) AnalyticsListener ExoPlayer mencatat transisi state + onPlayerError (errorCodeName) + onLoadError per-URL; (3) CrashLog diunggah otomatis ke POST /api/app-log (KV app_log_v1) saat uji mandiri selesai, saat rantai putar gagal, dan saat user mengetuk Send diagnostics (berbagi manual tetap ada).
+- Perbaikan kecil: pil skor hero tidak lagi berbintang ganda (teks skor dibersihkan dari karakter bintang karena ikon sudah menggambarnya).
+
 ## v1.0.0-debug.37 (belum dirilis — menunggu perintah): Perbaikan "Stream Unavailable" di HP
 - Laporan HP user atas .36: AoT S3P2 ep1 berhenti di "Stream unavailable" padahal stream hidup (terverifikasi dari server: endpoint 200, playlist + segmen via proksi 200 utuh). Tersangka: fase DATA putar kehabisan waktu di 4G — resolusi dingin endpoint ~5 dtk, timeout 12 dtk x 2 putaran + batas UI 26 dtk.
 - Aplikasi: data putar DIPANASKAN sejak Detail dibuka (prefetchPlayback utk episode tombol Play + episode lanjutan), TTL prefetch 2 -> 10 menit, batas total fase data 26 -> 35 dtk (jaring pengaman terakhir).

@@ -190,6 +190,9 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
             pb = ready
+            // Uji mandiri jalur stream (debug.38): GET polos meniru langkah
+            // pemutar (master -> varian -> segmen 1) lalu unggah log.
+            launch { diagStreamProbe(r, ready) }
         }
     }
     if (pbFailed) {
@@ -240,6 +243,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 
     key(useDirect, mainRetry) {
         PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline, onFatalError = {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("fatal") }
             // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
             // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
             // langsung/embed yang memang lebih rapuh di HP.
@@ -325,6 +329,20 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             .setMediaSourceFactory(sourceFactory)
             .setLoadControl(loadControl)
             .build().apply {
+            // Telemetri pemutar (debug.38): catat transisi keadaan, galat
+            // pemutar, dan galat muat per-URL ke CrashLog (diunggah otomatis).
+            addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                override fun onPlaybackStateChanged(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, state: Int) {
+                    com.onimeku.app.data.CrashLog.note("exo-state", "state=$state")
+                }
+                override fun onPlayerError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, error: androidx.media3.common.PlaybackException) {
+                    com.onimeku.app.data.CrashLog.note("exo-error", "${error.errorCodeName}: ${error.message} | cause=${error.cause}")
+                }
+                override fun onLoadError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo, mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData, error: java.io.IOException, wasCanceled: Boolean) {
+                    com.onimeku.app.data.CrashLog.note("exo-load", "${loadEventInfo.dataSpec.uri} -> ${error.javaClass.simpleName}: ${error.message}")
+                }
+            })
+            com.onimeku.app.data.CrashLog.note("player", "PlayerReady dibuat ep${r.ep} url=${streamUrl.take(60)}")
             // Seek ke keyframe terdekat: ketuk dua kali/geser bilah jauh lebih cepat.
             setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
             quality.removeSuffix("p").toIntOrNull()?.let { h ->
@@ -900,6 +918,54 @@ private fun PlayerStatus(vm: AppVM, a: com.onimeku.app.data.Anime, r: Route.Play
 }
 
 private fun spdLabel(f: Float): String = if (f == f.toInt().toFloat()) f.toInt().toString() else f.toString()
+
+/** Uji mandiri jalur stream (debug.38): GET polos OkHttp (klien bersama
+ * yang sama dengan pemutar) meniru langkah ExoPlayer: master -> varian ->
+ * 128KB segmen pertama, mencatat status/waktu tiap langkah ke CrashLog.
+ * Membedakan "lapisan OkHttp/jaringan perangkat gagal" dari "pemutar
+ * yang tak melanjutkan" — server hanya melihat master yang tiba. */
+private suspend fun diagStreamProbe(r: Route.Player, pb: com.onimeku.app.data.Playback) {
+    val master = pb.streamUrl ?: return
+    if (!master.contains("/api/proxy")) return
+    suspend fun fetch(u: String, maxBytes: Int): Triple<Int, Int, String> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val req = okhttp3.Request.Builder().url(u).build()
+            com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
+                val buf = ByteArray(maxBytes)
+                var n = 0
+                resp.body?.byteStream()?.use { ins ->
+                    while (n < maxBytes) {
+                        val rd = ins.read(buf, n, maxBytes - n)
+                        if (rd < 0) break
+                        n += rd
+                    }
+                }
+                Triple(resp.code, n, String(buf, 0, n, Charsets.UTF_8))
+            }
+        }
+    try {
+        val done = kotlinx.coroutines.withTimeoutOrNull(60_000) {
+            val t1 = System.currentTimeMillis()
+            val (c1, n1, masterText) = fetch(master, 8192)
+            com.onimeku.app.data.CrashLog.note("diag", "master HTTP $c1 ${n1}B ${System.currentTimeMillis() - t1}ms")
+            val variantRel = masterText.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("#") } ?: return@withTimeoutOrNull false
+            val variantUrl = java.net.URI(master).resolve(variantRel).toString()
+            val t2 = System.currentTimeMillis()
+            val (c2, n2, varText) = fetch(variantUrl, 32768)
+            com.onimeku.app.data.CrashLog.note("diag", "varian HTTP $c2 ${n2}B ${System.currentTimeMillis() - t2}ms")
+            val segRel = varText.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("#") } ?: return@withTimeoutOrNull false
+            val segUrl = java.net.URI(variantUrl).resolve(segRel).toString()
+            val t3 = System.currentTimeMillis()
+            val (c3, n3, _) = fetch(segUrl, 131072)
+            com.onimeku.app.data.CrashLog.note("diag", "segmen1 HTTP $c3 ${n3}B ${System.currentTimeMillis() - t3}ms")
+            true
+        }
+        if (done != true) com.onimeku.app.data.CrashLog.note("diag", "TIMEOUT/gagal di salah satu langkah (lihat urutan di atas)")
+    } catch (e: Exception) {
+        com.onimeku.app.data.CrashLog.note("diag", "GALAT ${e.javaClass.simpleName}: ${e.message}")
+    }
+    com.onimeku.app.data.ApiClient.uploadDiag("selftest")
+}
 
 private fun isMediaUrl(u: String): Boolean =
     u.contains(".m3u8") || u.contains(".mp4") || u.contains(".mpd")
