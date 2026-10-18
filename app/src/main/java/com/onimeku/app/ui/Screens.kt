@@ -67,7 +67,7 @@ fun HomeScreen(vm: AppVM) {
             SectionHead("Continue Watching")
             Rail {
                 item {
-                    Poster(a, railW, ep = true, meta = a.title to "Episode ${last.ep} · ${fmt(t)} / 24:00", progress = t / 1440f) {
+                    Poster(a, railW, ep = true, meta = a.title to "Episode ${last.ep} · ${fmt(t)}") {
                         vm.go(Route.Player(last.id, last.ep))
                     }
                 }
@@ -178,6 +178,7 @@ fun ItemRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.width(96.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(12.dp)).artBackground(a)
                 .clickable(onClick = onThumb ?: onOpen)) {
+                RealImage(a, Modifier.fillMaxSize())
                 Text(thumbLabel, Modifier.align(Alignment.BottomStart).fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD90A0B10))))
                     .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -204,20 +205,17 @@ fun MyListScreen(vm: AppVM) = Page {
     }
 }
 
-private fun sizeOf(id: String, ep: Int) = 110 + ((id[1].code * 7 + ep * 13) % 90)
-
 @Composable
 fun DownloadsScreen(vm: AppVM) = Page {
     RootTitle("Download")
     val d = vm.s.downloads
     if (d.isEmpty()) EmptyBox("No downloads yet", "Open an anime and tap the download icon on an episode to watch it offline.") { Btn("Browse anime", BtnStyle.Play) { vm.setTab(Route.Home) } }
     else {
-        val tot = d.sumOf { sizeOf(it.id, it.ep) }
-        Text("${d.size} episode${if (d.size > 1) "s" else ""} · $tot MB", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        Text("${d.size} episode${if (d.size > 1) "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
         Box(Modifier.padding(bottom = 12.dp)) { Chip("Delete all", icon = Icons.Outlined.Delete) { vm.removeAllDl() } }
         d.forEach { x ->
             val a = Catalog.byId[x.id] ?: return@forEach
-            ItemRow(a, "Ep ${x.ep}", a.title, "Episode ${x.ep} · ${sizeOf(x.id, x.ep)} MB",
+            ItemRow(a, "Ep ${x.ep}", a.title, "Episode ${x.ep}",
                 onOpen = { vm.go(Route.Player(x.id, x.ep)) }) {
                 IconChip(Icons.Outlined.Delete, "Remove download") { vm.removeDl(x.id, x.ep) }
             }
@@ -232,8 +230,10 @@ fun DetailScreen(vm: AppVM, id: String) {
     val on = id in vm.p.myList
     Page {
         SubHead("Details", vm)
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(18.dp)).artBackground(a)
-            .drawBehind { drawRect(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color(0xB314161F))) })
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(18.dp)).artBackground(a)) {
+            RealImage(a, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color(0xB314161F))) })
+        }
         Spacer(Modifier.height(16.dp))
         Text(a.title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 31.sp)
         Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -266,7 +266,7 @@ fun DetailScreen(vm: AppVM, id: String) {
             val dl = vm.hasDl(id, n)
             ItemRow(
                 a, "$n", "Episode $n",
-                if (seen) "24 min · Watched" else "24 min" + (prog?.let { " · Resume at ${fmt(it)}" } ?: ""), subOk = seen,
+                if (seen) "Watched" else (prog?.let { "Resume at ${fmt(it)}" } ?: ""), subOk = seen,
                 onOpen = { vm.go(Route.Player(id, n)) },
             ) {
                 when {

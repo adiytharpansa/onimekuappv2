@@ -3,7 +3,6 @@ package com.onimeku.app.data
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
@@ -17,8 +16,6 @@ data class Anime(
     val eps: Int,
     val ep: Int,
     val label: Boolean,
-    val ca: Color, val cb: Color, val cc: Color,
-    val x: Float, val y: Float,
     val synopsis: String,
     val year: Int,
     val day: Int = 0,
@@ -98,27 +95,5 @@ object Catalog {
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
             .take(6).map { it.first }
-    }
-
-    // ---------- palet warna cadangan (dipakai bila poster tak tersedia) ----------
-    private val palettes = listOf(
-        Triple("#8dd4e8", "#101a2c", "#343848"),
-        Triple("#c3202c", "#2a0a12", "#ff9d3d"),
-        Triple("#7a5cc7", "#1c1233", "#e07ad1"),
-        Triple("#58c4a8", "#0f2c2a", "#c8f0d8"),
-        Triple("#f0a35e", "#4a1d12", "#ffd36e"),
-        Triple("#5b7bd6", "#1a1f45", "#9fc0ff"),
-        Triple("#f6c9dc", "#8c5578", "#2a1a2c"),
-        Triple("#a9d3a0", "#3d4a2f", "#f4e4d0"),
-    )
-
-    private fun col(h: String) = Color(android.graphics.Color.parseColor(h))
-
-    fun artFor(id: String): Pair<Triple<Color, Color, Color>, Pair<Float, Float>> {
-        val h = (id.hashCode() and Int.MAX_VALUE)
-        val p = palettes[h % palettes.size]
-        val colors = Triple(col(p.first), col(p.second), col(p.third))
-        val xy = (30 + h % 45) / 100f to (32 + (h / 7) % 38) / 100f
-        return colors to xy
     }
 }

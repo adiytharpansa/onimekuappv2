@@ -200,7 +200,6 @@ private fun ApiAnime.toAnime(): Anime {
     val latest = latestEpisode ?: episodeNumbers.maxOrNull() ?: 0
     val total = totalEpisodes ?: 0
     val odt = runCatching { OffsetDateTime.parse(updatedAt) }.getOrNull()
-    val (colors, xy) = Catalog.artFor(id)
     val cleanSyn = (synopsis ?: "")
         .substringBefore("(Source:").trim()
         .ifBlank { "No synopsis available yet." }
@@ -213,12 +212,10 @@ private fun ApiAnime.toAnime(): Anime {
         title = title,
         genres = genres,
         rating = scoreTxt,
-        hd = true,
+        hd = false, // API tidak menyediakan info kualitas; jangan klaim HD
         eps = if (total > 0) total else latest,
         ep = latest,
         label = false,
-        ca = colors.first, cb = colors.second, cc = colors.third,
-        x = xy.first, y = xy.second,
         synopsis = cleanSyn,
         year = year ?: 0,
         day = odt?.dayOfWeek?.value?.rem(7) ?: 0,

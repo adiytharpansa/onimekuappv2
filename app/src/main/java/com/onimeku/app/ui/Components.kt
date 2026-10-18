@@ -119,6 +119,22 @@ fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modi
  */
 fun Modifier.artBackground(a: Anime): Modifier = this.background(Bg2)
 
+/**
+ * Gambar ASLI anime untuk thumbnail/header lebar (cover, jatuh ke poster).
+ * Tidak ada gambar buatan: sebelum gambar termuat, area tetap polos gelap.
+ */
+@Composable
+fun RealImage(a: Anime, modifier: Modifier = Modifier) {
+    val img = com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
+    if (!img.isNullOrBlank()) {
+        coil.compose.AsyncImage(
+            model = img, contentDescription = null,
+            modifier = modifier,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        )
+    }
+}
+
 val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.4f).coerceIn(142f, 230f).dp
 
 @Composable
