@@ -153,11 +153,31 @@ fun Poster(
         } else {
             com.onimeku.app.data.PosterHealer.posterFor(a)
         }
+        // Shimmer halus selama poster asli dimuat (denyut alpha di atas
+        // permukaan kartu); hilang begitu gambar tiba atau gagal dimuat
+        // (PosterHealer mengganti URL buruk dengan poster asli lain).
+        val imgDone = androidx.compose.runtime.remember(a.id, img) {
+            androidx.compose.runtime.mutableStateOf(false)
+        }
+        if (!img.isNullOrBlank() && !imgDone.value) {
+            val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "posterShimmer")
+                .animateFloat(
+                    initialValue = 0.3f, targetValue = 0.85f,
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        androidx.compose.animation.core.tween(900),
+                        androidx.compose.animation.core.RepeatMode.Reverse,
+                    ),
+                    label = "posterAlpha",
+                )
+            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = pulse.value * 0.07f)))
+        }
         if (!img.isNullOrBlank()) {
             coil.compose.AsyncImage(
                 model = img, contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                onSuccess = { imgDone.value = true },
+                onError = { imgDone.value = true },
             )
         }
         if (badges) {

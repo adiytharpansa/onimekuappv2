@@ -86,6 +86,8 @@ class MainActivity : ComponentActivity() {
             val testEp = intent?.getIntExtra("test_ep", 1) ?: 1
             vm.closeWelcome()
             vm.go(Route.Player(testId, testEp))
+        } else if (intent?.getBooleanExtra("test_home", false) == true) {
+            vm.closeWelcome()
         }
     }
 }

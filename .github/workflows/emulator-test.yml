@@ -53,6 +53,13 @@ jobs:
           disable-animations: true
           script: |
             adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n com.onimeku.app/.MainActivity --ez test_home true
+            sleep 25
+            adb exec-out screencap -p > home.png
+            adb shell uiautomator dump /sdcard/uih.xml || true
+            adb pull /sdcard/uih.xml uih.xml || true
+            adb shell am force-stop com.onimeku.app
+            sleep 2
             adb shell am start -n com.onimeku.app/.MainActivity --es test_id "${{ inputs.anime_id }}" --ei test_ep ${{ inputs.ep }}
             sleep 30
             adb exec-out screencap -p > shot1.png
@@ -70,6 +77,8 @@ jobs:
         with:
           name: emulator-evidence
           path: |
+            home.png
+            uih.xml
             shot1.png
             shot2.png
             ui1.xml

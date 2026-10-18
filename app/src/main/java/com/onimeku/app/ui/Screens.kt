@@ -98,6 +98,52 @@ fun HomeScreen(vm: AppVM) {
                 Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
             }
         }
+
+        if (Catalog.airing.isNotEmpty()) {
+            Spacer(Modifier.height(26.dp))
+            SectionHead("Airing Now") { vm.go(Route.SeeAll("airing")) }
+            Rail {
+                items(Catalog.airing.take(12)) { id ->
+                    Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(26.dp))
+        SectionHead("Popular") { vm.go(Route.SeeAll("popular")) }
+        Rail {
+            items(Catalog.popular.take(12)) { id ->
+                Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
+            }
+        }
+
+        Spacer(Modifier.height(26.dp))
+        SectionHead("Latest Releases") { vm.go(Route.SeeAll("latest")) }
+        Rail {
+            items(Catalog.latest.take(12)) { id ->
+                Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
+            }
+        }
+
+        if (Catalog.donghua.isNotEmpty()) {
+            Spacer(Modifier.height(26.dp))
+            SectionHead("Donghua") { vm.go(Route.SeeAll("donghua")) }
+            Rail {
+                items(Catalog.donghua.take(12)) { id ->
+                    Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
+                }
+            }
+        }
+
+        Catalog.topGenres.forEach { g ->
+            Spacer(Modifier.height(26.dp))
+            SectionHead(g) { vm.go(Route.SeeAll("genre:$g")) }
+            Rail {
+                items(Catalog.byGenre(g).take(12)) { id ->
+                    Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
+                }
+            }
+        }
     }
 }
 
@@ -313,8 +359,16 @@ fun DetailScreen(vm: AppVM, id: String) {
 
 @Composable
 fun SeeAllScreen(vm: AppVM, key: String) = Page {
-    SubHead(if (key == "top") "Top Hits Anime" else "New Episode Releases", vm)
-    val ids = if (key == "top") Catalog.top else Catalog.new.map { it.first }
+    val (title, ids) = when {
+        key == "top" -> "Top Hits Anime" to Catalog.top
+        key == "airing" -> "Airing Now" to Catalog.airing
+        key == "popular" -> "Popular" to Catalog.popular
+        key == "latest" -> "Latest Releases" to Catalog.latest
+        key == "donghua" -> "Donghua" to Catalog.donghua
+        key.startsWith("genre:") -> key.removePrefix("genre:") to Catalog.byGenre(key.removePrefix("genre:"))
+        else -> "New Episode Releases" to Catalog.new.map { it.first }
+    }
+    SubHead(title, vm)
     TileGrid(ids.mapNotNull { Catalog.byId[it] }, vm)
 }
 
@@ -352,6 +406,10 @@ fun NotifScreen(vm: AppVM) = Page {
 @Composable
 fun SearchScreen(vm: AppVM) {
     var q by rememberSaveable { mutableStateOf("") }
+    // Debounce 500 ms: hasil pencarian mengikuti teks yang sudah berhenti
+    // berubah, bukan setiap ketukan.
+    var appliedQ by remember { mutableStateOf("") }
+    LaunchedEffect(q) { kotlinx.coroutines.delay(500); appliedQ = q }
     var gs by remember { mutableStateOf(listOf<String>()) }
     var yr by remember { mutableStateOf("") }
     var st by remember { mutableStateOf("") }
@@ -385,7 +443,7 @@ fun SearchScreen(vm: AppVM) {
         }
         Spacer(Modifier.height(8.dp))
 
-        val query = q.trim().lowercase()
+        val query = appliedQ.trim().lowercase()
         if (query.isEmpty() && !any) {
             if (vm.s.hist.isEmpty()) Text("Search a title, or pick filters above", Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)
             else {

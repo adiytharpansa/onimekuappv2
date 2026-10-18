@@ -27,6 +27,7 @@ data class Anime(
     val updatedAt: String? = null,
     val score: Double? = null,
     val anilistId: Int? = null,
+    val country: String? = null,
 ) {
     val status: String
         get() = when (apiStatus) {
@@ -69,6 +70,35 @@ object Catalog {
             .sortedByDescending { it.updatedAt ?: "" }
             .take(5)
             .map { Triple(it.id, it.ep, relLabel(it.updatedAt)) }
+
+    private val byScore = compareByDescending<Anime> { it.score ?: -1.0 }.thenBy { it.title }
+
+    /** Sedang tayang (status RELEASING dari API), skor tertinggi dulu. */
+    val airing: List<String>
+        get() = all.filter { it.apiStatus == "RELEASING" }.sortedWith(byScore).map { it.id }
+
+    /** Populer: seluruh katalog menurut skor. */
+    val popular: List<String>
+        get() = all.sortedWith(byScore).map { it.id }
+
+    /** Rilisan terbaru: tahun paling baru, lalu paling baru diperbarui. */
+    val latest: List<String>
+        get() = all.sortedWith(
+            compareByDescending<Anime> { it.year }.thenByDescending { it.updatedAt ?: "" },
+        ).map { it.id }
+
+    /** Donghua (animasi Tiongkok) — barisnya sendiri di Home. */
+    val donghua: List<String>
+        get() = all.filter { it.country == "CN" }.sortedWith(byScore).map { it.id }
+
+    /** Genre dengan jumlah judul terbanyak, untuk baris per genre di Home. */
+    val topGenres: List<String>
+        get() = all.flatMap { it.genres }.groupingBy { it }.eachCount()
+            .entries.sortedByDescending { it.value }.take(4).map { it.key }
+
+    /** Semua judul dalam satu genre, skor tertinggi dulu. */
+    fun byGenre(g: String): List<String> =
+        all.filter { g in it.genres }.sortedWith(byScore).map { it.id }
 
     val notifs: List<Triple<String, Int, String>>
         get() = all.filter { it.ep > 0 }

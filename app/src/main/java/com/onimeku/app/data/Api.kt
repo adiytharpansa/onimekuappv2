@@ -33,6 +33,7 @@ data class ApiAnime(
     val episodeNumbers: List<Int> = emptyList(),
     val updatedAt: String? = null,
     val anilistId: Int? = null,
+    val country: String? = null,
 )
 
 @Serializable
@@ -177,7 +178,7 @@ object ApiClient {
     }
 
     suspend fun fetchDetail(id: String): Anime? {
-        val r = json.decodeFromString<DetailResp>(getText("$BASE/api/anime/${enc(id)}"))
+        val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime/${enc(id)}"))
         return r.data?.takeIf { it.id.isNotBlank() }?.toAnime()
     }
 
@@ -248,5 +249,6 @@ private fun ApiAnime.toAnime(): Anime {
         updatedAt = updatedAt,
         score = score,
         anilistId = anilistId,
+        country = country,
     )
 }
