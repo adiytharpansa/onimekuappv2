@@ -85,8 +85,8 @@ object ApiClient {
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "GET"
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 20_000
+            conn.connectTimeout = 20_000
+            conn.readTimeout = 45_000
             conn.setRequestProperty("Accept", "application/json")
             conn.setRequestProperty("User-Agent", "OnimekuApp/1.0 (Android)")
             if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
@@ -96,18 +96,76 @@ object ApiClient {
         }
     }
 
-    /** Ambil seluruh katalog (per halaman 100, sesuai batas API). */
-    suspend fun fetchCatalog(): List<Anime> {
-        val first = json.decodeFromString<ListResp>(getText("$BASE/api/anime?limit=100&page=1"))
+    /** GET dengan percobaan ulang (jaringan seluler + hulu kadang goyah). */
+    private suspend fun getTextRetry(url: String, attempts: Int = 3): String {
+        var last: Exception? = null
+        for (i in 1..attempts) {
+            try {
+                return getText(url)
+            } catch (e: Exception) {
+                last = e
+                if (i < attempts) kotlinx.coroutines.delay(900L * i)
+            }
+        }
+        throw last ?: java.io.IOException("gagal memuat")
+    }
+
+    /**
+     * Ambil seluruh katalog (per halaman 100, sesuai batas API). Hasil
+     * dilaporkan PROGRESIF lewat onProgress supaya layar terisi dari
+     * halaman pertama dan tidak kosong total hanya karena satu halaman
+     * di tengah gagal; onRaw menerima data mentah final untuk di-cache.
+     */
+    suspend fun fetchCatalog(
+        onProgress: (List<Anime>) -> Unit = {},
+        onRaw: (List<ApiAnime>) -> Unit = {},
+    ): List<Anime> {
+        fun mapped(raw: List<ApiAnime>): List<Anime> =
+            raw.filter { it.id.isNotBlank() && it.title.isNotBlank() }
+                .distinctBy { it.id }
+                .map { it.toAnime() }
+        val first = json.decodeFromString<ListResp>(getTextRetry("$BASE/api/anime?limit=100&page=1"))
         val acc = ArrayList<ApiAnime>(first.data)
+        onProgress(mapped(acc))
         val pages = first.totalPages.coerceIn(1, 20)
         for (p in 2..pages) {
-            val r = json.decodeFromString<ListResp>(getText("$BASE/api/anime?limit=100&page=$p"))
+            val r = json.decodeFromString<ListResp>(getTextRetry("$BASE/api/anime?limit=100&page=$p"))
             acc += r.data
+            onProgress(mapped(acc))
         }
-        return acc.filter { it.id.isNotBlank() && it.title.isNotBlank() }
-            .distinctBy { it.id }
-            .map { it.toAnime() }
+        val raw = acc.filter { it.id.isNotBlank() && it.title.isNotBlank() }.distinctBy { it.id }
+        onRaw(raw)
+        return mapped(raw)
+    }
+
+    /** Katalog terakhir yang berhasil dimuat, disimpan di disk oleh aplikasi. */
+    fun loadCachedCatalog(file: java.io.File): List<Anime>? {
+        return try {
+            if (!file.exists()) return null
+            val raw = json.decodeFromString(
+                kotlinx.serialization.builtins.ListSerializer(ApiAnime.serializer()),
+                file.readText(),
+            )
+            raw.filter { it.id.isNotBlank() && it.title.isNotBlank() }
+                .distinctBy { it.id }
+                .map { it.toAnime() }
+                .ifEmpty { null }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun saveCachedCatalog(file: java.io.File, raw: List<ApiAnime>) {
+        try {
+            file.writeText(
+                json.encodeToString(
+                    kotlinx.serialization.builtins.ListSerializer(ApiAnime.serializer()),
+                    raw,
+                )
+            )
+        } catch (e: Exception) {
+            // cache disk bersifat cadangan; gagal menulis tidak fatal
+        }
     }
 
     suspend fun fetchDetail(id: String): Anime? {

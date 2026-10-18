@@ -44,7 +44,7 @@ import java.util.Locale
 fun HomeScreen(vm: AppVM) {
     val p = vm.p
     if (Catalog.all.isEmpty()) {
-        Page {
+        Page(extraTop = 64.dp) {
             RootTitle("Home")
             if (Catalog.loading) {
                 Text("Loading catalog…", color = InkSoft, modifier = Modifier.padding(top = 12.dp))

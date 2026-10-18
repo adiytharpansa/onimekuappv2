@@ -49,10 +49,29 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     /** Muat katalog dari API Onimeku; dipanggil saat aplikasi dibuka dan dari tombol coba lagi. */
     fun reloadCatalog() {
+        // Tampilkan dulu katalog terakhir dari disk (seketika), jaringan
+        // menyegarkannya di latar — katalog tidak boleh kosong hanya karena
+        // satu permintaan jaringan goyah.
+        if (Catalog.all.isEmpty()) {
+            ApiClient.loadCachedCatalog(java.io.File(app.filesDir, "catalog_cache.json"))?.let {
+                Catalog.all = it
+            }
+        }
+        Catalog.loading = Catalog.all.isEmpty()
+        Catalog.loadFailed = false
         viewModelScope.launch {
-            Catalog.loading = true
             try {
-                val items = ApiClient.fetchCatalog()
+                val items = ApiClient.fetchCatalog(
+                    onProgress = { part ->
+                        if (part.isNotEmpty()) {
+                            Catalog.all = part
+                            Catalog.loading = false
+                        }
+                    },
+                    onRaw = { raw ->
+                        ApiClient.saveCachedCatalog(java.io.File(app.filesDir, "catalog_cache.json"), raw)
+                    },
+                )
                 if (items.isNotEmpty()) {
                     Catalog.all = items
                     Catalog.loadFailed = false
