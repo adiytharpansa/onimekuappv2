@@ -1,3 +1,8 @@
+## v1.0.0-debug.42 (belum dirilis): Beranda disederhanakan
+- Rail per kategori (Action, Fantasy, Comedy, dst.) dan pita "Explore Genres" DIHAPUS dari Beranda; kategori kini hanya di halaman Pencarian.
+- "All Anime" langsung menampilkan seluruh katalog sebagai grid 3 kolom (urut abjad, lazy per baris) alih-alih tombol.
+- Bilah atas (lonceng) menjadi solid + garis tipis setelah hero tergulung, sehingga tidak menimpa judul bagian/"See all".
+
 ## v1.0.0-debug.41 (belum dirilis): Animasi lanjutan + kerapian
 - Poster: angka ranking Top Hits muncul memantul berurutan; poster terangkat+miring saat ditekan (liftPress).
 - Detail: header judul memudar/mengecil saat digulir; episode muncul berurutan; percikan partikel saat masuk My List (Detail + hero Beranda).

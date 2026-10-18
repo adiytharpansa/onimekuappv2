@@ -274,8 +274,14 @@ fun App(vm: AppVM) {
 private fun TopBar(vm: AppVM) {
     // Bilah atas polos: tanpa logo, tanpa latar/scrim. Hanya dua tombol kaca bulat
     // yang melayang di atas poster (tetap terbaca di poster terang maupun gelap).
+    val sc = vm.homeScroll
+    val barA by animateFloatAsState(
+        if (sc.firstVisibleItemIndex > 0) 1f else 0f, tween(220), label = "topBarBg",
+    )
     Row(
-        Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 8.dp),
+        Modifier.fillMaxWidth()
+            .drawBehind { if (barA > 0f) { drawRect(Bg.copy(alpha = barA)); drawLine(Line.copy(alpha = barA), Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) } }
+            .statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

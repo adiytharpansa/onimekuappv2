@@ -120,6 +120,7 @@ private fun HomeContent(vm: AppVM) {
     val lastT = last?.let { p.prog["${it.id}:${it.ep}"] }
     val lastAnime = last?.let { Catalog.byId[it.id] }
     val fresh = Catalog.new
+    val allRows = remember(Catalog.all) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.chunked(3) }
     var pullPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val ptrThresholdPx = with(density) { 90.dp.toPx() }
@@ -168,15 +169,6 @@ private fun HomeContent(vm: AppVM) {
             item(key = "because", contentType = "rail") { PosterRow("${I18n.t("sec_because", "Because you watched")} ${base.title}", similar, vm, seeAll = null, delayMs = 0) }
         }
         item(key = "top", contentType = "rail") { PosterRow(I18n.t("sec_top", "Top Hits Anime"), Catalog.top, vm, seeAll = "top", ranked = true, delayMs = 0) }
-        if (Catalog.chips.size >= 4) {
-            item(key = "genres", contentType = "marquee") {
-                Column {
-                    Spacer(Modifier.height(SectionGap))
-                    SectionHead(I18n.t("sec_explore", "Explore Genres"))
-                    GenreMarquee(Catalog.chips) { g -> vm.go(Route.SeeAll("genre:$g")) }
-                }
-            }
-        }
         if (fresh.isNotEmpty()) {
             item(key = "new", contentType = "rail") {
                 Column(Modifier.fadeSlideIn(70)) {
@@ -203,17 +195,18 @@ private fun HomeContent(vm: AppVM) {
         item(key = "popular", contentType = "rail") { PosterRow(I18n.t("sec_popular", "Popular"), Catalog.popular.take(12), vm, seeAll = "popular", delayMs = -1) }
         item(key = "latest", contentType = "rail") { PosterRow(I18n.t("sec_latest", "Latest Releases"), Catalog.latest.take(12), vm, seeAll = "latest", delayMs = -1) }
         item(key = "donghua", contentType = "rail") { PosterRow(I18n.t("sec_donghua", "Donghua"), Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = -1) }
-        items(Catalog.topGenres, key = { "genre:$it" }, contentType = { "rail" }) { g ->
-            PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g", delayMs = -1)
-        }
-        // Pintu masuk ke SELURUH katalog (grid lazy, tanpa batas 12 judul).
-        item(key = "all", contentType = "all") {
+        // All Anime: seluruh katalog langsung tampil sebagai grid 3 kolom (dipecah per baris agar tetap lazy).
+        item(key = "all-head", contentType = "all-head") {
             Column {
                 Spacer(Modifier.height(SectionGap))
-                SectionHead(I18n.t("sec_all", "All Anime")) { vm.go(Route.SeeAll("all")) }
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    Btn("${I18n.t("browse_all", "Browse all")} ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView, Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
-                }
+                SectionHead(I18n.t("sec_all", "All Anime"))
+            }
+        }
+        items(allRows.size, key = { "all-row:$it" }, contentType = { "all-row" }) { r ->
+            val row = allRows[r]
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEachIndexed { c, a -> Box(Modifier.weight(1f)) { Tile(a, vm, (r * 3 + c) % 9) } }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
