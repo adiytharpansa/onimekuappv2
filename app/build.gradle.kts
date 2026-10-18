@@ -41,6 +41,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.media3:media3-exoplayer:1.5.0")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
+    implementation("androidx.media3:media3-database:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

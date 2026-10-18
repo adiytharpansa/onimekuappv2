@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Onimeku</string>
+    <string name="dl_channel_name">Downloads</string>
+    <string name="dl_channel_desc">Episode download progress</string>
 </resources>

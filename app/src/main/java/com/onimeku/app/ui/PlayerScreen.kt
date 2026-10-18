@@ -193,11 +193,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (!playback.referer.isNullOrBlank()) {
             dsFactory.setDefaultRequestProperties(mapOf("Referer" to playback.referer))
         }
+        // Pemutar membaca cache unduhan yang sama (kunci cache stabil per
+        // episode): episode yang sudah terunduh diputar dari disk, sisanya
+        // mengalir dari jaringan seperti biasa.
+        val cacheFactory = androidx.media3.datasource.cache.CacheDataSource.Factory()
+            .setCache(com.onimeku.app.data.Downloads.cache(ctx))
+            .setUpstreamDataSourceFactory(
+                androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
+            )
+            .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         ExoPlayer.Builder(ctx)
             .setMediaSourceFactory(
-                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
-                    androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
-                )
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cacheFactory)
             )
             .build().apply {
             when (quality) {
@@ -216,6 +223,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             setMediaItem(
                 MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
+                    .setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
                     .setSubtitleConfigurations(subs).build()
             )
             seekTo((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L)

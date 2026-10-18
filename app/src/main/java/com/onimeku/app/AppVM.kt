@@ -44,8 +44,68 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     init {
         PosterHealer.init(app)
         Reminders.rescheduleAll(app, s)
+        initDownloads()
         reloadCatalog()
     }
+
+    /** Sambungkan DownloadManager Media3 ke state aplikasi (progres asli). */
+    private fun initDownloads() {
+        val dm = Downloads.manager(app)
+        Downloads.setWifiOnly(app, s.settings.wifi)
+        // Pulihkan tampilan untuk unduhan dari sesi sebelumnya.
+        for ((contentKey, d) in Downloads.states(app)) {
+            val (id, ep) = Downloads.parseKey(contentKey) ?: continue
+            val k = "$id:$ep"
+            when (d.state) {
+                androidx.media3.exoplayer.offline.Download.STATE_DOWNLOADING,
+                androidx.media3.exoplayer.offline.Download.STATE_QUEUED,
+                androidx.media3.exoplayer.offline.Download.STATE_RESTARTING ->
+                    downloading[k] = pctOf(d)
+                androidx.media3.exoplayer.offline.Download.STATE_COMPLETED ->
+                    if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
+            }
+        }
+        dm.addListener(object : androidx.media3.exoplayer.offline.DownloadManager.Listener {
+            override fun onDownloadChanged(
+                dm: androidx.media3.exoplayer.offline.DownloadManager,
+                download: androidx.media3.exoplayer.offline.Download,
+                finalException: Exception?,
+            ) {
+                val (id, ep) = Downloads.parseKey(download.request.id) ?: return
+                val k = "$id:$ep"
+                when (download.state) {
+                    androidx.media3.exoplayer.offline.Download.STATE_DOWNLOADING,
+                    androidx.media3.exoplayer.offline.Download.STATE_QUEUED,
+                    androidx.media3.exoplayer.offline.Download.STATE_RESTARTING ->
+                        downloading[k] = pctOf(download)
+                    androidx.media3.exoplayer.offline.Download.STATE_COMPLETED -> {
+                        downloading.remove(k)
+                        if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
+                        toast("Episode $ep saved for offline watching")
+                    }
+                    androidx.media3.exoplayer.offline.Download.STATE_FAILED -> {
+                        downloading.remove(k)
+                        if (hasDl(id, ep)) {
+                            upd { st -> st.copy(downloads = st.downloads.filterNot { it.id == id && it.ep == ep }) }
+                            toast("Download failed: Episode $ep")
+                        }
+                    }
+                    androidx.media3.exoplayer.offline.Download.STATE_REMOVED -> downloading.remove(k)
+                }
+            }
+
+            override fun onDownloadRemoved(
+                dm: androidx.media3.exoplayer.offline.DownloadManager,
+                download: androidx.media3.exoplayer.offline.Download,
+            ) {
+                val (id, ep) = Downloads.parseKey(download.request.id) ?: return
+                downloading.remove("$id:$ep")
+            }
+        })
+    }
+
+    private fun pctOf(d: androidx.media3.exoplayer.offline.Download): Int =
+        d.percentDownloaded.toInt().coerceIn(0, 99)
 
     /** Muat katalog dari API Onimeku; dipanggil saat aplikasi dibuka dan dari tombol coba lagi. */
     fun reloadCatalog() {
@@ -131,40 +191,66 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun hasDl(id: String, ep: Int) = s.downloads.any { it.id == id && it.ep == ep }
 
+    /**
+     * Unduhan ASLI (Media3): ketuk mulai, ketuk lagi saat berjalan = batal.
+     * Hanya judul dengan stream HLS langsung yang bisa diunduh; judul
+     * embed-saja ditolak dengan jujur.
+     */
     fun download(id: String, ep: Int) {
         val k = "$id:$ep"
-        if (hasDl(id, ep)) { toast("Already saved offline"); return }
-        if (jobs[k]?.isActive == true) {
-            jobs.remove(k)?.cancel(); downloading.remove(k); toast("Download cancelled"); return
+        val contentKey = Downloads.key(id, ep)
+        val st = Downloads.states(app)[contentKey]?.state
+        if (st == androidx.media3.exoplayer.offline.Download.STATE_DOWNLOADING ||
+            st == androidx.media3.exoplayer.offline.Download.STATE_QUEUED ||
+            st == androidx.media3.exoplayer.offline.Download.STATE_RESTARTING
+        ) {
+            Downloads.remove(app, contentKey)
+            downloading.remove(k)
+            upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
+            toast("Download cancelled")
+            return
         }
-        downloading[k] = 0
-        jobs[k] = viewModelScope.launch {
-            var pr = 0.0
-            while (pr < 100) {
-                delay(150)
-                pr += 8 + Random.nextDouble() * 10
-                if (pr < 100) downloading[k] = pr.toInt()
+        if (hasDl(id, ep)) { toast("Already saved offline"); return }
+        viewModelScope.launch {
+            val pb = try { ApiClient.fetchPlayback(id, ep) } catch (e: Exception) { null }
+            val url = pb?.streamUrl
+            if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
+                toast("This title can't be downloaded")
+                return@launch
             }
-            downloading.remove(k); jobs.remove(k)
             if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
-            toast("Saved for offline watching")
+            downloading[k] = 0
+            Downloads.enqueue(app, id, ep, url, pb.referer) {
+                downloading.remove(k)
+                upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
+                toast("Download failed to start: Episode $ep")
+            }
+            toast("Download started: Episode $ep")
         }
     }
 
     fun downloadAll(id: String) {
         val a = Catalog.byId[id] ?: return
         val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
-        val add = nums.filter { !hasDl(id, it) }.map { Dl(id, it) }
-        upd { it.copy(downloads = it.downloads + add) }
-        toast(if (add.isNotEmpty()) "${add.size} episodes saved" else "All episodes already saved")
+        val todo = nums.filter { !hasDl(id, it) }
+        if (todo.isEmpty()) { toast("All episodes already saved"); return }
+        toast("Starting ${todo.size} downloads")
+        for (n in todo) download(id, n)
     }
 
     fun removeDl(id: String, ep: Int) {
+        Downloads.remove(app, Downloads.key(id, ep))
+        downloading.remove("$id:$ep")
         upd { st -> st.copy(downloads = st.downloads.filterNot { it.id == id && it.ep == ep }) }
         toast("Download removed")
     }
 
-    fun removeAllDl() { upd { it.copy(downloads = emptyList()) }; toast("All downloads removed") }
+    fun removeAllDl() {
+        for (d in s.downloads) Downloads.remove(app, Downloads.key(d.id, d.ep))
+        downloading.clear()
+        upd { it.copy(downloads = emptyList()) }
+        toast("All downloads removed")
+    }
 
     fun saveProg(id: String, ep: Int, t: Int, dur: Int) {
         val k = "$id:$ep"
@@ -189,6 +275,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val old = s.settings.alerts
         upd { it.copy(settings = f(it.settings)) }
         if (old != s.settings.alerts) Reminders.rescheduleAll(app, s)
+        Downloads.setWifiOnly(app, s.settings.wifi)
     }
 
     // ---------- profiles ----------

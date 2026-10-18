@@ -215,9 +215,20 @@ fun DownloadsScreen(vm: AppVM) = Page {
         Box(Modifier.padding(bottom = 12.dp)) { Chip("Delete all", icon = Icons.Outlined.Delete) { vm.removeAllDl() } }
         d.forEach { x ->
             val a = Catalog.byId[x.id] ?: return@forEach
-            ItemRow(a, "Ep ${x.ep}", a.title, "Episode ${x.ep}",
-                onOpen = { vm.go(Route.Player(x.id, x.ep)) }) {
-                IconChip(Icons.Outlined.Delete, "Remove download") { vm.removeDl(x.id, x.ep) }
+            val pct = vm.downloading["${x.id}:${x.ep}"]
+            Column {
+                ItemRow(a, "Ep ${x.ep}", a.title,
+                    if (pct != null) "Downloading… $pct%" else "Episode ${x.ep} · Saved offline",
+                    onOpen = { vm.go(Route.Player(x.id, x.ep)) }) {
+                    IconChip(Icons.Outlined.Delete, "Remove download") { vm.removeDl(x.id, x.ep) }
+                }
+                if (pct != null) {
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { pct / 100f },
+                        modifier = Modifier.fillMaxWidth().padding(start = 108.dp, end = 12.dp, bottom = 8.dp),
+                        color = Red, trackColor = Line,
+                    )
+                }
             }
         }
     }
