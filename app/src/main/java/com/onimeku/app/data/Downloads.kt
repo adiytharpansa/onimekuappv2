@@ -77,8 +77,8 @@ object Downloads {
         if (simpleCache == null && manager == null) {
             runCatching { File(app.filesDir, "media_downloads").deleteRecursively() }
             runCatching {
-                val m = ensureInit(ctx)
-                for (d in states(ctx)) m.removeDownload(d.request.id)
+                val m = manager(ctx)
+                for ((k, _) in states(ctx)) m.removeDownload(k)
             }
         }
         prefs.edit().putBoolean("reset_v13", true).apply()
