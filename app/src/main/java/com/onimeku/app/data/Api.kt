@@ -79,6 +79,9 @@ data class Playback(
     val subtitles: List<ApiSubtitle> = emptyList(),
     val mediaKind: String? = null,
     val playable: String? = null,
+    // Posisi intro (detik) bila API menyediakannya; tombol Skip intro hanya muncul jika keduanya ada.
+    val introStart: Int? = null,
+    val introEnd: Int? = null,
 )
 
 @Serializable

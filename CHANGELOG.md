@@ -1,3 +1,17 @@
+## v1.0.0-debug.47 (belum dirilis): Pemutar ala YouTube (lanjutan)
+- Bilah seek baru (YtSeekBar): tipis, segmen buffer, progres merah, bulatan penunjuk membesar saat digeser, ketuk = lompat.
+- Waktu `0:42 / 24:10` + tombol layar penuh dipindah ke kiri/kanan bawah; tombol tengah jadi ikon putih polos (tanpa lingkaran merah).
+- Ketuk dua kali di sisi layar: animasi setengah lingkaran dengan hitungan 10/20/30 detik, ketukan lanjutan menambah.
+- Tahan layar = kecepatan 2x selama ditahan (lencana "2x" di atas).
+- Roda gigi: label "Auto (720p)" sesuai resolusi yang diputar; ditambah Sleep timer, Picture-in-picture, Lock screen (ubin di bawah video dihapus); Subtitle > Subtitle style (ukuran + latar hitam, tersimpan di Settings.subSize / subBg).
+- Kecepatan putar tidak lagi reset tiap pindah episode (AppVM.playerSpeed).
+- Skip intro kini hanya muncul bila API mengirim Playback.introStart/introEnd (detik). Sebelumnya jendela tetap 3-90 dtk untuk semua episode. CATATAN: API saat ini belum mengirim field itu, jadi tombol belum muncul sampai backend menambahkannya.
+
+## v1.0.0-debug.46 (belum dirilis): Pengaturan pemutar ala YouTube
+- Settings: bagian "Video quality" dan "Subtitles" DIHAPUS (pilihan tetap tersimpan, kini diatur dari pemutar).
+- Pemutar: tombol CC (hidup/mati subtitle sekali ketuk) + roda gigi di bilah atas (potret & layar penuh). Roda gigi membuka lembar bawah: Quality, Subtitles, Playback speed, Audio; tiap item membuka sub-halaman dengan centang. Layar penuh: panel di kanan bawah. Tombol Back menutup/mundur satu halaman.
+- Ubin Speed / Subtitles / Quality / Audio di panel bawah video dihapus (pindah ke roda gigi); tersisa Sleep, PiP, Lock.
+
 ## v1.0.0-debug.45 (belum dirilis): Hero penuh saat refresh + tab bar modern
 - Tarik-untuk-segar: daftar TIDAK lagi digeser turun (dulu membuka celah hitam di atas dan memotong poster hero). Poster tetap penuh sampai tepi atas; saat ditarik hanya membesar halus (stretch) dan indikator putar merah (kapsul gelap) melayang di bawah status bar.
 - Tab bar: ripple/sorotan putih transparan saat disentuh DIHAPUS (indication = null); penanda aktif hanya kapsul + garis merah tua. Sentuhan = ikon mengecil sedikit.

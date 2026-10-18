@@ -34,6 +34,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -107,9 +111,24 @@ private fun onWifi(ctx: Context): Boolean {
 }
 
 @Composable
-private fun VideoSurface(player: Player, modifier: Modifier) {
-    AndroidView(factory = { c -> PlayerView(c).also { it.player = player; it.useController = false } }, modifier = modifier)
+private fun VideoSurface(player: Player, modifier: Modifier, subScale: Float = 1f, subBg: Boolean = false) {
+    AndroidView(
+        factory = { c -> PlayerView(c).also { it.player = player; it.useController = false } },
+        update = { pv ->
+            pv.subtitleView?.let { sv ->
+                sv.setApplyEmbeddedStyles(false)
+                sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subScale)
+                sv.setStyle(androidx.media3.ui.CaptionStyleCompat(
+                    android.graphics.Color.WHITE, if (subBg) 0xB3000000.toInt() else android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null,
+                ))
+            }
+        },
+        modifier = modifier,
+    )
 }
+
+private fun subScaleOf(size: String): Float = when (size) { "small" -> 0.8f; "large" -> 1.3f; "xl" -> 1.7f; else -> 1f }
 
 @Composable
 fun PlayerScreen(vm: AppVM, r: Route.Player) {
@@ -418,7 +437,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var failed by remember(r) { mutableStateOf(false) }
     var errMsg by remember(r) { mutableStateOf<String?>(null) }
     var dragging by remember(r) { mutableStateOf(false) }
-    var speed by remember(r) { mutableFloatStateOf(1f) }
+    var speed by remember(r) { mutableFloatStateOf(vm.playerSpeed) }
     var br by remember { mutableFloatStateOf(1f) }
     var hud by remember { mutableStateOf<String?>(null) }
     var hudTick by remember { mutableIntStateOf(0) }
@@ -442,7 +461,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val subTracks = remember(playback) { playback.subtitles.filter { it.url.isNotBlank() } }
     var subIdx by remember(r) { mutableIntStateOf(-1) }       // -1 = mati, selain itu indeks di subTracks
     var subReady by remember(r) { mutableStateOf(false) }
-    var subDialog by remember { mutableStateOf(false) }
+    // Menu pengaturan ala YouTube (roda gigi): null = tertutup, "main" | "quality" | "subs" | "speed" | "audio".
+    var sheet by remember { mutableStateOf<String?>(null) }
+    var buffered by remember(r) { mutableFloatStateOf(0f) }
+    var playingH by remember(r) { mutableIntStateOf(0) }
+    var boost by remember { mutableStateOf(false) }          // tahan layar = 2x
+    var dtSide by remember { mutableIntStateOf(0) }          // ketuk dua kali: -1 kiri, 1 kanan
+    var dtSecs by remember { mutableIntStateOf(0) }
+    var dtTick by remember { mutableIntStateOf(0) }
+    val speedNow by rememberUpdatedState(speed)
     fun subName(i: Int): String = if (i < 0) I18n.t("ctl_off", "Off") else subTracks.getOrNull(i)?.let { SubLang.display(it, i) } ?: I18n.t("ctl_off", "Off")
 
     fun applySub(i: Int) {
@@ -481,6 +508,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         player.seekTo(t)
         hud = if (ms > 0) "+${ms / 1000}s" else "−${-ms / 1000}s"; hudTick++
     }
+
+    // Ketuk dua kali di sisi kiri/kanan: geser +-10 dtk; ketukan lanjutan menambah (10, 20, 30 ...).
+    fun doubleSeek(side: Int) {
+        if (locked) return
+        if (dtSide != side) dtSecs = 0
+        dtSide = side; dtSecs += 10; dtTick++
+        player.seekTo((player.currentPosition + side * 10_000L).coerceIn(0L, if (player.duration > 0) player.duration else Long.MAX_VALUE))
+    }
+    LaunchedEffect(dtTick) { if (dtTick > 0) { delay(800); dtSide = 0; dtSecs = 0 } }
 
     DisposableEffect(player) {
         val stalls = ArrayDeque<Long>()
@@ -532,6 +568,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             override fun onRenderedFirstFrame() { rendered = true }
             override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
                 if (size.width > 0 && size.height > 0) vidRatio = size.width * size.pixelWidthHeightRatio / size.height
+                if (size.height > 0) playingH = size.height
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
@@ -585,6 +622,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         while (true) {
             val sec = (player.currentPosition / 1000).toInt()
             if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
+            val bufSec = (player.bufferedPosition / 1000L).toFloat()
+            if (bufSec != buffered) buffered = bufSec
             val d = player.duration
             if (d > 0) {
                 val ds = (d / 1000).toInt()
@@ -626,6 +665,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
         }
     }
+    LaunchedEffect(player) { if (speed != 1f) player.setPlaybackSpeed(speed) }
     LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null } }
 
     // Fullscreen: kunci landscape + sembunyikan bilah sistem; dipulihkan saat keluar/pergi dari pemutar.
@@ -647,6 +687,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
     BackHandler(enabled = full) { full = false }
+    BackHandler(enabled = sheet != null) { if (sheet == "main") sheet = null else sheet = "main" }
     // Kontrol hilang sendiri 3,5 dtk setelah ketukan terakhir saat video berjalan.
     LaunchedEffect(showUi, uiTick, wantPlay, buffering) { if (showUi && wantPlay && !buffering) { delay(3500); showUi = false } }
 
@@ -688,25 +729,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         wasPip = vm.inPip
     }
 
+    val subScale = subScaleOf(vm.s.settings.subSize)
+    val subBgOn = vm.s.settings.subBg
     if (vm.inPip) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize()) }
+        Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn) }
         return
     }
-
-    if (subDialog) SubtitleDialog(
-        tracks = subTracks, current = subIdx, pref = vm.s.settings.subLang, appLang = vm.s.settings.lang,
-        onTrack = { i ->
-            applySub(i); subDialog = false
-            SubLang.code(subTracks[i])?.let { c -> vm.setSettings { it.copy(subLang = c) } }
-            vm.toast("Subtitles: ${subName(i)}")
-        },
-        onOff = { applySub(-1); subDialog = false; vm.setSettings { it.copy(subLang = "off") }; vm.toast("Subtitles: ${I18n.t("ctl_off", "Off")}") },
-        onAuto = {
-            subDialog = false; vm.setSettings { it.copy(subLang = "auto") }
-            val n = SubLang.pick(subTracks, "auto", vm.s.settings.lang); applySub(n); vm.toast("Subtitles: Auto · ${subName(n)}")
-        },
-        onDismiss = { subDialog = false },
-    )
 
     val epList = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val curIdx = epList.indexOf(r.ep)
@@ -714,6 +742,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val scope = rememberCoroutineScope()
     val thumbSrc = remember { MutableInteractionSource() }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(if (full) Color.Black else Bg)) {
       // Area video: penuh lebar, menempel di bawah status bar (tanpa bingkai), hitam pekat.
       Box(if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
@@ -726,9 +755,25 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
                 .pointerInput(player) {
                     detectTapGestures(
-                        onTap = { showUi = !showUi; uiTick++ },
-                        onDoubleTap = { o -> if (!locked) { if (o.x < size.width / 2f) seekBy(-10_000) else seekBy(10_000) } },
+                        onTap = { o ->
+                            if (dtSide != 0 && !locked) doubleSeek(if (o.x < size.width / 2f) -1 else 1)
+                            else { showUi = !showUi; uiTick++ }
+                        },
+                        onDoubleTap = { o -> doubleSeek(if (o.x < size.width / 2f) -1 else 1) },
                     )
+                }
+                .pointerInput(player) {
+                    // Tahan layar = kecepatan 2x selama jari menempel (seperti YouTube).
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var held = true
+                        withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation(); held = false }
+                        if (held && !locked && player.isPlaying) {
+                            boost = true; player.setPlaybackSpeed(2f)
+                            waitForUpOrCancellation()
+                            boost = false; player.setPlaybackSpeed(speedNow)
+                        }
+                    }
                 }
                 .pointerInput(Unit) {
                     var left = true
@@ -751,15 +796,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                 },
         ) {
-            VideoSurface(player, Modifier.fillMaxSize())
+            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn)
             // Sampul anime menutupi layar hitam sampai bingkai video pertama tampil.
             if (!rendered && !failed) {
                 RealImage(a, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Color(0xA6080910)))
             }
-            if (vm.s.settings.skipIntro && pos >= 3 && pos < 90) {
-                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 58.dp).clip(CircleShape)
-                    .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(90_000L) }
+            // Skip intro HANYA bila API memberi posisi intro episode ini (introStart/introEnd, detik).
+            val introEnd = playback.introEnd
+            if (vm.s.settings.skipIntro && introEnd != null && introEnd > 0 && pos >= (playback.introStart ?: 0) && pos < introEnd) {
+                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 66.dp).clip(CircleShape)
+                    .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(introEnd * 1000L) }
                     .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
             hud?.let {
@@ -768,7 +815,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             val remain = dur - pos.toInt()
             if (nextEp != null && dur > 60 && remain in 1..20 && !failed) {
-                Row(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 58.dp).clip(RoundedCornerShape(14.dp))
+                Row(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 66.dp).clip(RoundedCornerShape(14.dp))
                     .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column {
@@ -784,34 +831,57 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Icon(Icons.Filled.LockOpen, "Unlock controls")
                 }
             }
+            if (dtSide != 0) {
+                val left = dtSide < 0
+                Box(Modifier.align(if (left) Alignment.CenterStart else Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.38f)
+                    .clip(if (left) RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50) else RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50))
+                    .background(Color(0x4D000000)), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(if (left) Icons.Filled.FastRewind else Icons.Filled.FastForward, null, Modifier.size(34.dp), tint = Color.White)
+                        Text("$dtSecs ${I18n.t("seconds", "seconds")}", Modifier.padding(top = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    }
+                }
+            }
+            if (boost) {
+                Row(Modifier.align(Alignment.TopCenter).padding(top = 14.dp).clip(CircleShape).background(Color(0x99000000)).padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("2×", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Icon(Icons.Filled.FastForward, null, Modifier.size(16.dp), tint = Color.White)
+                }
+            }
             val uiVisible = !locked && (showUi || !wantPlay || failed || buffering)
             val uiA by animateFloatAsState(if (uiVisible) 1f else 0f, tween(200), label = "controlsAlpha")
             if (uiA > 0.01f) Box(Modifier.matchParentSize().graphicsLayer { alpha = uiA }) {
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0xB3080910), 0.32f to Color(0x33080910), 0.6f to Color(0x33080910), 1f to Color(0xD9080910))))
 
-                // ---- Bar atas: kembali · judul · (kualitas/CC saat penuh) · kunci · layar penuh ----
+                // ---- Bar atas: kembali · judul · CC · roda gigi ----
                 Row(Modifier.align(Alignment.TopStart).graphicsLayer { translationY = -(1f - uiA) * 28.dp.toPx() }.fillMaxWidth().padding(start = 6.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(42.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                     }
                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
                         Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Text("Episode ${r.ep}", fontSize = 12.sp, color = Color(0xFFE6E8F0))
                     }
-                    if (full) {
-                        Text(quality, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF)).padding(horizontal = 9.dp, vertical = 4.dp))
-                        if (subTracks.isNotEmpty()) Text("CC · ${subName(subIdx)}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF))
-                                .clickable { subDialog = true; uiTick++ }
-                                .padding(horizontal = 9.dp, vertical = 4.dp))
+                    if (subTracks.isNotEmpty()) Box(Modifier.size(42.dp).clip(CircleShape).clickable {
+                        // Tombol CC: hidupkan/matikan subtitle sekali ketuk (seperti YouTube).
+                        if (subIdx >= 0) {
+                            applySub(-1); vm.setSettings { it.copy(subLang = "off") }; vm.toast("Subtitles: ${I18n.t("ctl_off", "Off")}")
+                        } else {
+                            val pf = vm.s.settings.subLang.let { if (it == "off") "auto" else it }
+                            val n = SubLang.pick(subTracks, pf, vm.s.settings.lang); applySub(n)
+                            vm.setSettings { it.copy(subLang = pf) }; vm.toast("Subtitles: ${subName(n)}")
+                        }
+                        uiTick++
+                    }, contentAlignment = Alignment.Center) {
+                        Icon(if (subIdx >= 0) Icons.Filled.ClosedCaption else Icons.Filled.ClosedCaptionOff, "Subtitles", tint = Color.White)
                     }
-                    Box(Modifier.size(42.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
-                        Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen")
+                    Box(Modifier.size(42.dp).clip(CircleShape).clickable { sheet = "main"; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Settings, "Settings", tint = Color.White)
                     }
                 }
 
-                // ---- Tengah: -10 · putar/jeda · +10 ----
+                // ---- Tengah: -10 · putar/jeda (ikon putih polos) · +10 ----
                 if (failed) {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(30.dp), tint = RedText)
@@ -827,38 +897,40 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     var rotF by remember { mutableStateOf(0f) }
                     val rb by animateFloatAsState(rotB, tween(380), label = "rotBack")
                     val rf by animateFloatAsState(rotF, tween(380), label = "rotFwd")
-                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(26.dp)) {
-                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { rotB -= 360f; seekBy(-10_000); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Replay10, "Back 10 seconds", Modifier.size(26.dp).graphicsLayer { rotationZ = rb })
+                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+                        Box(Modifier.size(52.dp).clip(CircleShape).pressable { rotB -= 360f; seekBy(-10_000); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Replay10, "Back 10 seconds", Modifier.size(34.dp).graphicsLayer { rotationZ = rb }, tint = Color.White)
                         }
-                        Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
                             if (buffering) {
-                                CircularProgressIndicator(Modifier.size(52.dp), color = Red, trackColor = Color(0x33FFFFFF), strokeWidth = 3.5.dp)
+                                CircularProgressIndicator(Modifier.size(52.dp), color = Color.White, trackColor = Color(0x33FFFFFF), strokeWidth = 3.5.dp)
                             } else {
-                                Box(Modifier.fillMaxSize().clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFFD01632), Red)))
-                                    .pressable { player.playWhenReady = !player.playWhenReady; uiTick++ }, contentAlignment = Alignment.Center) {
-                                    MorphIcon(wantPlay, Icons.Filled.Pause, Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", 36.dp, Color.White)
+                                Box(Modifier.fillMaxSize().clip(CircleShape).pressable { player.playWhenReady = !player.playWhenReady; uiTick++ }, contentAlignment = Alignment.Center) {
+                                    MorphIcon(wantPlay, Icons.Filled.Pause, Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", 56.dp, Color.White)
                                 }
                             }
                         }
-                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { rotF += 360f; seekBy(10_000); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Forward10, "Forward 10 seconds", Modifier.size(26.dp).graphicsLayer { rotationZ = rf })
+                        Box(Modifier.size(52.dp).clip(CircleShape).pressable { rotF += 360f; seekBy(10_000); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Forward10, "Forward 10 seconds", Modifier.size(34.dp).graphicsLayer { rotationZ = rf }, tint = Color.White)
                         }
                     }
                 }
 
-                // ---- Bawah: bilah seek + waktu ----
+                // ---- Bawah: waktu + layar penuh (kanan), bilah seek tipis dengan buffer ----
                 Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().padding(horizontal = if (full) 28.dp else 14.dp)) {
-                    Slider(pos.coerceIn(0f, dur.toFloat()), { dragging = true; pos = it },
-                        valueRange = 0f..dur.toFloat(), modifier = Modifier.height(24.dp),
-                        onValueChangeFinished = { player.seekTo((pos * 1000).toLong()); dragging = false },
-                        thumb = { SliderDefaults.Thumb(interactionSource = thumbSrc, thumbSize = androidx.compose.ui.unit.DpSize(14.dp, 14.dp), colors = SliderDefaults.colors(thumbColor = Color.White)) },
-                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Red, inactiveTrackColor = Color(0x55FFFFFF)))
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp).padding(bottom = 8.dp)) {
-                        Text(fmt(pos.toInt()), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(fmt(pos.toInt()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(" / ${fmt(dur)}", fontSize = 12.5.sp, color = Color(0xB3FFFFFF))
                         Spacer(Modifier.weight(1f))
-                        Text(fmt(dur), fontSize = 12.sp, color = Color(0xCCFFFFFF))
+                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen", tint = Color.White)
+                        }
                     }
+                    YtSeekBar(
+                        pos = pos, dur = dur.toFloat(), buffered = buffered, modifier = Modifier.padding(bottom = 4.dp),
+                        onPreview = { dragging = true; pos = it; uiTick++ },
+                        onDone = { player.seekTo((it * 1000).toLong()); pos = it; dragging = false; uiTick++ },
+                    )
                 }
             }
         }
@@ -887,46 +959,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         if (hasNext) Btn(I18n.t("next_episode", "Next episode"), BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { step(1) }
                     }
 
-                    val tiles = buildList {
-                        add(CtlTile(Icons.Filled.Speed, I18n.t("ctl_speed", "Speed"), "${spdLabel(speed)}×", speed != 1f) {
-                            val all = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-                            speed = all[(all.indexOf(speed).let { if (it < 0) 2 else it } + 1) % all.size]
-                            player.setPlaybackSpeed(speed)
-                            vm.toast("Speed ${spdLabel(speed)}×")
-                        })
-                        add(CtlTile(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), subName(subIdx), subIdx >= 0) {
-                            if (subTracks.isEmpty()) vm.toast("No subtitles for this episode")
-                            else subDialog = true
-                        })
-                        add(CtlTile(Icons.Filled.HighQuality, I18n.t("quality", "Quality"), quality) {
-                            val opts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p"))
-                            val nx = opts[(opts.indexOf(quality).let { if (it < 0) 0 else it } + 1) % opts.size]
-                            vm.setSettings { it.copy(quality = nx) }; applyQuality(nx); vm.toast("Quality: $nx")
-                        })
-                        if (audioLabels.size > 1) add(CtlTile(Icons.Filled.Audiotrack, "Audio", audioLabels.getOrElse(audioIdx) { "?" }) {
-                            val n = (audioIdx + 1) % audioLabels.size
-                            applyAudio(n); vm.toast("Audio: ${audioLabels[n]}")
-                        })
-                        add(CtlTile(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep"), if (sleepMin == 0) I18n.t("ctl_off", "Off") else "${sleepMin}m", sleepMin > 0) {
-                            sleepMin = when (sleepMin) { 0 -> 15; 15 -> 30; 30 -> 60; else -> 0 }
-                        })
-                        add(CtlTile(Icons.Filled.PictureInPictureAlt, "PiP", "Mini") {
-                            try { act?.enterPictureInPictureMode(vm.pipParams ?: pipParams(ctx, false, wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
-                        })
-                        add(CtlTile(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock"), I18n.t("ctl_screen", "Screen")) { locked = true; showUi = true })
-                    }
-                    Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        tiles.chunked(4).forEach { row ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                row.forEach { t -> ControlTile(t, Modifier.weight(1f)) }
-                            }
-                        }
-                    }
-
                     Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(Icons.Filled.TouchApp, null, Modifier.size(16.dp), tint = NavOff)
-                        Text(I18n.t("swipe_hint", "Swipe left: brightness · right: volume · double-tap sides: ±10s"), fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
+                        Text(I18n.t("swipe_hint", "Swipe left: brightness · right: volume · double-tap sides: ±10s · hold: 2× speed"), fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
                     }
                 }
             }
@@ -963,6 +999,36 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
         }
       }
+    }
+    PlayerSettingsSheet(
+        page = sheet, full = full,
+        quality = quality, autoRes = playingH,
+        qualityOpts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p")),
+        onQuality = { q -> vm.setSettings { it.copy(quality = q) }; applyQuality(q); sheet = null; vm.toast("Quality: $q") },
+        subTracks = subTracks, subCurrent = subIdx, subPref = vm.s.settings.subLang, subLabel = subName(subIdx),
+        onSubTrack = { i ->
+            applySub(i); sheet = null
+            SubLang.code(subTracks[i])?.let { c -> vm.setSettings { it.copy(subLang = c) } }
+            vm.toast("Subtitles: ${subName(i)}")
+        },
+        onSubOff = { applySub(-1); sheet = null; vm.setSettings { it.copy(subLang = "off") }; vm.toast("Subtitles: ${I18n.t("ctl_off", "Off")}") },
+        onSubAuto = {
+            sheet = null; vm.setSettings { it.copy(subLang = "auto") }
+            val n = SubLang.pick(subTracks, "auto", vm.s.settings.lang); applySub(n); vm.toast("Subtitles: Auto · ${subName(n)}")
+        },
+        subSize = vm.s.settings.subSize, subBg = vm.s.settings.subBg,
+        onSubSize = { v -> vm.setSettings { it.copy(subSize = v) } },
+        onSubBg = { v -> vm.setSettings { it.copy(subBg = v) } },
+        speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("Speed ${spdLabel(v)}×") },
+        audioLabels = audioLabels, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("Audio: ${audioLabels.getOrElse(n) { "?" }}") },
+        sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(if (m == 0) "Sleep timer: Off" else "Sleep timer: $m min") },
+        onLock = { locked = true; showUi = true; sheet = null },
+        onPip = {
+            sheet = null
+            try { act?.enterPictureInPictureMode(vm.pipParams ?: pipParams(ctx, false, wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
+        },
+        onPage = { sheet = it },
+    )
     }
 }
 
@@ -1010,6 +1076,171 @@ private fun PlayerStatus(vm: AppVM, a: com.onimeku.app.data.Anime, r: Route.Play
             if (message != null) Text(message, Modifier.padding(top = 10.dp), color = InkSoft, fontSize = 14.sp, lineHeight = 20.sp)
             if (onRetry != null) Box(Modifier.padding(top = 18.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Play, Icons.Filled.Refresh, height = 48.dp, onClick = onRetry) }
         }
+    }
+}
+
+// ------------------------------------------------------------------ Bilah seek ala YouTube
+/** Bilah seek tipis: lintasan, segmen buffer, progres merah, bulatan penunjuk yang membesar saat digeser. Ketuk = lompat. */
+@Composable
+private fun YtSeekBar(pos: Float, dur: Float, buffered: Float, modifier: Modifier = Modifier, onPreview: (Float) -> Unit, onDone: (Float) -> Unit) {
+    var dragging by remember { mutableStateOf(false) }
+    val trackH by androidx.compose.animation.core.animateDpAsState(if (dragging) 5.dp else 3.dp, tween(120), label = "seekH")
+    val thumbR by androidx.compose.animation.core.animateDpAsState(if (dragging) 9.dp else 6.dp, tween(120), label = "seekThumb")
+    val d = dur.coerceAtLeast(1f)
+    val prev by rememberUpdatedState(onPreview)
+    val fin by rememberUpdatedState(onDone)
+    Box(
+        modifier.fillMaxWidth().height(28.dp)
+            .pointerInput(d) {
+                detectTapGestures { o -> val v = (o.x / size.width).coerceIn(0f, 1f) * d; prev(v); fin(v) }
+            }
+            .pointerInput(d) {
+                var last = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { o -> dragging = true; last = (o.x / size.width).coerceIn(0f, 1f) * d; prev(last) },
+                    onDragEnd = { dragging = false; fin(last) },
+                    onDragCancel = { dragging = false; fin(last) },
+                ) { change, _ -> change.consume(); last = (change.position.x / size.width).coerceIn(0f, 1f) * d; prev(last) }
+            },
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val h = trackH.toPx(); val cy = size.height / 2f; val r = h / 2f; val w = size.width
+            val pf = (pos / d).coerceIn(0f, 1f)
+            val bf = (buffered / d).coerceIn(pf, 1f)
+            val cr = androidx.compose.ui.geometry.CornerRadius(r, r)
+            drawRoundRect(Color(0x55FFFFFF), androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w, h), cr)
+            drawRoundRect(Color(0x88FFFFFF), androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w * bf, h), cr)
+            drawRoundRect(Red, androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w * pf, h), cr)
+            drawCircle(Red, thumbR.toPx(), androidx.compose.ui.geometry.Offset(w * pf, cy))
+        }
+    }
+}
+
+// ------------------------------------------------------------------ Menu pengaturan ala YouTube
+/** Roda gigi di pemutar -> lembar bawah: Kualitas, Subtitle (+gaya), Kecepatan, Audio, Timer tidur, PiP, Kunci layar. Potret: naik dari bawah; layar penuh: panel kanan bawah. */
+@Composable
+private fun PlayerSettingsSheet(
+    page: String?, full: Boolean,
+    quality: String, autoRes: Int, qualityOpts: List<String>, onQuality: (String) -> Unit,
+    subTracks: List<com.onimeku.app.data.ApiSubtitle>, subCurrent: Int, subPref: String, subLabel: String,
+    onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
+    subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
+    speed: Float, onSpeed: (Float) -> Unit,
+    audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit,
+    sleepMin: Int, onSleep: (Int) -> Unit, onLock: () -> Unit, onPip: () -> Unit,
+    onPage: (String?) -> Unit,
+) {
+    var held by remember { mutableStateOf("main") }
+    LaunchedEffect(page) { if (page != null) held = page }
+    val open = page != null
+    fun qLabel(q: String) = if (q == "Auto" && quality == "Auto" && autoRes > 0) "Auto (${autoRes}p)" else q
+    val sizeNames = listOf("small" to "Small", "normal" to "Normal", "large" to "Large", "xl" to "Extra large")
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.animation.AnimatedVisibility(
+            open, enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(160)),
+        ) {
+            Box(Modifier.fillMaxSize().background(Color(0x8C000000))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPage(null) })
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            open, Modifier.align(if (full) Alignment.BottomEnd else Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically(tween(260)) { it } + androidx.compose.animation.fadeIn(tween(160)),
+            exit = androidx.compose.animation.slideOutVertically(tween(200)) { it } + androidx.compose.animation.fadeOut(tween(160)),
+        ) {
+            val shape = if (full) RoundedCornerShape(18.dp) else RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+            Column(
+                (if (full) Modifier.width(340.dp).padding(end = 16.dp, bottom = 12.dp) else Modifier.fillMaxWidth())
+                    .heightIn(max = if (full) 300.dp else 520.dp)
+                    .clip(shape).background(Bg2).border(1.dp, Line, shape)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                    .then(if (full) Modifier else Modifier.navigationBarsPadding()),
+            ) {
+                if (!full) Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp, bottom = 4.dp).size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape).background(Color(0x55FFFFFF)))
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
+                    when (held) {
+                        "quality" -> {
+                            SheetHeader(I18n.t("quality", "Quality")) { onPage("main") }
+                            qualityOpts.forEach { q -> SheetOption(qLabel(q), q == quality) { onQuality(q) } }
+                        }
+                        "subs" -> {
+                            SheetHeader(I18n.t("subtitles", "Subtitles")) { onPage("main") }
+                            val order = subTracks.indices.sortedBy { i -> when (SubLang.code(subTracks[i])) { "id" -> 0; "en" -> 1; else -> 2 } }
+                            SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
+                            val autoSub = if (subPref == "auto" && subCurrent >= 0) subTracks.getOrNull(subCurrent)?.let { " · " + SubLang.display(it, subCurrent) } else null
+                            SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
+                            order.forEach { i -> SheetOption(SubLang.display(subTracks[i], i), subPref != "auto" && subCurrent == i) { onSubTrack(i) } }
+                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
+                            SheetRowItem(Icons.Filled.FormatSize, "Subtitle style", sizeNames.firstOrNull { it.first == subSize }?.second ?: "Normal") { onPage("substyle") }
+                        }
+                        "substyle" -> {
+                            SheetHeader("Subtitle style") { onPage("subs") }
+                            sizeNames.forEach { (k, label) -> SheetOption(label, subSize == k) { onSubSize(k) } }
+                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
+                            Row(Modifier.fillMaxWidth().clickable { onSubBg(!subBg) }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Black background", Modifier.weight(1f), fontSize = 15.sp, color = Color.White)
+                                Switch(subBg, { onSubBg(it) }, colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
+                                    uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50)))
+                            }
+                        }
+                        "speed" -> {
+                            SheetHeader(I18n.t("speed", "Playback speed")) { onPage("main") }
+                            listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { v ->
+                                SheetOption(if (v == 1f) I18n.t("normal", "Normal") else "${spdLabel(v)}×", v == speed) { onSpeed(v) }
+                            }
+                        }
+                        "audio" -> {
+                            SheetHeader("Audio") { onPage("main") }
+                            audioLabels.forEachIndexed { i, l -> SheetOption(l, i == audioIdx) { onAudio(i) } }
+                        }
+                        "sleep" -> {
+                            SheetHeader(I18n.t("ctl_sleep", "Sleep timer")) { onPage("main") }
+                            listOf(0, 15, 30, 60).forEach { m -> SheetOption(if (m == 0) I18n.t("ctl_off", "Off") else "$m min", sleepMin == m) { onSleep(m) } }
+                        }
+                        else -> {
+                            SheetRowItem(Icons.Filled.Tune, I18n.t("quality", "Quality"), qLabel(quality)) { onPage("quality") }
+                            if (subTracks.isNotEmpty()) SheetRowItem(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), subLabel) { onPage("subs") }
+                            SheetRowItem(Icons.Filled.Speed, I18n.t("speed", "Playback speed"), if (speed == 1f) I18n.t("normal", "Normal") else "${spdLabel(speed)}×") { onPage("speed") }
+                            if (audioLabels.size > 1) SheetRowItem(Icons.Filled.Audiotrack, "Audio", audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
+                            SheetRowItem(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep timer"), if (sleepMin == 0) I18n.t("ctl_off", "Off") else "$sleepMin min") { onPage("sleep") }
+                            SheetRowItem(Icons.Filled.PictureInPictureAlt, "Picture-in-picture", "") { onPip() }
+                            SheetRowItem(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock screen"), "") { onLock() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetRowItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(22.dp), tint = Color.White)
+        Text(label, Modifier.weight(1f).padding(start = 16.dp), fontSize = 15.sp, color = Color.White)
+        if (value.isNotEmpty()) {
+            Text(value, fontSize = 13.5.sp, color = NavOff, maxLines = 1)
+            Icon(Icons.Filled.ChevronRight, null, Modifier.padding(start = 4.dp).size(20.dp), tint = NavOff)
+        }
+    }
+}
+
+@Composable
+private fun SheetHeader(title: String, onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onBack).padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(22.dp), tint = Color.White)
+        Text(title, Modifier.padding(start = 14.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+}
+
+@Composable
+private fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { if (selected) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText) }
+        Text(label, Modifier.padding(start = 16.dp), fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) RedText else Color.White)
     }
 }
 

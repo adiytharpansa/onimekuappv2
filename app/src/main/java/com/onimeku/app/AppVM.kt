@@ -43,6 +43,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     // PlayerReady yang dibongkar tiap pindah episode sehingga fullscreen
     // selalu lepas. Direset otomatis saat rute teratas bukan pemutar.
     var playerFull by mutableStateOf(false)
+    // Kecepatan putar dipertahankan antar episode (diatur dari roda gigi pemutar).
+    var playerSpeed by mutableStateOf(1f)
     var toastMsg by mutableStateOf<String?>(null); private set
     var welcomeOpen by mutableStateOf(!s.welcomeSeen); private set
     var calDay by mutableIntStateOf(0)

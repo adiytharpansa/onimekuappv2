@@ -190,30 +190,6 @@ fun SubScreen(vm: AppVM, key: String) {
                     HLine()
                     SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
                 }
-                Grp(I18n.t("quality_s", "Video quality"))
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(5.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Auto", "1080p", "720p", "480p").forEach { qv ->
-                        val on = set.quality == qv
-                        Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(14.dp)).background(if (on) Red else Color.Transparent)
-                            .clickable { vm.setSettings { it.copy(quality = qv) } }, contentAlignment = Alignment.Center) {
-                            Text(qv, fontSize = 14.sp, color = if (on) Color.White else InkSoft)
-                        }
-                    }
-                }
-                Grp(I18n.t("subtitles", "Subtitles"))
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(5.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("auto" to "Auto", "id" to "Indonesia", "en" to "English", "off" to I18n.t("ctl_off", "Off")).forEach { (code, label) ->
-                        val on = set.subLang == code
-                        Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(14.dp)).background(if (on) Red else Color.Transparent)
-                            .clickable { vm.setSettings { it.copy(subLang = code) } }, contentAlignment = Alignment.Center) {
-                            Text(label, fontSize = 13.sp, color = if (on) Color.White else InkSoft, maxLines = 1)
-                        }
-                    }
-                }
-                Text(I18n.t("sub_auto_hint", "Auto picks Indonesia or English to match the app language, and falls back to the other when one is missing."),
-                    Modifier.padding(start = 2.dp, top = 8.dp), fontSize = 12.5.sp, color = NavOff)
                 Grp(I18n.t("grp_data", "Data and alerts"))
                 CardBox {
                     SwitchRow(I18n.t("wifi_only_t", "Stream over Wi-Fi only"), I18n.t("wifi_only_d", "Avoid using mobile data."), set.wifi) { v -> vm.setSettings { it.copy(wifi = v) } }
@@ -250,7 +226,7 @@ fun SubScreen(vm: AppVM, key: String) {
                     val faq = listOf(
                         "How do I watch an episode offline?" to "Open the Download tab and save an episode while you are online. Saved episodes stay there until you remove them.",
                         "How do I add an anime to My List?" to "Tap the My List button on the anime you like. It will be saved in the My List tab.",
-                        "An episode will not play. What can I do?" to "Check your connection, then lower the video quality in Settings. If it still fails, close the app and open it again.",
+                        "An episode will not play. What can I do?" to "Check your connection, then lower the video quality with the gear icon in the player. If it still fails, close the app and open it again.",
                         "Why is some quality missing?" to "Not every episode is available in every quality. Auto picks the best one for your connection.",
                         "How do I get new episode alerts?" to "Turn on New episode alerts in Settings. You will be told when something in your list updates.",
                     )
