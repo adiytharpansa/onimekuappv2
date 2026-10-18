@@ -1,3 +1,15 @@
+# Perbaikan pengingat (18 Okt 2026, dari Dokumen Gabungan) — diterapkan agen sebagai debug.29
+
+- `Reminders.kt`: pengingat mingguan tidak lagi mati sesudah bunyi pertama — `ReminderWorker` kini meneruskan detail hasil `fetchDetail` ke `Reminders.schedule(...)` (katalog kosong di proses worker membuat penjadwalan ulang sebelumnya diam-diam batal).
+- `Reminders.kt`: `delayMs` mem-parsing `time` secara aman (kosong/rusak -> 09:00); sebelumnya `toInt()` pada string kosong membuat aplikasi crash dari `rescheduleAll`.
+
+# Perbaikan agen debug.23–.28 (18 Okt 2026) — putar di HP + poster
+
+- Putar: rantai disamakan pemutar web (ref proksi = referer utuh; embed dicabut dari rantai judul ber-stream — rantai habis = layar galat jujur + "Try again"); retry sekali jalur proksi; pembersihan entri cache unduhan yatim era cache-tulis; CrashLog mencatat lapis + kode galat.
+- debug.25: streaming lepas total dari cache bersama (cache hanya untuk putar unduhan offline, item streaming tanpa kunci cache); jalur proksi tanpa samaran UA peramban dan tanpa header Referer asing; bendera cleanup hanya terpasang bila pembersihan benar berjalan.
+- Poster (debug.26–.28): `resolvePoster` hidup lagi — resolusi langsung ke API pemetaan Kitsu (anilistId -> poster/cover media.kitsu.app) karena poster s4.anilist.co dibalas 403 dari mana pun (372 judul). debug.27: Kitsu menolak `Accept: application/json` (406) — pengambilan memakai `Accept: application/vnd.api+json`. debug.28: URL Kitsu bertanda tangan X-Amz (kedaluwarsa 15 menit) tidak disimpan permanen.
+- Terverifikasi emulator CI (bukti emu-evidence-27): Beranda penuh poster asli, AoT S3P2 ep 1 terputar, logcat FATAL 0.
+
 # Putaran 4 (19 Okt 2026) — fitur pemutar + akun
 - Pemutar: pemutaran latar + MediaSession (notifikasi, layar kunci, headset; `PlaybackService`, setting "Background playback", video dimatikan saat di latar), pilihan trek audio, kualitas dari rendisi nyata, kartu "Up next" (20 dtk terakhir), daftar episode, timer tidur, kunci kontrol, kecepatan 0,5–2×, saran turunkan kualitas saat 3x macet/90 dtk.
 - Akun: hapus akun (Edge Function), refresh token, token di EncryptedSharedPreferences, sinkronisasi My List/progres (`data/Sync.kt`, `backend/supabase/schema.sql`).

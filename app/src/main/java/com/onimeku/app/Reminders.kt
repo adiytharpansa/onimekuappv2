@@ -20,15 +20,18 @@ object Reminders {
 
     private fun delayMs(day: Int, time: String): Long {
         val now = LocalDateTime.now()
-        val (h, m) = time.split(":").map { it.toInt() }
+        // time bisa kosong bila updatedAt katalog tak terbaca: jangan crash.
+        val parts = time.split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+        val m = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
         val add = ((day - now.dayOfWeek.value % 7) + 7) % 7
         var t = now.toLocalDate().plusDays(add.toLong()).atTime(h, m)
         if (!t.isAfter(now)) t = t.plusDays(7)
         return Duration.between(now, t).toMillis()
     }
 
-    fun schedule(ctx: Context, pi: Int, id: String) {
-        val c = Catalog.byId[id] ?: return
+    fun schedule(ctx: Context, pi: Int, id: String, anime: com.onimeku.app.data.Anime? = null) {
+        val c = anime ?: Catalog.byId[id] ?: return
         val req = OneTimeWorkRequestBuilder<ReminderWorker>()
             .setInitialDelay(delayMs(c.day, c.time), TimeUnit.MILLISECONDS)
             .setInputData(workDataOf("pi" to pi, "id" to id))
@@ -58,7 +61,9 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         val c = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }
             ?: return Result.success()
         Notifier.show(applicationContext, "New episode: ${c.title}", "Episode ${c.ep} is out now")
-        Reminders.schedule(applicationContext, pi, id) // jadwalkan minggu depan
+        // Katalog kosong di proses worker: kirim detail yang baru diambil agar
+        // jadwal minggu depan benar-benar dibuat (sebelumnya diam-diam batal).
+        Reminders.schedule(applicationContext, pi, id, c)
         return Result.success()
     }
 }
