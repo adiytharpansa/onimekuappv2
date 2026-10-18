@@ -43,13 +43,21 @@ object PosterHealer {
             u.contains("backblazeb2") || u.contains("amazonaws.com")
     }
 
+    // Sebagian kecil poster Kitsu berupa URL bertanda tangan S3/Backblaze
+    // (X-Amz-Expires=900 — mati dalam 15 menit). URL semacam itu TIDAK
+    // boleh disimpan permanen: cukup hidup di memori sesi ini, dan entri
+    // cache lama yang terlanjur menyimpannya dianggap basi (debug.28).
+    private fun isPresigned(u: String?): Boolean = u?.contains("X-Amz-") == true
+
     fun posterFor(a: Anime): String? {
         val p = a.poster
         if (p.isNullOrBlank()) return null
         if (!isBad(p)) return p
         val aid = a.anilistId ?: return null
         posters[aid]?.let { return it.ifBlank { null } }
-        prefs?.getString("p$aid", null)?.let { posters[aid] = it; return it }
+        prefs?.getString("p$aid", null)?.let {
+            if (!isPresigned(it)) { posters[aid] = it; return it }
+        }
         ensure(aid)
         return null
     }
@@ -60,7 +68,9 @@ object PosterHealer {
         if (!isBad(b)) return b
         val aid = a.anilistId ?: return null
         covers[aid]?.let { return it.ifBlank { null } }
-        prefs?.getString("c$aid", null)?.let { covers[aid] = it; return it }
+        prefs?.getString("c$aid", null)?.let {
+            if (!isPresigned(it)) { covers[aid] = it; return it }
+        }
         ensure(aid)
         return null
     }
@@ -73,10 +83,12 @@ object PosterHealer {
                 posters[aid] = r?.poster ?: ""
                 covers[aid] = r?.cover ?: ""
                 if (r != null) {
-                    prefs?.edit()
-                        ?.putString("p$aid", r.poster ?: "")
-                        ?.putString("c$aid", r.cover ?: "")
-                        ?.apply()
+                    // Hanya URL stabil yang disimpan permanen; yang
+                    // bertanda tangan kedaluwarsa (X-Amz-) memori saja.
+                    val ed = prefs?.edit()
+                    if (!isPresigned(r.poster)) ed?.putString("p$aid", r.poster ?: "")
+                    if (!isPresigned(r.cover)) ed?.putString("c$aid", r.cover ?: "")
+                    ed?.apply()
                 }
             } catch (e: Exception) {
                 posters[aid] = ""
