@@ -57,30 +57,25 @@ object PosterHealer {
     // cache lama yang terlanjur menyimpannya dianggap basi (debug.28).
     private fun isPresigned(u: String?): Boolean = u?.contains("X-Amz-") == true
 
+    // SEJAK gambar selalu datang lewat /api/img milik API sendiri dan
+    // penyembuhan hidup di SERVER, aplikasi menampilkan URL dari API
+    // apa adanya — tanpa penyembunyian per host lagi. Daftar host buruk
+    // lama (isBad) justru mengosongkan poster yang sah: URL terbungkus
+    // /api/img tetap mengandung nama host asal di parameternya, jadi
+    // semua poster samehadaku (dan yang tanpa anilistId tidak punya
+    // jalur resolusi sama sekali) tampil KOSONG permanen di aplikasi
+    // (ditemukan 19 Okt 2026 dari tangkapan layar "All Anime" user).
+    // Server adalah satu-satunya penyembuh sekarang.
     fun posterFor(a: Anime): String? {
         val p = a.poster
         if (p.isNullOrBlank()) return null
-        if (!isBad(p)) return p
-        val aid = a.anilistId ?: return null
-        posters[aid]?.let { return it.ifBlank { null } }
-        prefs?.getString("p$aid", null)?.let {
-            if (!isPresigned(it)) { posters[aid] = it; return it }
-        }
-        ensure(aid)
-        return null
+        return p
     }
 
     fun coverFor(a: Anime): String? {
         val b = a.banner
         if (b.isNullOrBlank()) return null
-        if (!isBad(b)) return b
-        val aid = a.anilistId ?: return null
-        covers[aid]?.let { return it.ifBlank { null } }
-        prefs?.getString("c$aid", null)?.let {
-            if (!isPresigned(it)) { covers[aid] = it; return it }
-        }
-        ensure(aid)
-        return null
+        return b
     }
 
     private fun ensure(aid: Int) {
