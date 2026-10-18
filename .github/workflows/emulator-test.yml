@@ -71,6 +71,7 @@ jobs:
             adb pull /sdcard/ui2.xml ui2.xml || true
             adb logcat -d > logcat.txt || true
             adb shell dumpsys activity processes > processes.txt || true
+            adb exec-out run-as com.onimeku.app cat shared_prefs/poster_cache.xml > poster_cache.xml 2>/dev/null || true
 
       - name: Upload test evidence
         uses: actions/upload-artifact@v4
@@ -85,4 +86,5 @@ jobs:
             ui2.xml
             logcat.txt
             processes.txt
+            poster_cache.xml
           if-no-files-found: warn

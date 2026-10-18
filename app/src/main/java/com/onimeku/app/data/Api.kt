@@ -260,15 +260,29 @@ object ApiClient {
      * PosterHealer meng-cache hasil ini permanen di disk, jadi tiap
      * judul hanya dicari sekali. Kegagalan = null (coba lagi sesi depan).
      */
+    /** Ambil teks dari Kitsu: API-nya JSON:API ketat — menolak
+     *  "Accept: application/json" dengan 406 (bug debug.26: resolusi
+     *  poster selalu gagal di dalam aplikasi walau URL-nya benar).
+     *  Wajib "application/vnd.api+json", jadi tidak memakai getText. */
+    private suspend fun getKitsu(url: String): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val req = okhttp3.Request.Builder().url(url)
+            .header("Accept", "application/vnd.api+json")
+            .header("User-Agent", "OnimekuApp/1.0 (Android)")
+            .build()
+        Net.client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw java.io.IOException("kitsu http ${resp.code}")
+            resp.body?.string() ?: throw java.io.IOException("kitsu kosong")
+        }
+    }
+
     suspend fun resolvePoster(anilistId: Int): PosterResp? {
         return try {
-            val mapJson = getText(
+            val mapJson = getKitsu(
                 "https://kitsu.io/api/edge/mappings?filter%5BexternalSite%5D=anilist%2Fanime&filter%5BexternalId%5D=$anilistId",
-                readTimeoutSec = 15,
             )
             val mapId = Regex(""""id":"(\d+)","type":"mappings"""").find(mapJson)?.groupValues?.get(1)
                 ?: return null
-            val itemJson = getText("https://kitsu.io/api/edge/mappings/$mapId/item", readTimeoutSec = 15)
+            val itemJson = getKitsu("https://kitsu.io/api/edge/mappings/$mapId/item")
             fun original(field: String): String? =
                 Regex(""""$field":\{[^}]*?"original":"([^"]+)"""").find(itemJson)?.groupValues?.get(1)
                     ?.replace("\\/", "/")
