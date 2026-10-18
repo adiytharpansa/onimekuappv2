@@ -442,7 +442,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val subTracks = remember(playback) { playback.subtitles.filter { it.url.isNotBlank() } }
     var subIdx by remember(r) { mutableIntStateOf(-1) }       // -1 = mati, selain itu indeks di subTracks
     var subReady by remember(r) { mutableStateOf(false) }
-    fun subName(i: Int): String = if (i < 0) "Off" else subTracks.getOrNull(i)?.let { it.label.ifBlank { it.lang.uppercase() }.ifBlank { "Sub ${i + 1}" } } ?: "Off"
+    var subDialog by remember { mutableStateOf(false) }
+    fun subName(i: Int): String = if (i < 0) I18n.t("ctl_off", "Off") else subTracks.getOrNull(i)?.let { SubLang.display(it, i) } ?: I18n.t("ctl_off", "Off")
 
     fun applySub(i: Int) {
         // Perbaikan agen (berulang dari v5/v6): konstanta C dipakai sebagai
@@ -452,7 +453,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (i < 0 || groups.isEmpty()) {
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
         } else {
-            val g = groups.getOrNull(i) ?: groups.first()
+            // Cocokkan trek menurut bahasa (urutan ke-n untuk bahasa yang sama); cadangan: indeks.
+            val want = subTracks.getOrNull(i)
+            val nth = if (want == null) 0 else subTracks.take(i).count { it.lang.equals(want.lang, true) }
+            val byLang = if (want == null) emptyList() else groups.filter { it.mediaTrackGroup.getFormat(0).language.equals(want.lang, true) }
+            val g = byLang.getOrNull(nth) ?: groups.getOrNull(i) ?: groups.first()
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0))
         }
@@ -516,10 +521,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     .filter { it > 0 }.distinct().sortedDescending()
                 if (!subReady && tracks.groups.any { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }) {
                     subReady = true
-                    fun has(i: Int, f: (String) -> Boolean) = subTracks.getOrNull(i)?.let { f((it.lang + " " + it.label).lowercase()) } == true
-                    val pick = subTracks.indices.firstOrNull { has(it) { s -> s.contains("indo") || Regex("\\bid\\b").containsMatchIn(s) } }
-                        ?: subTracks.indices.firstOrNull { has(it) { s -> s.contains("eng") || Regex("\\ben\\b").containsMatchIn(s) } }
-                        ?: subTracks.indices.firstOrNull() ?: -1
+                    val pref = vm.s.settings.subLang
+                    val pick = SubLang.pick(subTracks, pref, vm.s.settings.lang)
+                    // Bahasa pilihan tidak tersedia di episode ini -> beri tahu, lalu pakai bahasa cadangan.
+                    if ((pref == "id" || pref == "en") && pick >= 0 && SubLang.code(subTracks[pick]) != pref)
+                        vm.toast("${SubLang.prefName(pref)} subtitle unavailable · using ${subName(pick)}")
                     applySub(pick)
                 }
             }
@@ -687,6 +693,21 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         return
     }
 
+    if (subDialog) SubtitleDialog(
+        tracks = subTracks, current = subIdx, pref = vm.s.settings.subLang, appLang = vm.s.settings.lang,
+        onTrack = { i ->
+            applySub(i); subDialog = false
+            SubLang.code(subTracks[i])?.let { c -> vm.setSettings { it.copy(subLang = c) } }
+            vm.toast("Subtitles: ${subName(i)}")
+        },
+        onOff = { applySub(-1); subDialog = false; vm.setSettings { it.copy(subLang = "off") }; vm.toast("Subtitles: ${I18n.t("ctl_off", "Off")}") },
+        onAuto = {
+            subDialog = false; vm.setSettings { it.copy(subLang = "auto") }
+            val n = SubLang.pick(subTracks, "auto", vm.s.settings.lang); applySub(n); vm.toast("Subtitles: Auto · ${subName(n)}")
+        },
+        onDismiss = { subDialog = false },
+    )
+
     val epList = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val curIdx = epList.indexOf(r.ep)
     val epListState = rememberLazyListState()
@@ -782,7 +803,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF)).padding(horizontal = 9.dp, vertical = 4.dp))
                         if (subTracks.isNotEmpty()) Text("CC · ${subName(subIdx)}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF))
-                                .clickable { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); uiTick++; vm.toast("Subtitles: ${subName(n)}") }
+                                .clickable { subDialog = true; uiTick++ }
                                 .padding(horizontal = 9.dp, vertical = 4.dp))
                     }
                     Box(Modifier.size(42.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
@@ -875,7 +896,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         })
                         add(CtlTile(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), subName(subIdx), subIdx >= 0) {
                             if (subTracks.isEmpty()) vm.toast("No subtitles for this episode")
-                            else { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); vm.toast("Subtitles: ${subName(n)}") }
+                            else subDialog = true
                         })
                         add(CtlTile(Icons.Filled.HighQuality, I18n.t("quality", "Quality"), quality) {
                             val opts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p"))

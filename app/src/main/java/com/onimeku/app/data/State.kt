@@ -33,6 +33,8 @@ data class Settings(
     // Bahasa antarmuka: "en" atau "id" (debug.31). Default Inggris agar
     // keadaan lama tidak berubah; dipilih di Profil -> Language.
     val lang: String = "en",
+    // Bahasa subtitle pemutar: "auto" (ikut bahasa aplikasi, Indonesia/English), "id", "en", atau "off".
+    val subLang: String = "auto",
 )
 
 @Serializable

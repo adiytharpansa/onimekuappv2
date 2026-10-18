@@ -201,6 +201,19 @@ fun SubScreen(vm: AppVM, key: String) {
                         }
                     }
                 }
+                Grp(I18n.t("subtitles", "Subtitles"))
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("auto" to "Auto", "id" to "Indonesia", "en" to "English", "off" to I18n.t("ctl_off", "Off")).forEach { (code, label) ->
+                        val on = set.subLang == code
+                        Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(14.dp)).background(if (on) Red else Color.Transparent)
+                            .clickable { vm.setSettings { it.copy(subLang = code) } }, contentAlignment = Alignment.Center) {
+                            Text(label, fontSize = 13.sp, color = if (on) Color.White else InkSoft, maxLines = 1)
+                        }
+                    }
+                }
+                Text(I18n.t("sub_auto_hint", "Auto picks Indonesia or English to match the app language, and falls back to the other when one is missing."),
+                    Modifier.padding(start = 2.dp, top = 8.dp), fontSize = 12.5.sp, color = NavOff)
                 Grp(I18n.t("grp_data", "Data and alerts"))
                 CardBox {
                     SwitchRow(I18n.t("wifi_only_t", "Stream over Wi-Fi only"), I18n.t("wifi_only_d", "Avoid using mobile data."), set.wifi) { v -> vm.setSettings { it.copy(wifi = v) } }

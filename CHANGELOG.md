@@ -1,3 +1,9 @@
+## v1.0.0-debug.44 (belum dirilis): Subtitle otomatis Indonesia / English
+- Setting baru Settings -> Subtitles: Auto / Indonesia / English / Off (Settings.subLang, tersimpan). Auto mengikuti bahasa aplikasi (id -> Indonesia dulu, selain itu English dulu).
+- Bahasa pilihan tidak ada di episode -> otomatis pakai bahasa cadangan (Indonesia <-> English, lalu trek pertama) + toast pemberitahuan.
+- Pemutar: ketuk CC / tile Subtitles membuka menu (Auto, Indonesia, English, bahasa lain, Off) menggantikan putar-siklus; pilihan Indonesia/English/Off disimpan sebagai preferensi.
+- Pencocokan trek ExoPlayer kini menurut bahasa (bukan indeks) agar tidak salah trek bila ada subtitle yang gagal diunduh. Berkas baru: ui/Subtitles.kt.
+
 ## v1.0.0-debug.43 (belum dirilis): PiP ala YouTube
 - Jendela PiP kini punya tombol Sebelumnya / Putar-Jeda / Berikutnya (RemoteAction + BroadcastReceiver); ikon putar/jeda berganti mengikuti status.
 - Rasio jendela PiP mengikuti rasio video asli; transisi masuk/keluar halus (sourceRectHint dari area video + seamless resize).
