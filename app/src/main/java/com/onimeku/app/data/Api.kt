@@ -264,7 +264,6 @@ object ApiClient {
      * menampilkan gradasi untuk poster yang memang belum sembuh.
      */
     suspend fun resolvePoster(anilistId: Int): PosterResp? = null
-    }
 }
 
 @Serializable
