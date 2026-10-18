@@ -1,5 +1,13 @@
 package com.onimeku.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,7 +43,6 @@ fun WelcomeScreen(vm: AppVM) {
     var idx by remember { mutableIntStateOf(0) }
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(tick) { while (true) { delay(4500); idx = (idx + 1) % slides.size } }
-    val (plain, em, sub) = slides[idx]
 
     Box(Modifier.fillMaxSize().background(Color(0xFF161821))) {
         Canvas(Modifier.fillMaxWidth().fillMaxHeight(0.64f)) {
@@ -56,17 +63,29 @@ fun WelcomeScreen(vm: AppVM) {
             fontSize = 13.sp, fontWeight = FontWeight.Medium)
 
         Column(Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp).navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
-            Text(buildAnnotatedString {
-                append(plain); withStyle(SpanStyle(color = Red)) { append(em) }
-            }, fontSize = 46.sp, fontWeight = FontWeight.Bold, lineHeight = 50.sp, letterSpacing = (-1.5).sp)
-            Text(sub, Modifier.padding(top = 16.dp), fontSize = 20.sp, lineHeight = 29.sp, color = Color(0xFFF2F2F6))
-            Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                slides.indices.forEach { i ->
-                    Box(Modifier.padding(start = 9.dp).height(10.dp).width(if (i == idx) 42.dp else 10.dp).clip(CircleShape)
-                        .background(if (i == idx) Red else Color(0xFF5A5F6E)).clickable { idx = i; tick++ })
+            // Teks slide berganti dengan fade + geser halus.
+            AnimatedContent(
+                targetState = idx,
+                transitionSpec = { (fadeIn(tween(450)) + slideInVertically(tween(450)) { it / 6 }) togetherWith fadeOut(tween(200)) },
+                label = "welcomeText",
+            ) { i ->
+                val (pl, e, sb) = slides[i]
+                Column {
+                    Text(buildAnnotatedString {
+                        append(pl); withStyle(SpanStyle(color = Red)) { append(e) }
+                    }, fontSize = 46.sp, fontWeight = FontWeight.Bold, lineHeight = 50.sp, letterSpacing = (-1.5).sp)
+                    Text(sb, Modifier.padding(top = 16.dp), fontSize = 20.sp, lineHeight = 29.sp, color = Color(0xFFF2F2F6))
                 }
             }
-            Row(Modifier.padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                slides.indices.forEach { i ->
+                    val dotW by animateDpAsState(if (i == idx) 42.dp else 10.dp, tween(300), label = "dotW")
+                    val dotC by animateColorAsState(if (i == idx) Red else Color(0xFF5A5F6E), tween(300), label = "dotC")
+                    Box(Modifier.padding(start = 9.dp).height(10.dp).width(dotW).clip(CircleShape)
+                        .background(dotC).clickable { idx = i; tick++ })
+                }
+            }
+            Row(Modifier.padding(top = 22.dp).fadeSlideIn(150), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome() }
                 Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome() }
             }

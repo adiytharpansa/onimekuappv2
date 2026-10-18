@@ -140,12 +140,19 @@ fun Modifier.artBackground(a: Anime): Modifier = this.background(Bg2)
 fun RealImage(a: Anime, modifier: Modifier = Modifier) {
     val img = com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
     val req = rememberImg(img)
-    if (req != null) {
-        coil.compose.AsyncImage(
-            model = req, contentDescription = null,
-            modifier = modifier,
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-        )
+    val done = remember(a.id, img) { mutableStateOf(false) }
+    Box(modifier) {
+        // Kilau selama gambar dimuat; crossfade saat tiba.
+        if (!done.value && (req != null || !a.poster.isNullOrBlank() || !a.banner.isNullOrBlank())) Box(Modifier.fillMaxSize().shimmer())
+        if (req != null) {
+            coil.compose.AsyncImage(
+                model = req, contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                onSuccess = { done.value = true },
+                onError = { done.value = true },
+            )
+        }
     }
 }
 
@@ -257,7 +264,7 @@ fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
-        items(items, key = { it.id }) { a -> Tile(a, vm) }
+        items(items, key = { it.id }) { a -> Box(Modifier.animateItem()) { Tile(a, vm) } }
     }
 }
 

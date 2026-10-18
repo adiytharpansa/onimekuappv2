@@ -11,6 +11,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -33,8 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -129,10 +132,17 @@ fun App(vm: AppVM) {
                 if (vm.route == Route.Home) TopBar(vm)
                 if (vm.route !is Route.Player) TabBar(vm, Modifier.align(Alignment.BottomCenter))
             }
-            vm.toastMsg?.let { m ->
-                val bottom = if (vm.route is Route.Player || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp
-                Text(m, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = bottom, start = 16.dp, end = 16.dp)
-                    .clip(CircleShape).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp),
+            // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.
+            var lastToast by remember { mutableStateOf("") }
+            LaunchedEffect(vm.toastMsg) { vm.toastMsg?.let { lastToast = it } }
+            val bottom = if (vm.route is Route.Player || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp
+            AnimatedVisibility(
+                visible = vm.toastMsg != null,
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = bottom, start = 16.dp, end = 16.dp),
+                enter = fadeIn(tween(200)) + slideInVertically(tween(250)) { it / 2 },
+                exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 2 },
+            ) {
+                Text(vm.toastMsg ?: lastToast, Modifier.clip(CircleShape).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp),
                     color = Bg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
         }

@@ -39,10 +39,11 @@ fun ProfileScreen(vm: AppVM) {
         Text("Profiles", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
         vm.s.profiles.forEachIndexed { i, pr ->
             val sel = i == vm.s.pi
-            Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val bd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, androidx.compose.animation.core.tween(250), label = "profBd")
+            Row(Modifier.padding(bottom = 10.dp).fadeSlideIn(minOf(i, 3) * 60), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(
                     Modifier.weight(1f).heightIn(min = 56.dp).clip(RoundedCornerShape(18.dp)).background(Bg2)
-                        .border(1.dp, if (sel) Red else Line, RoundedCornerShape(18.dp))
+                        .border(1.dp, bd, RoundedCornerShape(18.dp))
                         .clickable { vm.switchProfile(i) }.padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -78,7 +79,7 @@ fun ProfileScreen(vm: AppVM) {
             }
         }
 
-        CardBox(Modifier.padding(top = 20.dp)) {
+        CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(120)) {
             Column(Modifier.padding(20.dp)) {
                 Text("Sign in to Onimeku", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Text("Save your watchlist and pick up where you left off on any device.", Modifier.padding(top = 6.dp), color = InkSoft, fontSize = 14.sp)
@@ -89,7 +90,7 @@ fun ProfileScreen(vm: AppVM) {
             }
         }
 
-        CardBox(Modifier.padding(top = 20.dp)) {
+        CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(200)) {
             listOf("settings" to "Settings", "language" to "Language", "help" to "Help Center", "about" to "About Onimeku").forEachIndexed { i, (k, label) ->
                 if (i > 0) HLine()
                 Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = 18.dp, vertical = 17.dp),

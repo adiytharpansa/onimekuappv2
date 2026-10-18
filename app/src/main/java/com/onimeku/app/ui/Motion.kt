@@ -134,3 +134,17 @@ fun HomeSkeleton(heroHeight: Dp, posterWidth: Dp, bottomPad: Dp) {
         }
     }
 }
+
+/** Baris kerangka (thumbnail + dua teks) untuk daftar yang masih memuat. */
+@Composable
+fun SkeletonRows(count: Int = 4) {
+    repeat(count) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SkeletonBox(Modifier.width(96.dp).aspectRatio(16f / 10f), 12.dp)
+            Column(Modifier.weight(1f).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SkeletonBox(Modifier.fillMaxWidth(0.85f).height(14.dp), 6.dp)
+                SkeletonBox(Modifier.fillMaxWidth(0.5f).height(11.dp), 6.dp)
+            }
+        }
+    }
+}

@@ -1,15 +1,21 @@
 package com.onimeku.app.ui
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.delay
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -236,10 +242,11 @@ fun CalendarScreen(vm: AppVM) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             days.forEachIndexed { k, d ->
                 val sel = k == vm.calDay
+                val chipBg by androidx.compose.animation.animateColorAsState(if (sel) Red else Bg2, tween(220), label = "dayBg")
+                val chipBd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, tween(220), label = "dayBd")
                 Column(
-                    Modifier.width(56.dp).clip(RoundedCornerShape(16.dp)).background(if (sel) Red else Bg2)
-                        .border(1.dp, if (sel) Red else Line, RoundedCornerShape(16.dp))
-                        .clickable { vm.calDay = k }.padding(vertical = 10.dp),
+                    Modifier.width(56.dp).pressable { vm.calDay = k }.clip(RoundedCornerShape(16.dp)).background(chipBg)
+                        .border(1.dp, chipBd, RoundedCornerShape(16.dp)).padding(vertical = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(if (k == 0) "Today" else d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, Locale.ENGLISH),
@@ -249,6 +256,9 @@ fun CalendarScreen(vm: AppVM) {
             }
         }
         Spacer(Modifier.height(8.dp))
+        if (Catalog.all.isEmpty()) {
+            SkeletonRows(5)
+        } else key(vm.calDay) { Column(Modifier.fadeSlideIn()) {
         if (realList != null) {
             if (realList.isEmpty()) EmptyBox("Nothing airing", "No new episodes are scheduled for this day.")
             else realList.forEach { (a, s, dt) ->
@@ -267,6 +277,7 @@ fun CalendarScreen(vm: AppVM) {
                 onOpen = { vm.go(Route.Detail(a.id)) },
             ) { Chip(if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
         }
+        } }
     }
 }
 
@@ -314,18 +325,19 @@ fun DownloadsScreen(vm: AppVM) = Page {
     else {
         Text("${d.size} episode${if (d.size > 1) "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
         Box(Modifier.padding(bottom = 12.dp)) { Chip("Delete all", icon = Icons.Outlined.Delete) { vm.removeAllDl() } }
-        d.forEach { x ->
-            val a = Catalog.byId[x.id] ?: return@forEach
+        d.forEachIndexed { idx, x ->
+            val a = Catalog.byId[x.id] ?: return@forEachIndexed
             val pct = vm.downloading["${x.id}:${x.ep}"]
-            Column {
+            Column(Modifier.fadeSlideIn(minOf(idx, 5) * 50)) {
                 ItemRow(a, "Ep ${x.ep}", a.title,
                     if (pct != null) "Downloading… $pct%" else "Episode ${x.ep} · Saved offline",
                     onOpen = { vm.go(Route.Player(x.id, x.ep)) }) {
                     IconChip(Icons.Outlined.Delete, "Remove download") { vm.removeDl(x.id, x.ep) }
                 }
                 if (pct != null) {
+                    val animPct by animateFloatAsState(pct / 100f, tween(300), label = "dlBar")
                     androidx.compose.material3.LinearProgressIndicator(
-                        progress = { pct / 100f },
+                        progress = { animPct },
                         modifier = Modifier.fillMaxWidth().padding(start = 108.dp, end = 12.dp, bottom = 8.dp),
                         color = Red, trackColor = Line,
                     )
@@ -336,6 +348,18 @@ fun DownloadsScreen(vm: AppVM) = Page {
 }
 
 // ------------------------------------------------------------------ DETAIL
+/** Cincin progres unduhan; ketuk untuk membatalkan. */
+@Composable
+private fun DownloadRing(pct: Int, onClick: () -> Unit) {
+    val prog by animateFloatAsState(pct / 100f, tween(300), label = "dlProg")
+    Box(Modifier.size(width = 40.dp, height = 36.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        androidx.compose.material3.CircularProgressIndicator(
+            progress = { prog }, modifier = Modifier.size(22.dp), color = Red, trackColor = Line, strokeWidth = 2.5.dp,
+        )
+        Icon(Icons.Filled.Close, "Cancel download", Modifier.size(10.dp), tint = Color.White)
+    }
+}
+
 @Composable
 fun DetailScreen(vm: AppVM, id: String) {
     val a = Catalog.byId[id] ?: return
@@ -344,39 +368,63 @@ fun DetailScreen(vm: AppVM, id: String) {
     var expanded by rememberSaveable(id) { mutableStateOf(false) }
     val epNums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val sim = Catalog.similar(id)
+    val resume = vm.p.last?.takeIf { it.id == id }
+    val listState = rememberLazyListState()
     // LazyColumn: judul panjang (ratusan episode) tidak lagi digambar sekaligus.
     LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = bottomContentPadding()),
+        Modifier.fillMaxSize(), state = listState,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 12.dp, bottom = bottomContentPadding()),
     ) {
         item {
-            SubHead("Details", vm)
-            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(18.dp)).artBackground(a)) {
-                RealImage(a, Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color(0xB314161F))) })
+            // Header: gambar parallax (bergeser lebih lambat dari scroll) + tombol kembali melayang.
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(22.dp)).artBackground(a)) {
+                RealImage(a, Modifier.fillMaxSize().graphicsLayer {
+                    val slack = size.height * 0.1f
+                    val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
+                    translationY = minOf(off * 0.4f, slack)
+                    scaleX = 1.2f; scaleY = 1.2f
+                })
+                Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color(0xCC14161F))) })
+                Box(Modifier.align(Alignment.TopStart).padding(12.dp).size(40.dp).clip(CircleShape)
+                    .background(Color(0x9914161F)).pressable { vm.back() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                }
             }
-            Spacer(Modifier.height(16.dp))
-            Text(a.title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 31.sp)
-            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                a.rating?.let { Tag(it, Color.White, Bg) }
-                if (a.hd) Tag("HD", Red, Color.White)
-                Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.status).joinToString(" · "),
-                    fontSize = 13.sp, color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.fadeSlideIn(40)) {
+                Spacer(Modifier.height(16.dp))
+                Text(a.title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 31.sp)
+                Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    a.rating?.let { Tag(it, Color.White, Bg) }
+                    if (a.hd) Tag("HD", Red, Color.White)
+                    Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.status).joinToString(" · "),
+                        fontSize = 13.sp, color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (a.genres.isNotEmpty()) {
+                    Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        a.genres.forEach { g ->
+                            Text(g, fontSize = 12.sp, color = InkSoft, maxLines = 1,
+                                modifier = Modifier.clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = 12.dp, vertical = 5.dp))
+                        }
+                    }
+                }
             }
-            if (a.genres.isNotEmpty()) {
-                Text(a.genres.joinToString(", "), Modifier.padding(top = 6.dp), fontSize = 13.sp, color = NavOff)
+            Column(Modifier.fadeSlideIn(120)) {
+                Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Btn(if (resume != null) "Resume Ep ${resume.ep}" else "Play", BtnStyle.Play, Icons.Filled.PlayArrow, Modifier.weight(1f)) {
+                        vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1))
+                    }
+                    Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
+                        if (on) Icons.Filled.Check else Icons.Filled.Add, Modifier.weight(1f)) { vm.toggleML(id) }
+                }
+                Box(Modifier.padding(top = 14.dp)) { Chip("Download all", icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Btn("Play", BtnStyle.Play, Icons.Filled.PlayArrow, Modifier.weight(1f)) { vm.go(Route.Player(id, a.available.firstOrNull() ?: 1)) }
-                Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
-                    if (on) Icons.Filled.Check else Icons.Filled.Add, Modifier.weight(1f)) { vm.toggleML(id) }
-            }
-            Box(Modifier.padding(top = 14.dp)) { Chip("Download all", icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
-            Text(a.synopsis, Modifier.padding(top = 18.dp), color = InkSoft, fontSize = 15.sp, lineHeight = 22.sp,
-                maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
-            if (a.synopsis.length > 180) {
-                Text(if (expanded) "Show less" else "Read more", Modifier.padding(top = 6.dp).clickable { expanded = !expanded },
-                    color = RedText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Column(Modifier.fadeSlideIn(200)) {
+                Text(a.synopsis, Modifier.padding(top = 18.dp).animateContentSize(), color = InkSoft, fontSize = 15.sp, lineHeight = 22.sp,
+                    maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
+                if (a.synopsis.length > 180) {
+                    Text(if (expanded) "Show less" else "Read more", Modifier.padding(top = 6.dp).clickable { expanded = !expanded },
+                        color = RedText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
             }
             if (sim.isNotEmpty()) {
                 Text("More like this", Modifier.padding(top = 26.dp, bottom = 12.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -384,7 +432,10 @@ fun DetailScreen(vm: AppVM, id: String) {
                     items(sim, key = { it.id }) { x -> PosterCard(x, railW) { vm.go(Route.Detail(x.id)) } }
                 }
             }
-            Text("Episodes", Modifier.padding(top = 26.dp, bottom = 4.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.padding(top = 26.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
+                Text("Episodes", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("${epNums.size} available", fontSize = 13.sp, color = NavOff)
+            }
             if (epNums.isEmpty()) Text("No episodes available yet.", color = NavOff, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
         }
         items(epNums, key = { it }) { n ->
@@ -399,7 +450,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                 onOpen = { vm.go(Route.Player(id, n)) },
             ) {
                 when {
-                    pct != null -> Chip("$pct%", minW = 52.dp) { vm.download(id, n) }
+                    pct != null -> DownloadRing(pct) { vm.download(id, n) }
                     dl -> IconChip(Icons.Filled.Check, "Saved offline", on = true) { vm.download(id, n) }
                     else -> IconChip(Icons.Outlined.Download, "Download episode $n") { vm.download(id, n) }
                 }
@@ -438,6 +489,7 @@ fun NotifScreen(vm: AppVM) = Page {
             Text("Turn on in Settings", fontSize = 13.sp, color = RedText, modifier = Modifier.clickable { vm.openSettings() })
         }
     }
+    if (Catalog.all.isEmpty()) SkeletonRows(4)
     Catalog.notifs.forEach { (id, ep, whenTxt) ->
         val a = Catalog.byId[id] ?: return@forEach
         Column {
@@ -507,6 +559,9 @@ fun SearchScreen(vm: AppVM) {
             if (any) Chip("Clear") { gs = emptyList(); yr = ""; st = "" }
         }
         Spacer(Modifier.height(8.dp))
+        if (q.trim().lowercase() != query) {
+            androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Red, trackColor = Color.Transparent)
+        }
 
         if (query.isEmpty() && !any) {
             if (vm.s.hist.isEmpty()) Text("Search a title, or pick filters above", Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)

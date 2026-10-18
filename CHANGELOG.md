@@ -20,3 +20,14 @@
 - README disesuaikan dengan API sebenarnya.
 
 Catatan: perubahan belum dikompilasi di sini (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` / workflow CI.
+
+## Tahap 2 — Halaman Home modern (animasi & loading)
+- `ui/Motion.kt` (baru): `shimmer()`, `SkeletonBox`, `HomeSkeleton`, `pressable()` (efek tekan pegas), `fadeSlideIn()`, `rememberImg()` (crossfade Coil).
+- Home: skeleton loading (hero + baris poster), carousel hero 5 judul (geser/otomatis 5,5 dtk, indikator animasi, parallax), pull-to-refresh, baris muncul berurutan.
+- Poster: kilau saat dimuat, gambar crossfade 350 ms, efek tekan; tombol juga.
+- Navigasi: transisi fade + skala antar layar; ikon tab beranimasi.
+- Refresh tidak lagi menyusutkan daftar sementara halaman awal dimuat.
+
+## Tahap 3-4
+- Detail: header parallax, tombol kembali melayang, genre chip, Resume Ep N, cincin progres unduhan.
+- Welcome, Calendar, Search/See all, Download, Notifikasi, Profile, Toast: animasi dan loading (lihat Onimeku_Lengkap.md).
