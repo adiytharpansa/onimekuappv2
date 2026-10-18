@@ -251,11 +251,35 @@ object ApiClient {
     }
 
     /**
-     * Hulu tidak menyediakan endpoint poster pengganti; pengobat poster
-     * aplikasi memakai poster katalog apa adanya (cache lokal hasil
-     * resolusi lama tetap berlaku di PosterHealer).
+     * Resolusi poster pengganti LANGSUNG ke Kitsu (perbaikan debug.26):
+     * poster katalog ber-host s4.anilist.co dibalas 403 oleh CDN-nya —
+     * dari jaringan mana pun, termasuk lewat /api/img (502) — sehingga
+     * 372 judul tampil tanpa poster. Padanan Kitsu dicari lewat API
+     * pemetaan publik Kitsu (anilistId -> item Kitsu -> posterImage/
+     * coverImage original di media.kitsu.app, terverifikasi 200).
+     * PosterHealer meng-cache hasil ini permanen di disk, jadi tiap
+     * judul hanya dicari sekali. Kegagalan = null (coba lagi sesi depan).
      */
-    suspend fun resolvePoster(anilistId: Int): PosterResp? = null
+    suspend fun resolvePoster(anilistId: Int): PosterResp? {
+        return try {
+            val mapJson = getText(
+                "https://kitsu.io/api/edge/mappings?filter%5BexternalSite%5D=anilist%2Fanime&filter%5BexternalId%5D=$anilistId",
+                readTimeoutSec = 15,
+            )
+            val mapId = Regex(""""id":"(\d+)","type":"mappings"""").find(mapJson)?.groupValues?.get(1)
+                ?: return null
+            val itemJson = getText("https://kitsu.io/api/edge/mappings/$mapId/item", readTimeoutSec = 15)
+            fun original(field: String): String? =
+                Regex(""""$field":\{[^}]*?"original":"([^"]+)"""").find(itemJson)?.groupValues?.get(1)
+                    ?.replace("\\/", "/")
+            val poster = original("posterImage")
+            val cover = original("coverImage")
+            if (poster == null && cover == null) null
+            else PosterResp(ok = true, poster = poster, cover = cover)
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
 
 @Serializable
