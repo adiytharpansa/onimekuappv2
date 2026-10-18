@@ -102,6 +102,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())
         private set
     var inPip by mutableStateOf(false)
+    /** Parameter PiP terbaru dari pemutar (rasio, aksi, sourceRect) — dipakai MainActivity untuk Android < 12. */
+    var pipParams: android.app.PictureInPictureParams? = null
     var playing by mutableStateOf(false)
 
     init {

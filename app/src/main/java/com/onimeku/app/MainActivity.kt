@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         // Android 12+ memakai auto-enter (diatur di PlayerScreen); di bawahnya masuk PiP manual di sini.
         if (Build.VERSION.SDK_INT < 31 && vm.route is Route.Player && vm.playing) {
-            try { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) } catch (_: Exception) {}
+            try { enterPictureInPictureMode(vm.pipParams ?: PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) } catch (_: Exception) {}
         }
     }
 

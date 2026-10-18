@@ -47,6 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,9 +73,30 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private fun pipParams(auto: Boolean): PictureInPictureParams {
-    val b = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
-    if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(auto)
+private const val PIP_ACTION = "com.onimeku.app.PIP_CONTROL"
+
+private fun pipAction(ctx: Context, op: String, icon: Int, title: String, code: Int): android.app.RemoteAction {
+    val pi = android.app.PendingIntent.getBroadcast(
+        ctx, code, android.content.Intent(PIP_ACTION).setPackage(ctx.packageName).putExtra("op", op),
+        android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+    return android.app.RemoteAction(android.graphics.drawable.Icon.createWithResource(ctx, icon), title, title, pi)
+}
+
+/** Parameter PiP ala YouTube: rasio mengikuti video, tombol sebelumnya/putar-jeda/berikutnya, transisi halus dari area video. */
+private fun pipParams(
+    ctx: Context, auto: Boolean, playing: Boolean, ratio: Float = 16f / 9f,
+    rect: android.graphics.Rect? = null, hasPrev: Boolean = false, hasNext: Boolean = false,
+): PictureInPictureParams {
+    val r = ratio.coerceIn(0.5f, 2.3f)
+    val b = PictureInPictureParams.Builder().setAspectRatio(Rational((r * 1000).toInt(), 1000))
+    val acts = ArrayList<android.app.RemoteAction>()
+    if (hasPrev) acts.add(pipAction(ctx, "prev", com.onimeku.app.R.drawable.ic_pip_prev, "Previous", 1))
+    acts.add(pipAction(ctx, "toggle", if (playing) com.onimeku.app.R.drawable.ic_pip_pause else com.onimeku.app.R.drawable.ic_pip_play, if (playing) "Pause" else "Play", 2))
+    if (hasNext) acts.add(pipAction(ctx, "next", com.onimeku.app.R.drawable.ic_pip_next, "Next", 3))
+    b.setActions(acts)
+    if (rect != null && rect.width() > 0 && rect.height() > 0) b.setSourceRectHint(rect)
+    if (Build.VERSION.SDK_INT >= 31) { b.setAutoEnterEnabled(auto); b.setSeamlessResizeEnabled(true) }
     return b.build()
 }
 
@@ -406,6 +429,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var sleepMin by remember(r) { mutableIntStateOf(0) }
     var locked by remember(r) { mutableStateOf(false) }
     var rendered by remember(r) { mutableStateOf(false) }
+    var vidRatio by remember(r) { mutableFloatStateOf(16f / 9f) }
+    var pipRect by remember { mutableStateOf<android.graphics.Rect?>(null) }
     val bg by rememberUpdatedState(vm.s.settings.bgPlay)
 
     // ---- Fullscreen, kontrol otomatis sembunyi, subtitle, kualitas ----
@@ -499,6 +524,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
             }
             override fun onRenderedFirstFrame() { rendered = true }
+            override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
+                if (size.width > 0 && size.height > 0) vidRatio = size.width * size.pixelWidthHeightRatio / size.height
+            }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
                 failed = true; buffering = false
@@ -583,11 +611,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
 
     // PiP: auto-enter saat video diputar (Android 12+), layar tetap menyala, kecerahan dipulihkan
-    LaunchedEffect(wantPlay) { act?.setPictureInPictureParams(pipParams(wantPlay)) }
     DisposableEffect(Unit) {
         act?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
-            act?.setPictureInPictureParams(pipParams(false))
+            vm.pipParams = null
+            act?.setPictureInPictureParams(pipParams(ctx, false, false))
             act?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
         }
@@ -625,6 +653,35 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val hasPrev = (if (a.available.isNotEmpty()) a.available.firstOrNull() else 1)?.let { r.ep > it } ?: (r.ep > 1)
     val hasNext = (if (a.available.isNotEmpty()) a.available.lastOrNull() else a.eps)?.let { r.ep < it } ?: (r.ep < a.eps)
 
+    // PiP ala YouTube: parameter diperbarui tiap rasio/status putar/posisi video berubah; auto-masuk PiP hanya saat video diputar.
+    LaunchedEffect(wantPlay, vidRatio, pipRect, hasPrev, hasNext) {
+        val p = pipParams(ctx, wantPlay, wantPlay, vidRatio, pipRect, hasPrev, hasNext)
+        vm.pipParams = p
+        act?.setPictureInPictureParams(p)
+    }
+    // Tombol di jendela PiP (putar/jeda, sebelumnya, berikutnya).
+    val stepNow by rememberUpdatedState<(Int) -> Unit>({ d -> step(d) })
+    DisposableEffect(player) {
+        val rcv = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: android.content.Intent) {
+                when (i.getStringExtra("op")) {
+                    "toggle" -> if (player.playWhenReady) player.pause() else player.play()
+                    "prev" -> stepNow(-1)
+                    "next" -> stepNow(1)
+                }
+            }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(ctx, rcv, android.content.IntentFilter(PIP_ACTION), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { try { ctx.unregisterReceiver(rcv) } catch (_: Exception) {} }
+    }
+    // Masuk PiP: sembunyikan kontrol. PiP ditutup (X) saat aplikasi sudah berhenti: jeda, jangan terus berbunyi di latar.
+    var wasPip by remember { mutableStateOf(false) }
+    LaunchedEffect(vm.inPip) {
+        if (vm.inPip) showUi = false
+        if (wasPip && !vm.inPip && !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && !bg) player.pause()
+        wasPip = vm.inPip
+    }
+
     if (vm.inPip) {
         Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize()) }
         return
@@ -641,6 +698,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
       Box(if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
         Box(
             (if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f)).background(Color.Black)
+                .onGloballyPositioned { c ->
+                    val bnd = c.boundsInWindow()
+                    val nr = android.graphics.Rect(bnd.left.toInt(), bnd.top.toInt(), bnd.right.toInt(), bnd.bottom.toInt())
+                    if (nr != pipRect) pipRect = nr
+                }
                 .pointerInput(player) {
                     detectTapGestures(
                         onTap = { showUi = !showUi; uiTick++ },
@@ -828,7 +890,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             sleepMin = when (sleepMin) { 0 -> 15; 15 -> 30; 30 -> 60; else -> 0 }
                         })
                         add(CtlTile(Icons.Filled.PictureInPictureAlt, "PiP", "Mini") {
-                            try { act?.enterPictureInPictureMode(pipParams(wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
+                            try { act?.enterPictureInPictureMode(vm.pipParams ?: pipParams(ctx, false, wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
                         })
                         add(CtlTile(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock"), I18n.t("ctl_screen", "Screen")) { locked = true; showUi = true })
                     }

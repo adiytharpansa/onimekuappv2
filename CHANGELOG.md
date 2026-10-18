@@ -1,3 +1,10 @@
+## v1.0.0-debug.43 (belum dirilis): PiP ala YouTube
+- Jendela PiP kini punya tombol Sebelumnya / Putar-Jeda / Berikutnya (RemoteAction + BroadcastReceiver); ikon putar/jeda berganti mengikuti status.
+- Rasio jendela PiP mengikuti rasio video asli; transisi masuk/keluar halus (sourceRectHint dari area video + seamless resize).
+- Auto-masuk PiP hanya saat video diputar; kontrol disembunyikan di PiP; menutup PiP (X) menjeda video (kecuali Background playback aktif).
+- Manifest: launchMode=singleTask + resizeableActivity, agar membuka aplikasi dari ikon saat PiP aktif tidak membuat salinan kedua.
+- Android < 12 memakai parameter PiP yang sama (vm.pipParams).
+
 ## v1.0.0-debug.42 (belum dirilis): Beranda disederhanakan
 - Rail per kategori (Action, Fantasy, Comedy, dst.) dan pita "Explore Genres" DIHAPUS dari Beranda; kategori kini hanya di halaman Pencarian.
 - "All Anime" langsung menampilkan seluruh katalog sebagai grid 3 kolom (urut abjad, lazy per baris) alih-alih tombol.
