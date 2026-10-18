@@ -84,6 +84,20 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var refreshing by mutableStateOf(false); private set
     fun refresh() { refreshing = true; reloadCatalog() }
 
+    // Kesegaran katalog (debug.33): kapan terakhir data katalog tiba dari API
+    // + penanda muat berjalan, agar penyegaran otomatis tidak menumpuk.
+    @Volatile private var lastFetchAt = 0L
+    @Volatile private var catalogBusy = false
+
+    /** Segarkan katalog DIAM-DIAM (tanpa indikator tarik) bila data yang tampil
+     *  sudah lebih tua dari [maxAgeMs]. Dipanggil saat aplikasi kembali ke depan,
+     *  saat kembali ke tab Beranda, dan berkala selama aplikasi terbuka — supaya
+     *  anime/episode baru dari API langsung tampil tanpa menunggu mulai dingin. */
+    fun refreshIfStale(maxAgeMs: Long = 5 * 60_000L) {
+        if (Catalog.all.isEmpty() || catalogBusy || refreshing) return
+        if (System.currentTimeMillis() - lastFetchAt > maxAgeMs) reloadCatalog()
+    }
+
     /** Jadwal tayang asli dari API: id katalog -> episode berikutnya + waktu. */
     var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())
         private set
@@ -195,6 +209,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                 // Jadwal asli gagal dimuat: Calendar memakai cadangan lama.
             }
         }
+        catalogBusy = true
         viewModelScope.launch {
             try {
                 val items = ApiClient.fetchCatalog(
@@ -215,6 +230,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                 if (items.isNotEmpty()) {
                     Catalog.all = items
                     Catalog.loadFailed = false
+                    lastFetchAt = System.currentTimeMillis()
                 } else {
                     Catalog.loadFailed = Catalog.all.isEmpty()
                 }
@@ -223,6 +239,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             } finally {
                 Catalog.loading = false
                 refreshing = false
+                catalogBusy = false
                 Reminders.rescheduleAll(app, s)
             }
         }
@@ -238,7 +255,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     // ---------- navigation ----------
     fun go(r: Route) { stack = stack + r; afterNav() }
     fun back() { stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
-    fun setTab(r: Route) { stack = listOf(r); afterNav() }
+    fun setTab(r: Route) { stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
     fun replaceTop(r: Route) { stack = stack.dropLast(1) + r; afterNav() }
     private fun afterNav() { if (stack.lastOrNull() !is Route.Player) playerFull = false }
     fun openSettings() { stack = listOf(Route.ProfileTab, Route.Sub("settings")) }

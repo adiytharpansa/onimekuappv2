@@ -1,3 +1,7 @@
+## v1.0.0-debug.33 (belum dirilis — menunggu perintah): Katalog Selalu Segar
+- Permintaan user: semua yang tampil di Beranda dsb. harus selalu ter-update saat ada anime baru. Kini aplikasi menyegarkan katalog DIAM-DIAM (tanpa spinner, tanpa mengosongkan layar) pada tiga pemicu: (1) aplikasi kembali ke depan bila data sudah >5 menit, (2) kembali ke tab Beranda, (3) pemeriksaan berkala tiap 10 menit selama aplikasi terbuka (selaras irama sinkron + cache API 10 menit).
+- Umur data dilacak dari keberhasilan muat terakhir (AppVM.refreshIfStale + lastFetchAt); pemicu tidak menumpuk saat muat berjalan. Detail/episode/pemutar memang sudah selalu diambil segar dari API setiap dibuka — yang berubah sesi panjang yang sebelumnya tidak pernah menyegar kecuali mulai dingin atau tarik manual (tarik-untuk-segar tetap ada).
+
 ## v1.0.0-debug.32 (belum dirilis — menunggu perintah): Poles Tampilan Beranda (paket Claude)
 - Hero: gambar parallax kini dipotong (clipToBounds) — tidak bocor lagi ke bawah hero; judul Bold; baris meta baru (skor emas Gold + tahun + jumlah episode + status); genre lebih redup; tombol lebih ramping.
 - Bilah atas: solid 100% saat digulir + garis tipis (dulu 97% sehingga judul hero tembus samar); scrim atas tanpa tepi keras.

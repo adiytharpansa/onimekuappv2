@@ -124,6 +124,23 @@ class MainActivity : ComponentActivity() {
 fun App(vm: AppVM) {
     // Bahasa antarmuka aktif mengikuti Settings (debug.31).
     androidx.compose.runtime.SideEffect { I18n.lang = vm.s.settings.lang }
+    // Kesegaran katalog (debug.33): segarkan diam-diam saat aplikasi kembali
+    // ke depan, dan periksa berkala tiap 10 menit selama aplikasi terbuka.
+    val hostActivity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
+    androidx.compose.runtime.DisposableEffect(hostActivity) {
+        if (hostActivity == null) return@DisposableEffect onDispose { }
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refreshIfStale()
+        }
+        hostActivity.lifecycle.addObserver(obs)
+        onDispose { hostActivity.lifecycle.removeObserver(obs) }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(10 * 60_000L)
+            vm.refreshIfStale(10 * 60_000L)
+        }
+    }
     BackHandler(enabled = vm.stack.size > 1 && !vm.welcomeOpen) { vm.back() }
 
     Surface(Modifier.fillMaxSize(), color = Bg, contentColor = Color.White) {
