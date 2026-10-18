@@ -27,6 +27,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -240,9 +246,9 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
     data class T(val r: Route, val label: String, val icon: ImageVector, val sel: ImageVector)
     val tabs = listOf(
         T(Route.Home, I18n.t("tab_home", "Home"), Icons.Outlined.Home, Icons.Filled.Home),
-        T(Route.Calendar, I18n.t("tab_calendar", "Calendar"), Icons.Outlined.CalendarMonth, Icons.Outlined.CalendarMonth),
-        T(Route.MyList, I18n.t("tab_mylist", "My List"), Icons.Outlined.BookmarkBorder, Icons.Outlined.BookmarkBorder),
-        T(Route.Downloads, I18n.t("tab_download", "Download"), Icons.Outlined.Download, Icons.Outlined.Download),
+        T(Route.Calendar, I18n.t("tab_calendar", "Calendar"), Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth),
+        T(Route.MyList, I18n.t("tab_mylist", "My List"), Icons.Outlined.BookmarkBorder, Icons.Filled.Bookmark),
+        T(Route.Downloads, I18n.t("tab_download", "Download"), Icons.Outlined.Download, Icons.Filled.Download),
         T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), Icons.Outlined.Person, Icons.Filled.Person),
     )
     Row(
@@ -256,10 +262,12 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
             Column(Modifier.weight(1f).fillMaxHeight().clickable { vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                 val tint by animateColorAsState(if (sel) RedText else NavOff, tween(200), label = "tabTint")
-                val pill by animateColorAsState(if (sel) Red.copy(alpha = 0.28f) else Color.Transparent, tween(200), label = "tabPill")
-                // Indikator "pil" di belakang ikon aktif (gaya Material 3), lebih jelas daripada hanya warna.
-                Box(Modifier.size(width = 58.dp, height = 30.dp).clip(CircleShape).background(pill), contentAlignment = Alignment.Center) {
-                    Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(24.dp), tint = tint)
+                val pill by animateColorAsState(if (sel) Red.copy(alpha = 0.30f) else Color.Transparent, tween(220), label = "tabPill")
+                // debug.33: pil melebar dengan pegas + ikon sedikit membesar saat aktif.
+                val pw by animateDpAsState(if (sel) 60.dp else 34.dp, spring(dampingRatio = 0.7f, stiffness = 500f), label = "tabPillW")
+                val isc by animateFloatAsState(if (sel) 1.12f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "tabIconScale")
+                Box(Modifier.size(width = pw, height = 30.dp).clip(CircleShape).background(pill), contentAlignment = Alignment.Center) {
+                    Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(24.dp).graphicsLayer { scaleX = isc; scaleY = isc }, tint = tint)
                 }
                 Text(t.label, fontSize = 11.5.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, color = tint, maxLines = 1)
             }

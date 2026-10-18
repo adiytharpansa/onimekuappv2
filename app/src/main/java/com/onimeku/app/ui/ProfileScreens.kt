@@ -10,6 +10,11 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -37,7 +42,23 @@ fun ProfileScreen(vm: AppVM) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var name by rememberSaveable { mutableStateOf("") }
     Page(extraTop = 24.dp) {
-        Text("Profiles", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
+        val acc = vm.s.account
+        val hShape = RoundedCornerShape(24.dp)
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 26.dp).clip(hShape).background(Brush.linearGradient(listOf(Color(0xFF3A1220), Bg2)))
+                .border(1.dp, Line, hShape).padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(Modifier.size(68.dp).clip(CircleShape).background(if (acc != null) Red else Color(0x26FFFFFF)).border(2.dp, if (acc != null) RedText else Line, CircleShape), contentAlignment = Alignment.Center) {
+                if (acc != null) Text(acc.email.take(1).uppercase(), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                else Icon(Icons.Outlined.Person, null, Modifier.size(34.dp), tint = InkSoft)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(if (acc != null) "Signed in" else "Guest", fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                Text(acc?.email ?: "Not signed in", Modifier.padding(top = 2.dp), fontSize = 14.sp, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+        }
+        Text("Profiles", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         vm.s.profiles.forEachIndexed { i, pr ->
             val sel = i == vm.s.pi
             val bd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, androidx.compose.animation.core.tween(250), label = "profBd")
@@ -52,6 +73,7 @@ fun ProfileScreen(vm: AppVM) {
                         Text(pr.name.take(1).uppercase(), fontWeight = FontWeight.Bold)
                     }
                     Text(pr.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (sel) Icon(Icons.Filled.Check, "Active", Modifier.size(20.dp), tint = RedText)
                 }
                 if (vm.s.profiles.size > 1 && !sel) IconChip(Icons.Outlined.Delete, "Delete profile") { vm.delProfile(i) }
             }
@@ -70,17 +92,6 @@ fun ProfileScreen(vm: AppVM) {
             }
         }
 
-        val acc = vm.s.account
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.size(64.dp).clip(CircleShape).background(if (acc != null) Red else Bg2).border(1.dp, if (acc != null) Red else Line, CircleShape), contentAlignment = Alignment.Center) {
-                if (acc != null) Text(acc.email.take(1).uppercase(), fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                else Icon(Icons.Outlined.Person, null, Modifier.size(32.dp), tint = NavOff)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(if (acc != null) "Signed in" else "Guest", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-                Text(acc?.email ?: "Not signed in", fontSize = 14.sp, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            }
-        }
 
         if (acc == null) CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(120)) {
             Column(Modifier.padding(20.dp)) {
@@ -111,7 +122,10 @@ fun ProfileScreen(vm: AppVM) {
                 if (i > 0) HLine()
                 Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = 18.dp, vertical = 17.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(label, Modifier.weight(1f), fontSize = 16.sp)
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x14FFFFFF)), contentAlignment = Alignment.Center) {
+                        Icon(when (k) { "settings" -> Icons.Outlined.Settings; "language" -> Icons.Outlined.Language; "help" -> Icons.Outlined.HelpOutline; else -> Icons.Outlined.Info }, null, Modifier.size(18.dp), tint = InkSoft)
+                    }
+                    Text(label, Modifier.weight(1f).padding(start = 2.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     if (k == "language") Text(if (vm.s.settings.lang == "id") "Bahasa Indonesia" else "English", color = NavOff, fontSize = 14.sp)
                     Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
                 }

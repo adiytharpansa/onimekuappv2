@@ -1,3 +1,9 @@
+## v1.0.0-debug.36 (belum dirilis — menunggu perintah): Redesain Lengkap (paket Claude)
+- Tab bar baru: pil aktif MELEBAR dgn pegas (60dp) + ikon membesar; ikon terisi (filled) utk tab aktif Calendar/My List/Download.
+- Kalender: strip 7 hari lebar-sama + lonceng pengingat; My List/Unduhan/Kalender memakai kartu baris baru (ItemRow); Pencarian: kolom 54dp + tombol hapus + keadaan kosong baru.
+- Profil: kartu akun gradien di paling atas + avatar besar, tanda centang profil aktif, menu berikon (Settings/Language/Help/Info). Komponen: judul layar 28sp Bold, kartu kosong berikon.
+- TopBar paket ini identik dgn .35 (tidak diubah); PlayerScreen identik dgn .34 — perbaikan OptIn agen dipertahankan, berkas tidak ditimpa.
+
 ## v1.0.0-debug.35 (belum dirilis — menunggu perintah): Perbaikan Beranda (paket Claude lanjutan)
 - Bilah atas: scrim hitam di belakang logo DIHAPUS total — di atas hero bilah benar-benar polos, lalu cepat menjadi solid penuh + garis saat digulir (ambang 24px/56px). Logo digeser ke kanan (padding 24dp) dan diperbesar 48dp.
 - Kartu "New Episode Releases": kini POTRET sama seperti rail lain (dulu lanskap 232:150 memakai banner) + lencana rating/HD tampil (Poster badges=true; parameternya memang sudah ada di Components).

@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -314,17 +315,20 @@ fun SubHead(title: String, vm: AppVM) {
 
 @Composable
 fun RootTitle(title: String, lead: String? = null) {
-    Text(title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+    Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
     if (lead != null) Text(lead, color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
 }
 
 @Composable
 fun EmptyBox(title: String, text: String, action: (@Composable () -> Unit)? = null) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(22.dp)
     Column(
-        Modifier.padding(top = 28.dp).fillMaxWidth().clip(shape).border(1.dp, Line, shape).padding(28.dp),
+        Modifier.padding(top = 28.dp).fillMaxWidth().clip(shape).background(Bg2).border(1.dp, Line, shape).padding(28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Box(Modifier.padding(bottom = 14.dp).size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Inbox, null, Modifier.size(28.dp), tint = RedText)
+        }
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Text(text, color = InkSoft, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp))
         action?.invoke()

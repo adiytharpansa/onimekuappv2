@@ -254,26 +254,32 @@ private fun HeroPage(vm: AppVM, a: Anime) {
             alignment = Alignment.TopCenter,
         )
         Box(Modifier.fillMaxSize().drawBehind {
-            drawRect(Brush.verticalGradient(0f to Color(0x8014161F), 0.28f to Color.Transparent, 0.68f to Color(0xC014161F), 1f to Bg))
+            drawRect(Brush.verticalGradient(0f to Color(0x99080910), 0.26f to Color.Transparent, 0.52f to Color(0x3314161F), 0.8f to Color(0xE614161F), 1f to Bg))
         })
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = 40.dp)) {
-            Text(a.title, fontSize = 30.sp, fontWeight = FontWeight.Bold, lineHeight = 35.sp, letterSpacing = (-0.4).sp,
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 44.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                a.rating?.let { ScorePill(it) }
+                if (a.hd) Tag("HD", Red, Color.White)
+                StatusPill(a.status)
+            }
+            Text(a.title, Modifier.padding(top = 12.dp), fontSize = 32.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp, letterSpacing = (-0.6).sp,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(
                 a.year.takeIf { it > 0 }?.toString(),
                 a.eps.takeIf { it > 0 }?.let { "$it ${if (it == 1) "episode" else "episodes"}" },
-                a.status,
+                a.genres.take(2).joinToString(", ").ifBlank { null },
             ).joinToString("  ·  ")
-            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                a.rating?.let { Text(it, Modifier.padding(end = 10.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Gold) }
-                Text(meta, fontSize = 14.sp, color = Color(0xFFE3E5EE), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text(a.genres.take(4).joinToString(", "), Modifier.padding(top = 4.dp), fontSize = 14.sp,
-                color = Color(0xFFB9BDCB), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Btn(I18n.t("play", "Play"), BtnStyle.Play, Icons.Filled.PlayCircleFilled) { vm.go(Route.Player(a.id, firstEp)) }
-                Btn(if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"), if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
-                    if (on) Icons.Filled.Check else Icons.Filled.Add) { vm.toggleML(a.id) }
+            Text(meta, Modifier.padding(top = 6.dp), fontSize = 13.sp, color = Color(0xFFD5D8E3), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (a.synopsis.isNotBlank()) Text(a.synopsis, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 19.sp,
+                color = Color(0xFFB9BDCB), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                PlayButton(I18n.t("play", "Play"), null, Modifier.weight(1f)) { vm.go(Route.Player(a.id, firstEp)) }
+                Box(
+                    Modifier.size(56.dp).pressable { vm.toggleML(a.id) }.clip(RoundedCornerShape(18.dp))
+                        .background(if (on) Color.White else Color(0x59080910))
+                        .border(1.dp, if (on) Color.White else Color(0x66FFFFFF), RoundedCornerShape(18.dp)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(if (on) Icons.Filled.Check else Icons.Filled.Add, if (on) "Added" else "My List", Modifier.size(26.dp), tint = if (on) Bg else Color.White) }
             }
         }
     }
@@ -299,19 +305,20 @@ fun CalendarScreen(vm: AppVM) {
     } else null
     Page {
         RootTitle(I18n.t("calendar_t", "Release Calendar"), I18n.t("calendar_sub", "Episodes airing this week."))
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             days.forEachIndexed { k, d ->
                 val sel = k == vm.calDay
                 val chipBg by androidx.compose.animation.animateColorAsState(if (sel) Red else Bg2, tween(220), label = "dayBg")
                 val chipBd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, tween(220), label = "dayBd")
                 Column(
-                    Modifier.width(56.dp).pressable { vm.calDay = k }.clip(RoundedCornerShape(16.dp)).background(chipBg)
-                        .border(1.dp, chipBd, RoundedCornerShape(16.dp)).padding(vertical = 10.dp),
+                    Modifier.weight(1f).pressable { vm.calDay = k }.clip(RoundedCornerShape(16.dp)).background(chipBg)
+                        .border(1.dp, chipBd, RoundedCornerShape(16.dp)).padding(vertical = 11.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(if (k == 0) "Today" else d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, Locale.ENGLISH),
-                        fontSize = 12.sp, color = if (sel) Color.White else NavOff)
-                    Text("${d.dayOfMonth}", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, Locale.ENGLISH).uppercase(),
+                        fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp, color = if (sel) Color(0xCCFFFFFF) else NavOff)
+                    Text("${d.dayOfMonth}", Modifier.padding(top = 3.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Box(Modifier.padding(top = 5.dp).size(5.dp).clip(CircleShape).background(if (k == 0) (if (sel) Color.White else RedText) else Color.Transparent))
                 }
             }
         }
@@ -327,7 +334,7 @@ fun CalendarScreen(vm: AppVM) {
                     a, thumbLabel = dt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), title = a.title,
                     sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                     onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { Chip(if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
+                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
             }
         } else if (list.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
         else list.forEach { a ->
@@ -335,7 +342,7 @@ fun CalendarScreen(vm: AppVM) {
             ItemRow(
                 a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                 onOpen = { vm.go(Route.Detail(a.id)) },
-            ) { Chip(if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
+            ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
         }
         } }
     }
@@ -346,23 +353,22 @@ fun ItemRow(
     a: Anime, thumbLabel: String, title: String, sub: String, subOk: Boolean = false,
     onThumb: (() -> Unit)? = null, onOpen: () -> Unit, trailing: @Composable () -> Unit,
 ) {
-    Column {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.width(96.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(12.dp)).artBackground(a)
-                .clickable(onClick = onThumb ?: onOpen)) {
-                RealImage(a, Modifier.fillMaxSize())
-                Text(thumbLabel, Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD90A0B10))))
-                    .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Column(Modifier.weight(1f).clickable(onClick = onOpen)) {
-                Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(sub, fontSize = 12.sp, color = if (subOk) RedText else NavOff, modifier = Modifier.padding(top = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            trailing()
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(shape).background(Bg2).border(1.dp, Line, shape).padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.width(108.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)
+            .clickable(onClick = onThumb ?: onOpen)) {
+            RealImage(a, Modifier.fillMaxSize())
+            Text(thumbLabel, Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
+                .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
-        HLine()
+        Column(Modifier.weight(1f).clickable(onClick = onOpen)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
+            Text(sub, fontSize = 12.sp, color = if (subOk) RedText else NavOff, modifier = Modifier.padding(top = 3.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        trailing()
     }
 }
 
@@ -398,7 +404,7 @@ fun DownloadsScreen(vm: AppVM) = Page {
                     val animPct by animateFloatAsState(pct / 100f, tween(300), label = "dlBar")
                     androidx.compose.material3.LinearProgressIndicator(
                         progress = { animPct },
-                        modifier = Modifier.fillMaxWidth().padding(start = 108.dp, end = 12.dp, bottom = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp),
                         color = Red, trackColor = Line,
                     )
                 }
@@ -460,9 +466,9 @@ private fun StatusPill(status: String) {
 
 /** Tombol utama: gradasi crimson, tinggi 56dp, bayangan lembut. */
 @Composable
-private fun PlayButton(label: String, sub: String?, onClick: () -> Unit) {
+private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(56.dp).pressable(onClick).clip(RoundedCornerShape(18.dp))
+        modifier.fillMaxWidth().height(56.dp).pressable(onClick).clip(RoundedCornerShape(18.dp))
             .background(Brush.horizontalGradient(listOf(Color(0xFFC8142F), Red)))
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -846,14 +852,17 @@ fun SearchScreen(vm: AppVM) {
     // Hasil memakai grid lazy: mengetik di katalog besar tidak lagi menggambar ratusan kartu sekaligus.
     AnimeGrid(results, vm) {
         SubHead(I18n.t("search", "Search"), vm)
-        Row(Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = 16.dp),
+        Row(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, if (q.isNotEmpty()) Red.copy(alpha = 0.7f) else Line, RoundedCornerShape(18.dp)).padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Outlined.Search, null, Modifier.size(20.dp), tint = NavOff)
+            Icon(Icons.Outlined.Search, null, Modifier.size(22.dp), tint = if (q.isNotEmpty()) RedText else NavOff)
             BasicTextField(q, { q = it }, Modifier.weight(1f).focusRequester(fr), singleLine = true,
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { vm.addHist(q) }),
                 decorationBox = { inner -> if (q.isEmpty()) Text(I18n.t("search_hint2", "Search anime or genre"), color = NavOff); inner() })
+            if (q.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Close, "Clear", Modifier.size(18.dp), tint = InkSoft)
+            }
         }
         group("Genre") { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }
         group("Status") { Catalog.statuses.forEach { v -> Chip(v, st == v) { st = if (st == v) "" else v } } }
@@ -867,7 +876,7 @@ fun SearchScreen(vm: AppVM) {
         }
 
         if (query.isEmpty() && !any) {
-            if (vm.s.hist.isEmpty()) Text("Search a title, or pick filters above", Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)
+            if (vm.s.hist.isEmpty()) EmptyBox("Find your next anime", "Search a title or genre, or pick filters above.")
             else {
                 Text("Recent searches", Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)
                 FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
