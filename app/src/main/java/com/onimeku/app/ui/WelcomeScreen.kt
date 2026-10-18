@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -58,6 +60,23 @@ fun WelcomeScreen(vm: AppVM) {
         }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
             0.30f to Color.Transparent, 0.56f to Color(0xEB161821), 0.68f to Color(0xFF161821))))
+
+        // Logo masuk: memutar + memantul dengan pegas, lalu melayang pelan.
+        val intro = remember { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(Unit) { intro.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 110f)) }
+        val float = androidx.compose.animation.core.rememberInfiniteTransition(label = "logoFloat")
+        val fy by float.animateFloat(
+            initialValue = -6f, targetValue = 6f,
+            animationSpec = androidx.compose.animation.core.infiniteRepeatable(tween(2200, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse),
+            label = "logoFloatY",
+        )
+        Box(
+            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 96.dp).graphicsLayer {
+                val v = intro.value
+                scaleX = v; scaleY = v; rotationZ = (1f - v) * -140f; alpha = v.coerceIn(0f, 1f)
+                translationY = fy.dp.toPx() * v
+            },
+        ) { Logo(88.dp) }
 
         Text(I18n.t("skip_for_now", "Skip for now"), Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp).clip(CircleShape)
             .background(Color(0x8C14161F)).clickable { vm.closeWelcome() }.padding(horizontal = 14.dp, vertical = 8.dp),

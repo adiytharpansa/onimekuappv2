@@ -180,9 +180,10 @@ fun App(vm: AppVM) {
         try { android.provider.Settings.Global.getFloat(ctxMotion.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f } catch (e: Exception) { false }
     }
 
+    val enterA by animateFloatAsState(if (vm.welcomeOpen) 0f else 1f, tween(520), label = "homeEnter")
     Surface(Modifier.fillMaxSize(), color = Bg, contentColor = Color.White) {
         Box(Modifier.fillMaxSize()) {
-            if (vm.welcomeOpen) WelcomeScreen(vm) else {
+            if (vm.welcomeOpen) WelcomeScreen(vm) else Box(Modifier.fillMaxSize().graphicsLayer { alpha = enterA; val z = 1.05f - 0.05f * enterA; scaleX = z; scaleY = z }) {
                 Box(Modifier.fillMaxSize().graphicsLayer {
                     val p = backP
                     val s = 1f - 0.07f * p
@@ -289,13 +290,6 @@ private fun TopBar(vm: AppVM) {
 }
 
 @Composable
-private fun IconBtn(icon: ImageVector, desc: String, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, desc, Modifier.size(26.dp))
-    }
-}
-
-@Composable
 private fun TabBar(vm: AppVM, modifier: Modifier) {
     data class T(val r: Route, val label: String, val icon: ImageVector, val sel: ImageVector)
     val tabs = listOf(
@@ -306,12 +300,21 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
         T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), Icons.Outlined.Person, Icons.Filled.Person),
     )
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    Row(
+    val selIdx = tabs.indexOfFirst { it.r == vm.tab }.coerceAtLeast(0)
+    val pos by animateFloatAsState(selIdx.toFloat(), spring(dampingRatio = 0.72f, stiffness = 380f), label = "tabBar")
+    Box(
         // Solid + garis tipis di atas, supaya konten yang digulir tidak tembus di balik tab bar.
         modifier.fillMaxWidth().background(Bg)
             .drawBehind { drawLine(Line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
-            .navigationBarsPadding().height(TabBarHeight).padding(horizontal = 8.dp),
+            .navigationBarsPadding().height(TabBarHeight),
     ) {
+    // Penanda merah yang meluncur mengikuti tab aktif.
+    Box(Modifier.fillMaxWidth().height(3.dp).padding(horizontal = 8.dp).drawBehind {
+        val seg = size.width / tabs.size
+        drawRoundRect(RedText, Offset(pos * seg + seg * 0.3f, 0f), androidx.compose.ui.geometry.Size(seg * 0.4f, size.height),
+            androidx.compose.ui.geometry.CornerRadius(size.height, size.height))
+    })
+    Row(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         tabs.forEach { t ->
             val sel = vm.tab == t.r
             Column(Modifier.weight(1f).fillMaxHeight().clickable { if (!sel) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
@@ -329,5 +332,6 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
                     modifier = Modifier.graphicsLayer { alpha = lblA })
             }
         }
+    }
     }
 }

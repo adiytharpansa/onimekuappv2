@@ -1,3 +1,18 @@
+## v1.0.0-debug.41 (belum dirilis): Animasi lanjutan + kerapian
+- Poster: angka ranking Top Hits muncul memantul berurutan; poster terangkat+miring saat ditekan (liftPress).
+- Detail: header judul memudar/mengecil saat digulir; episode muncul berurutan; percikan partikel saat masuk My List (Detail + hero Beranda).
+- Continue Watching & thumbnail episode: bilah progres terisi dengan animasi (AnimatedProgressBar).
+- Welcome: logo masuk berputar-memantul lalu melayang; transisi Welcome -> Beranda memudar + zoom halus.
+- Tab bar: penanda merah meluncur mengikuti tab aktif.
+- Kerapian: IconBtn tak terpakai dihapus; judul "Latest Releases" lewat I18n (sec_latest).
+
+## v1.0.0-debug.40 (belum dirilis): Poles Beranda + Animasi
+- Indikator lingkaran merah di atas Beranda (tarik-untuk-segar) DIHAPUS; layar tidak lagi bergeser saat ditarik. Penyegaran katalog tetap jalan diam-diam (tarik, kembali ke depan, berkala).
+- Hero: zoom sinematik pelan (Ken Burns), scrim atas untuk status bar, indikator slide terisi sesuai waktu 5,5 dtk.
+- Tombol Play: kilau menyapu + panah bergoyang. Titik "Airing": denyut gelombang.
+- Bagian baru "Explore Genres": dua pita genre bergulir otomatis berlawanan arah (ketuk -> daftar genre). Berhenti bila animasi sistem dimatikan.
+- Judul bagian: bilah merah tumbuh saat muncul.
+
 ## v1.0.0-debug.39 (belum dirilis — menunggu perintah): AKAR PUTAR DITEMUKAN — tipe HLS eksplisit
 - Telemetri .38 di emulator mereproduksi kegagalan HP persis: kaki proksi mati dengan ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED (UnrecognizedInputFormatException) pada master — ExoPlayer TIDAK mengenali URL /api/proxy?u=... sebagai HLS (ekstensi .m3u8 tersembunyi di parameter terenkode) lalu memperlakukannya sebagai media progresif. Uji GET polos di saat yang sama: master/varian/segmen semua 200. Di emulator kaki langsung CDN menyelamatkan putar (jaringan AS); di HP user kaki langsung terblokir operator -> semua video gagal. Ini akar seluruh saga putar HP-vs-emulator.
 - Perbaikan: MediaItem kini diberi MimeTypes.APPLICATION_M3U8 secara eksplisit bila URL/directUrl/streamUrl mengandung .m3u8 (judul MP4 tidak disentuh). Telemetri .38 dipertahankan (mengonfirmasi perbaikan dari HP user secara otomatis).

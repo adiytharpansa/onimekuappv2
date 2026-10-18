@@ -55,6 +55,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.unit.sp
 
 // ---------------------------------------------------------------------------
 // Motion & loading primitives dipakai bersama oleh semua layar.
@@ -217,4 +224,223 @@ fun MorphIcon(on: Boolean, onIcon: ImageVector, offIcon: ImageVector, desc: Stri
         },
         label = "morph",
     ) { st -> Icon(if (st) onIcon else offIcon, desc, Modifier.size(size), tint = tint) }
+}
+
+
+// ====================================================================== GERAK BERANDA (v2)
+/** Zoom sangat pelan bolak-balik pada gambar hero (efek sinematik "Ken Burns"). */
+@Composable
+fun Modifier.kenBurns(): Modifier {
+    if (LocalReduceMotion.current) return this
+    val t = rememberInfiniteTransition(label = "kenBurns")
+    val s by t.animateFloat(
+        initialValue = 1f, targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(tween(9000, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "kenBurnsScale",
+    )
+    return this.graphicsLayer { scaleX = s; scaleY = s }
+}
+
+/** Kilau cahaya miring yang menyapu tombol utama tiap beberapa detik. */
+@Composable
+fun Modifier.sweepShine(): Modifier {
+    if (LocalReduceMotion.current) return this
+    val t = rememberInfiniteTransition(label = "shine")
+    val x by t.animateFloat(
+        initialValue = -0.6f, targetValue = 1.8f,
+        animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing)),
+        label = "shineX",
+    )
+    return this.drawWithContent {
+        drawContent()
+        val w = size.width
+        val band = w * 0.28f
+        val x0 = x * w
+        drawRect(
+            Brush.linearGradient(
+                colors = listOf(Color.Transparent, Color(0x40FFFFFF), Color.Transparent),
+                start = Offset(x0, 0f), end = Offset(x0 + band, size.height * 0.6f),
+            ),
+        )
+    }
+}
+
+/** Panah kecil yang bergoyang ke kanan, mengajak mengetuk. */
+@Composable
+fun Modifier.nudgeX(): Modifier {
+    if (LocalReduceMotion.current) return this
+    val t = rememberInfiniteTransition(label = "nudge")
+    val v by t.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(750, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "nudgeV",
+    )
+    return this.graphicsLayer { translationX = v * 5.dp.toPx() }
+}
+
+/** Titik status "Airing": inti hijau + gelombang yang memudar keluar. */
+@Composable
+fun PulseDot(color: Color) {
+    val reduce = LocalReduceMotion.current
+    val t = rememberInfiniteTransition(label = "pulse")
+    val p by t.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing)),
+        label = "pulseP",
+    )
+    Box(Modifier.size(6.dp)) {
+        if (!reduce) Box(
+            Modifier.fillMaxSize().graphicsLayer { val s = 1f + 1.8f * p; scaleX = s; scaleY = s; alpha = 0.55f * (1f - p) }
+                .clip(androidx.compose.foundation.shape.CircleShape).background(color),
+        )
+        Box(Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.CircleShape).background(color))
+    }
+}
+
+/** Titik indikator hero: yang aktif memanjang dan terisi pelan sesuai waktu sebelum slide berganti (5,5 dtk). */
+@Composable
+fun HeroDot(selected: Boolean, page: Int) {
+    val reduce = LocalReduceMotion.current
+    val w by animateDpAsState(if (selected) 28.dp else 6.dp, spring(dampingRatio = 0.7f, stiffness = 500f), label = "dotW")
+    val prog = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(selected, page) {
+        if (selected && !reduce) { prog.snapTo(0f); prog.animateTo(1f, tween(5500, easing = LinearEasing)) }
+        else prog.snapTo(if (selected) 1f else 0f)
+    }
+    Box(
+        Modifier.height(6.dp).width(w).clip(RoundedCornerShape(50)).background(Color(0x59FFFFFF))
+            .drawBehind { drawRect(RedText, size = androidx.compose.ui.geometry.Size(size.width * prog.value, size.height)) },
+    )
+}
+
+/** Sekali per tampilan: bilah merah kecil di samping judul bagian tumbuh dari nol. */
+@Composable
+fun Modifier.growIn(delayMs: Int = 0): Modifier {
+    val reduce = LocalReduceMotion.current
+    var shown by remember { mutableStateOf(reduce) }
+    LaunchedEffect(Unit) { shown = true }
+    val a by animateFloatAsState(if (shown) 1f else 0f, tween(if (reduce) 0 else 520, delayMillis = if (reduce) 0 else delayMs, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "grow")
+    return this.graphicsLayer { scaleX = a; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) }
+}
+
+/**
+ * Pita genre bergulir otomatis (marquee). Dua baris berlawanan arah; ketuk pita untuk membuka genre.
+ * Berhenti otomatis bila pengguna mematikan animasi sistem.
+ */
+@Composable
+fun GenreMarquee(genres: List<String>, onClick: (String) -> Unit) {
+    if (genres.isEmpty()) return
+    val half = genres.size / 2
+    val rows = listOf(genres.take(maxOf(half, 1)) to 1, genres.drop(maxOf(half, 1)).ifEmpty { genres.reversed() } to -1)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        rows.forEachIndexed { r, (list, dir) -> MarqueeRow(list, dir, 26f + r * 8f, onClick) }
+    }
+}
+
+@Composable
+private fun MarqueeRow(list: List<String>, dir: Int, dpPerSec: Float, onClick: (String) -> Unit) {
+    val reduce = LocalReduceMotion.current
+    val n = list.size
+    val start = Int.MAX_VALUE / 2 - (Int.MAX_VALUE / 2) % n
+    val state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = start)
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { dpPerSec.dp.toPx() }
+    LaunchedEffect(n, reduce) {
+        if (reduce) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { now ->
+                if (last != 0L) state.dispatchRawDelta(dir * px * (now - last) / 1_000_000_000f)
+                last = now
+            }
+        }
+    }
+    androidx.compose.foundation.lazy.LazyRow(
+        state = state, userScrollEnabled = false,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        items(Int.MAX_VALUE) { i ->
+            val g = list[i % n]
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Bg2).border(1.dp, Line, RoundedCornerShape(50))
+                    .pressable { onClick(g) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(Modifier.size(6.dp).clip(androidx.compose.foundation.shape.CircleShape).background(RedText))
+                androidx.compose.material3.Text(g, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = Color.White, maxLines = 1)
+            }
+        }
+    }
+}
+
+
+// ====================================================================== GERAK LANJUTAN (v3)
+/** Muncul dengan pantulan pegas (skala 0,3 -> 1) setelah jeda; dipakai angka ranking Top Hits. */
+@Composable
+fun Modifier.popIn(delayMs: Int = 0): Modifier {
+    val reduce = LocalReduceMotion.current
+    var shown by remember { mutableStateOf(reduce) }
+    LaunchedEffect(Unit) { shown = true }
+    val sc by animateFloatAsState(
+        targetValue = if (shown) 1f else 0.3f,
+        animationSpec = if (reduce) tween(0) else spring(dampingRatio = 0.45f, stiffness = 260f),
+        label = "popScale",
+    )
+    val al by animateFloatAsState(if (shown) 1f else 0f, tween(if (reduce) 0 else 220, delayMillis = if (reduce) 0 else delayMs), label = "popAlpha")
+    return this.graphicsLayer {
+        scaleX = sc; scaleY = sc; alpha = al
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)
+    }
+}
+
+/** Klik dengan efek "terangkat": mengecil + sedikit miring ke belakang saat ditekan, lalu memantul kembali. */
+@Composable
+fun Modifier.liftPress(onClick: () -> Unit): Modifier {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val reduce = LocalReduceMotion.current
+    val sc by animateFloatAsState(if (pressed && !reduce) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftS")
+    val tilt by animateFloatAsState(if (pressed && !reduce) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftT")
+    return this
+        .graphicsLayer { scaleX = sc; scaleY = sc; rotationX = tilt; cameraDistance = 14f * density }
+        .clickable(interactionSource = src, indication = null, onClick = onClick)
+}
+
+/** Percikan partikel kecil sekali saat [trigger] berubah dari false ke true (mis. judul masuk My List). */
+@Composable
+fun Modifier.sparkBurst(trigger: Boolean): Modifier {
+    val reduce = LocalReduceMotion.current
+    val anim = remember { androidx.compose.animation.core.Animatable(1f) }
+    var prev by remember { mutableStateOf(trigger) }
+    LaunchedEffect(trigger) {
+        if (trigger && !prev && !reduce) { anim.snapTo(0f); anim.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+        prev = trigger
+    }
+    return this.drawWithContent {
+        drawContent()
+        val p = anim.value
+        if (p < 1f) {
+            val c = Offset(size.width / 2f, size.height * 0.38f)
+            val maxD = 34.dp.toPx()
+            for (i in 0 until 10) {
+                val ang = Math.toRadians(i * 36.0 + 12.0)
+                val d = 10.dp.toPx() + (maxD - 10.dp.toPx()) * p * (if (i % 2 == 0) 1f else 0.7f)
+                drawCircle(
+                    color = (if (i % 3 == 0) Gold else RedText).copy(alpha = (1f - p).coerceIn(0f, 1f)),
+                    radius = (if (i % 2 == 0) 3.2.dp else 2.dp).toPx() * (1f - 0.6f * p),
+                    center = Offset(c.x + (kotlin.math.cos(ang) * d).toFloat(), c.y + (kotlin.math.sin(ang) * d).toFloat()),
+                )
+            }
+        }
+    }
+}
+
+/** Bilah progres yang terisi dengan animasi dari 0 ke [value] saat pertama tampil. */
+@Composable
+fun AnimatedProgressBar(value: Float, modifier: Modifier = Modifier, color: Color = Red, track: Color = Color(0x40FFFFFF)) {
+    val reduce = LocalReduceMotion.current
+    val a = remember { androidx.compose.animation.core.Animatable(if (reduce) value else 0f) }
+    LaunchedEffect(value) { a.animateTo(value.coerceIn(0f, 1f), tween(if (reduce) 0 else 900, delayMillis = if (reduce) 0 else 250, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+    Box(modifier.background(track).drawBehind { drawRect(color, size = androidx.compose.ui.geometry.Size(size.width * a.value, size.height)) })
 }

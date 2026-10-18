@@ -174,7 +174,7 @@ fun Poster(
 ) {
     val sized = if (w != null) modifier.width(w) else modifier.fillMaxWidth()
     Box(
-        sized.pressable { if (sharedKey != null) SharedArt.key = sharedKey; onClick() }.aspectRatio(if (ep) 232f / 150f else 232f / 311f)
+        sized.liftPress { if (sharedKey != null) SharedArt.key = sharedKey; onClick() }.aspectRatio(if (ep) 232f / 150f else 232f / 311f)
             .sharedArt(sharedKey)
             .clip(RoundedCornerShape(if (compact) 12.dp else 18.dp)).artBackground(a),
     ) {
@@ -204,7 +204,7 @@ fun Poster(
         }
         if (rank != null) {
             val big = 60.sp
-            Box(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 2.dp)) {
+            Box(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 2.dp).popIn(120 + rank * 70)) {
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Bg,
                     style = TextStyle(drawStyle = Stroke(width = 14f)), lineHeight = big)
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Color.White, lineHeight = big)
@@ -221,9 +221,7 @@ fun Poster(
             }
         }
         if (progress != null) {
-            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x40FFFFFF))) {
-                Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(Red))
-            }
+            AnimatedProgressBar(progress, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp))
         }
     }
 }
@@ -285,6 +283,7 @@ fun Rail(content: LazyListScope.() -> Unit) {
 @Composable
 fun SectionHead(title: String, onAll: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.padding(end = 10.dp).width(4.dp).height(20.dp).growIn().clip(CircleShape).background(Red))
         Text(title, Modifier.weight(1f).padding(end = 12.dp), fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
             letterSpacing = (-0.2).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (onAll != null) Row(

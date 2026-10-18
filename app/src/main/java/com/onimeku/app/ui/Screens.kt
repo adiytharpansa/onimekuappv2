@@ -146,7 +146,7 @@ private fun HomeContent(vm: AppVM) {
         }
     }
     Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().nestedScroll(ptrConn).graphicsLayer { translationY = pullPx }, state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
+    LazyColumn(Modifier.fillMaxSize().nestedScroll(ptrConn), state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
         item(key = "hero", contentType = "hero") { Hero(vm, heroH) }
 
         if (last != null && lastT != null && lastAnime != null) {
@@ -156,7 +156,7 @@ private fun HomeContent(vm: AppVM) {
                     SectionHead(I18n.t("sec_continue", "Continue Watching"))
                     Rail {
                         item {
-                            Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(lastT)}") {
+                            Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(lastT)}", progress = (lastT / 1440f).coerceIn(0.03f, 0.97f)) {
                                 vm.go(Route.Player(last.id, last.ep))
                             }
                         }
@@ -168,6 +168,15 @@ private fun HomeContent(vm: AppVM) {
             item(key = "because", contentType = "rail") { PosterRow("${I18n.t("sec_because", "Because you watched")} ${base.title}", similar, vm, seeAll = null, delayMs = 0) }
         }
         item(key = "top", contentType = "rail") { PosterRow(I18n.t("sec_top", "Top Hits Anime"), Catalog.top, vm, seeAll = "top", ranked = true, delayMs = 0) }
+        if (Catalog.chips.size >= 4) {
+            item(key = "genres", contentType = "marquee") {
+                Column {
+                    Spacer(Modifier.height(SectionGap))
+                    SectionHead(I18n.t("sec_explore", "Explore Genres"))
+                    GenreMarquee(Catalog.chips) { g -> vm.go(Route.SeeAll("genre:$g")) }
+                }
+            }
+        }
         if (fresh.isNotEmpty()) {
             item(key = "new", contentType = "rail") {
                 Column(Modifier.fadeSlideIn(70)) {
@@ -192,7 +201,7 @@ private fun HomeContent(vm: AppVM) {
         // delayMs = -1: tanpa animasi masuk (baris di bawah layar tidak mengulang animasi saat digulir kembali).
         item(key = "airing", contentType = "rail") { PosterRow(I18n.t("sec_airing", "Airing Now"), Catalog.airing.take(12), vm, seeAll = "airing", delayMs = 140) }
         item(key = "popular", contentType = "rail") { PosterRow(I18n.t("sec_popular", "Popular"), Catalog.popular.take(12), vm, seeAll = "popular", delayMs = -1) }
-        item(key = "latest", contentType = "rail") { PosterRow("Latest Releases", Catalog.latest.take(12), vm, seeAll = "latest", delayMs = -1) }
+        item(key = "latest", contentType = "rail") { PosterRow(I18n.t("sec_latest", "Latest Releases"), Catalog.latest.take(12), vm, seeAll = "latest", delayMs = -1) }
         item(key = "donghua", contentType = "rail") { PosterRow(I18n.t("sec_donghua", "Donghua"), Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = -1) }
         items(Catalog.topGenres, key = { "genre:$it" }, contentType = { "rail" }) { g ->
             PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g", delayMs = -1)
@@ -206,12 +215,6 @@ private fun HomeContent(vm: AppVM) {
                     Btn("${I18n.t("browse_all", "Browse all")} ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView, Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
                 }
             }
-        }
-    }
-    if (pullPx > 6f || vm.refreshing) {
-        Box(Modifier.align(Alignment.TopCenter).padding(top = 76.dp).size(38.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape), contentAlignment = Alignment.Center) {
-            if (vm.refreshing) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = Red, strokeWidth = 2.5.dp)
-            else androidx.compose.material3.CircularProgressIndicator(progress = { (pullPx / ptrThresholdPx).coerceIn(0f, 1f) }, Modifier.size(20.dp), color = Red, strokeWidth = 2.5.dp)
         }
     }
     }
@@ -236,12 +239,12 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
     // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
     Box(Modifier.fillMaxWidth().height(heroH).clipToBounds()) {
         HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) { (pager.currentPage - i) + pager.currentPageOffsetFraction } }
+        // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
+        Box(Modifier.fillMaxWidth().height(120.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent))) })
         if (items.size > 1) {
             Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
                 items.indices.forEach { i ->
-                    val sel = pager.currentPage == i
-                    val w by animateDpAsState(if (sel) 22.dp else 6.dp, label = "dotW")
-                    Box(Modifier.height(6.dp).width(w).clip(CircleShape).background(if (sel) Red else Color(0x66FFFFFF)))
+                    HeroDot(selected = pager.currentPage == i, page = pager.currentPage)
                 }
             }
         }
@@ -261,7 +264,7 @@ private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
             modifier = Modifier.fillMaxSize().sharedArt("hero:${a.id}").graphicsLayer {
                 translationY = vm.homeScrollPx().coerceAtMost(4000) * 0.35f
                 translationX = -pageOffset() * size.width * 0.3f // parallax: gambar lebih lambat dari halaman
-            },
+            }.kenBurns(),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             alignment = Alignment.TopCenter,
         )
@@ -293,7 +296,7 @@ private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
                 Box(
                     Modifier.size(56.dp).pressable { vm.toggleML(a.id) }.clip(RoundedCornerShape(18.dp))
                         .background(if (on) Color.White else Color(0x59080910))
-                        .border(1.dp, if (on) Color.White else Color(0x66FFFFFF), RoundedCornerShape(18.dp)),
+                        .border(1.dp, if (on) Color.White else Color(0x66FFFFFF), RoundedCornerShape(18.dp)).sparkBurst(on),
                     contentAlignment = Alignment.Center,
                 ) { MorphIcon(on, Icons.Filled.Check, Icons.Filled.Add, if (on) "Added" else "My List", 26.dp, if (on) Bg else Color.White) }
             }
@@ -475,7 +478,7 @@ private fun StatusPill(status: String) {
         Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x26FFFFFF)).padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(if (live) GoodGreen else NavOff))
+        if (live) PulseDot(GoodGreen) else Box(Modifier.size(6.dp).clip(CircleShape).background(NavOff))
         Text(statusText(status), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, softWrap = false)
     }
 }
@@ -486,6 +489,7 @@ private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifie
     Row(
         modifier.fillMaxWidth().height(56.dp).pressable(onClick).clip(RoundedCornerShape(18.dp))
             .background(Brush.horizontalGradient(listOf(Color(0xFFC8142F), Red)))
+            .sweepShine()
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -496,7 +500,7 @@ private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifie
             Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
             if (sub != null) Text(sub, fontSize = 12.sp, color = Color(0xCCFFFFFF), maxLines = 1)
         }
-        Icon(Icons.Filled.ChevronRight, null, tint = Color(0xB3FFFFFF))
+        Icon(Icons.Filled.ChevronRight, null, Modifier.nudgeX(), tint = Color(0xB3FFFFFF))
     }
 }
 
@@ -509,7 +513,7 @@ private fun ActionTile(
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier.height(68.dp).pressable(onClick).clip(shape).background(if (on) Color(0x26A6122D) else Bg2)
-            .border(1.dp, if (on) Red.copy(alpha = 0.7f) else Line, shape),
+            .border(1.dp, if (on) Red.copy(alpha = 0.7f) else Line, shape).sparkBurst(on),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         if (iconOn != null) MorphIcon(on, iconOn, icon, label, 22.dp, if (on) RedText else Color.White)
@@ -550,9 +554,7 @@ fun EpisodeCard(
             }
             Text("EP $n", Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
                 .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            if (frac > 0f) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x59FFFFFF))) {
-                Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(Red))
-            }
+            if (frac > 0f) AnimatedProgressBar(frac, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp), track = Color(0x59FFFFFF))
         }
         Column(Modifier.weight(1f)) {
             Text("Episode $n", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
@@ -631,7 +633,13 @@ fun DetailScreen(vm: AppVM, id: String) {
                     // scrim atas (ikon terbaca) + peleburan ke latar di bawah
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
                         0f to Color(0x99080910), 0.28f to Color.Transparent, 0.5f to Color(0x2214161F), 0.82f to Color(0xE614161F), 1f to Bg)))
-                    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Gutter)) {
+                    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().graphicsLayer {
+                        val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else heroPx
+                        val f = (off / (heroPx * 0.6f)).coerceIn(0f, 1f)
+                        alpha = 1f - f; translationY = off * 0.3f
+                        val sc = 1f - 0.06f * f; scaleX = sc; scaleY = sc
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)
+                    }.padding(horizontal = Gutter)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             a.rating?.let { ScorePill(it) }
                             if (a.hd) Tag("HD", Red, Color.White)
@@ -703,10 +711,11 @@ fun DetailScreen(vm: AppVM, id: String) {
                 Spacer(Modifier.height(12.dp))
                 if (epNums.isEmpty()) Text("No episodes available yet.", Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = 14.sp)
             }
-            items(epNums, key = { "ep$it" }) { n ->
+            itemsIndexed(epNums, key = { _, n -> "ep$n" }) { idx, n ->
                 val k = "$id:$n"
                 val pct = vm.downloading[k]
                 val dl = vm.hasDl(id, n)
+                Box(Modifier.staggerIn("ep:$id:$n", idx)) {
                 EpisodeCard(
                     a, n, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = resume?.ep == n,
                     onOpen = { vm.go(Route.Player(id, n)) },
@@ -716,6 +725,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                         dl -> IconChip(Icons.Filled.Check, "Saved offline", on = true) { vm.download(id, n) }
                         else -> IconChip(Icons.Outlined.Download, "Download episode $n") { vm.download(id, n) }
                     }
+                }
                 }
             }
             if (sim.isNotEmpty()) {
