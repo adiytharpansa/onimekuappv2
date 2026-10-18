@@ -64,6 +64,20 @@ class MainActivity : ComponentActivity() {
         else { permCb = cb; permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleLink(intent)
+    }
+
+    /** onimeku://anime/<id> -> halaman Detail (bila judul ada di katalog). */
+    private fun handleLink(i: android.content.Intent?) {
+        val d = i?.data ?: return
+        if (d.scheme != "onimeku" || d.host != "anime") return
+        val id = d.pathSegments.firstOrNull() ?: return
+        vm.closeWelcome()
+        vm.go(Route.Detail(id))
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // Android 12+ memakai auto-enter (diatur di PlayerScreen); di bawahnya masuk PiP manual di sini.
@@ -94,6 +108,7 @@ class MainActivity : ComponentActivity() {
         // Kait tes otomatis (emulator CI): buka pemutar langsung ke satu
         // episode lewat intent agar putar bisa diverifikasi ujung-ke-ujung
         // tanpa mengetuk UI. Tidak berpengaruh pada pemakaian normal.
+        handleLink(intent)
         val testId = intent?.getStringExtra("test_id")
         if (!testId.isNullOrBlank()) {
             val testEp = intent?.getIntExtra("test_ep", 1) ?: 1

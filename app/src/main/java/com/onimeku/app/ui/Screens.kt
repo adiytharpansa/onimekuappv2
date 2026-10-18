@@ -423,6 +423,16 @@ fun DetailScreen(vm: AppVM, id: String) {
                     Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
                         if (on) Icons.Filled.Check else Icons.Filled.Add, Modifier.weight(1f)) { vm.toggleML(id) }
                 }
+                val shareCtx = androidx.compose.ui.platform.LocalContext.current
+                Row(Modifier.padding(top = 10.dp)) {
+                    Chip("Share") {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/$id")
+                        }
+                        shareCtx.startActivity(android.content.Intent.createChooser(send, "Share").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                }
                 Box(Modifier.padding(top = 14.dp)) { Chip("Download all", icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
             }
             Column(Modifier.fadeSlideIn(200)) {

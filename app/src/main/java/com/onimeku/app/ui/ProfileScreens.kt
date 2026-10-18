@@ -91,7 +91,18 @@ fun ProfileScreen(vm: AppVM) {
                 }
             }
         } else Box(Modifier.padding(top = 20.dp)) {
-            Btn("Sign out", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.signOut() }
+            var confirmDel by remember { mutableStateOf(false) }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Btn("Sign out", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.signOut() }
+                Btn("Delete account", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { confirmDel = true }
+            }
+            if (confirmDel) androidx.compose.material3.AlertDialog(
+                onDismissRequest = { confirmDel = false },
+                title = { Text("Delete account?") },
+                text = { Text("This permanently deletes your account and the data synced to it. Data stored only on this device stays here.") },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmDel = false; vm.deleteAccount() }) { Text("Delete", color = RedText) } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmDel = false }) { Text("Cancel") } },
+            )
         }
 
         CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(200)) {
@@ -142,6 +153,8 @@ fun SubScreen(vm: AppVM, key: String) {
                     SwitchRow("Autoplay next episode", "Start the next episode when one ends.", set.autoplay) { v -> vm.setSettings { it.copy(autoplay = v) } }
                     HLine()
                     SwitchRow("Skip intro", "Show a button to skip opening songs.", set.skipIntro) { v -> vm.setSettings { it.copy(skipIntro = v) } }
+                    HLine()
+                    SwitchRow("Background playback", "Keep audio playing with lock-screen controls when you leave the app.", set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
                 }
                 Grp("Video quality")
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(5.dp),
@@ -208,12 +221,25 @@ fun SubScreen(vm: AppVM, key: String) {
                     Logo(56.dp)
                     Column {
                         Text("Onimeku", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Version 1.0.0", color = NavOff)
+                        Text("Version ${com.onimeku.app.BuildConfig.VERSION_NAME}", color = NavOff)
                     }
                 }
                 Text("Onimeku is a place to watch anime online. Browse top hits, follow new episodes, and keep a list of what you want to watch next.",
                     Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
                 CardBox {
+                    val ctxA = androidx.compose.ui.platform.LocalContext.current
+                    Row(Modifier.fillMaxWidth().clickable {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Onimeku diagnostics")
+                            putExtra(android.content.Intent.EXTRA_TEXT, com.onimeku.app.data.CrashLog.read())
+                        }
+                        ctxA.startActivity(android.content.Intent.createChooser(send, "Send diagnostics").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Send diagnostics", Modifier.weight(1f), fontSize = 16.sp)
+                        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
+                    }
+                    HLine()
                     listOf("terms" to "Terms of Service", "privacy" to "Privacy Policy", "licenses" to "Licenses").forEachIndexed { i, (k2, l) ->
                         if (i > 0) HLine()
                         Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k2)) }.padding(horizontal = 18.dp, vertical = 16.dp),

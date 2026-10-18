@@ -29,6 +29,7 @@ data class Settings(
     val wifi: Boolean = false,
     val alerts: Boolean = true,
     val quality: String = "Auto",
+    val bgPlay: Boolean = true,
 )
 
 @Serializable
@@ -48,11 +49,41 @@ class Store(ctx: Context) {
     private val sp = ctx.getSharedPreferences("onimeku", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    fun load(): AppState = try {
-        sp.getString("state", null)?.let { json.decodeFromString<AppState>(it) } ?: AppState()
-    } catch (e: Exception) { AppState() }
+    // Token akun disimpan di EncryptedSharedPreferences (kunci di Android Keystore),
+    // bukan di JSON state biasa. Bila Keystore gagal, jatuh ke penyimpanan lama.
+    private val secure: android.content.SharedPreferences? by lazy {
+        try {
+            val mk = androidx.security.crypto.MasterKey.Builder(ctx.applicationContext)
+                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
+            androidx.security.crypto.EncryptedSharedPreferences.create(
+                ctx.applicationContext, "onimeku_secure", mk,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        } catch (e: Exception) { null }
+    }
+    private var lastAcc: Account? = null
+    private var accWritten = false
+
+    fun load(): AppState {
+        val base = try {
+            sp.getString("state", null)?.let { json.decodeFromString<AppState>(it) } ?: AppState()
+        } catch (e: Exception) { AppState() }
+        val sec = secure ?: return base
+        val acc = try { sec.getString("account", null)?.let { json.decodeFromString<Account>(it) } } catch (e: Exception) { null }
+        // Migrasi: akun lama yang masih di JSON biasa dipindah ke penyimpanan terenkripsi.
+        return base.copy(account = acc ?: base.account)
+    }
 
     fun save(s: AppState) {
-        sp.edit().putString("state", json.encodeToString(s)).apply()
+        val sec = secure
+        if (sec == null) { sp.edit().putString("state", json.encodeToString(s)).apply(); return }
+        // Tulis token hanya saat berubah (enkripsi Keystore tidak murah; save() dipanggil tiap simpan progres).
+        if (!accWritten || s.account != lastAcc) {
+            val e = sec.edit()
+            if (s.account != null) e.putString("account", json.encodeToString(s.account)) else e.remove("account")
+            e.apply(); lastAcc = s.account; accWritten = true
+        }
+        sp.edit().putString("state", json.encodeToString(s.copy(account = null))).apply()
     }
 }

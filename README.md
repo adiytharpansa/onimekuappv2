@@ -1,27 +1,14 @@
-# Onimeku (Kotlin, Media3) – siap rilis setelah 3 hal ini
-Tidak ada data contoh di aplikasi. Semua konten datang dari API Anda.
+# Onimeku (Kotlin, Compose, Media3)
 
-## 1. API (wajib)
-Aplikasi memakai API katalog `onimekuappv2-api` (lihat `ApiClient.BASE` di `data/Api.kt`; ubah di sana bila Anda memindahkan API).
-- `GET /api/anime?limit=100&page=N` -> `{ ok, total, page, limit, totalPages, data: [Anime] }` (seluruh katalog dimuat bertahap, halaman pertama langsung tampil)
-- `GET /api/anime/:id` · `GET /api/anime/:id/episode/:ep` · `GET /api/schedule` · `GET /api/poster/:anilistId`
-Konten harus Anda miliki lisensinya.
+Aplikasi Android untuk menonton anime. Tidak ada data contoh; semua konten dari API katalog `my-anime-app` (lihat `ApiClient.BASE` di `data/Api.kt`). Konten harus Anda miliki lisensinya.
 
-## 2. Firebase Auth (opsional tapi disarankan)
-Aktifkan Email/Password di console.firebase.google.com, taruh `google-services.json` di `app/`.
+## Menjalankan
+`gradle :app:assembleDebug` (JDK 17, Gradle 8.9). Uji unit: `gradle :app:testDebugUnitTest`.
 
-## 3. Signing
-`ONIMEKU_STORE_FILE`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS` di gradle.properties, lalu `./gradlew bundleRelease`.
-Siapkan ikon adaptif (ganti `sym_def_app_icon` di manifest) dan Privacy Policy untuk Play Console.
+## Akun (opsional)
+Supabase Auth + sinkronisasi My List/progres. Siapkan backend di `backend/` (lihat `backend/README.md`), lalu isi `ONIMEKU_SUPABASE_URL` dan `ONIMEKU_SUPABASE_KEY` (kunci PUBLIK) di `gradle.properties` atau secret CI.
 
-## Komentar saat menonton (API tambahan)
-- `GET anime/{id}/episodes/{ep}/comments` -> `[{"id","userId","user","text","timeMs","mine"}]` (`mine` true bila milik pengguna yang login)
-- `POST anime/{id}/episodes/{ep}/comments` body `{"text","timeMs"}` + header `Authorization: Bearer <Firebase ID token>` -> komentar baru. Server WAJIB memverifikasi token, membatasi laju (rate limit), dan menyaring kata terlarang.
-- `DELETE comments/{cid}` (hanya pemilik) · `POST comments/{cid}/report`
-Kebijakan konten buatan pengguna Google Play mewajibkan: pelaporan, pemblokiran pengguna, moderasi di server, dan syarat penggunaan. Aplikasi sudah punya tombol Laporkan/Blokir; moderasi dan Terms of Use Anda sediakan sendiri.
+## Rilis
+`ONIMEKU_STORE_FILE`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS`, `ONIMEKU_KEY_PASS` lalu `gradle :app:bundleRelease`, atau jalankan workflow `release` (secret: `ONIMEKU_STORE_B64`, dst). Uji build rilis (R8) di perangkat sebelum unggah.
 
-## Tampilan
-- Home: hero (tinggi mengikuti layar), baris "Top Hits Anime (ranking) / New Episode Releases / Airing Now / Popular / Latest / Donghua / per genre", lalu tombol **Browse all N anime**. Posisi scroll Home tersimpan saat membuka Detail lalu kembali.
-- Setiap baris poster menampilkan judul di bawah poster; "See all" membuka grid 3 kolom (LazyVerticalGrid) berisi SELURUH judul. Search, My List, dan See all memakai grid yang sama.
-- Detail: LazyColumn (daftar episode panjang tetap ringan), sinopsis "Read more", tombol Play/My List sama lebar.
-- Daftar turunan katalog (top, populer, per genre, byId) di-cache per perubahan katalog (`Catalog.kt`).
+Panduan lengkap untuk pengembang/agent: `ONIMEKU-AGENT-GUIDE.md`; arsitektur: `CATATAN-ARSITEKTUR.md`.

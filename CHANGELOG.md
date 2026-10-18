@@ -1,3 +1,9 @@
+# Putaran 4 (19 Okt 2026) — fitur pemutar + akun
+- Pemutar: pemutaran latar + MediaSession (notifikasi, layar kunci, headset; `PlaybackService`, setting "Background playback", video dimatikan saat di latar), pilihan trek audio, kualitas dari rendisi nyata, kartu "Up next" (20 dtk terakhir), daftar episode, timer tidur, kunci kontrol, kecepatan 0,5–2×, saran turunkan kualitas saat 3x macet/90 dtk.
+- Akun: hapus akun (Edge Function), refresh token, token di EncryptedSharedPreferences, sinkronisasi My List/progres (`data/Sync.kt`, `backend/supabase/schema.sql`).
+- Lain: tautan dalam `onimeku://anime/<id>` + tombol Share, `CrashLog` lokal + "Send diagnostics", cek ruang sebelum unduh, uji unit (`CoreTest`), signingConfig + workflow `release.yml`, README diperbarui.
+- Belum dikompilasi/diukur di sini (tanpa Android SDK).
+
 # Putaran 3 (19 Okt 2026) — performa streaming video
 
 - Start lebih cepat: subtitle diunduh PARALEL dengan batas 4 dtk (sebelumnya berurutan, timeout 10+15 dtk per trek, menahan video); berkas subtitle dipakai ulang; `LoadControl` mulai putar di 1,5 dtk buffer (bawaan 2,5) dan pulih rebuffer di 4 dtk.

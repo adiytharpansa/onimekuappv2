@@ -19,8 +19,21 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"${prop("ONIMEKU_SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${prop("ONIMEKU_SUPABASE_KEY")}\"")
     }
+    // Tanda tangan rilis: aktif hanya bila ONIMEKU_STORE_FILE diberikan (gradle.properties / -P / CI).
+    signingConfigs {
+        create("release") {
+            val f = project.findProperty("ONIMEKU_STORE_FILE") as String?
+            if (!f.isNullOrBlank()) {
+                storeFile = file(f)
+                storePassword = project.findProperty("ONIMEKU_STORE_PASS") as String?
+                keyAlias = project.findProperty("ONIMEKU_KEY_ALIAS") as String?
+                keyPassword = (project.findProperty("ONIMEKU_KEY_PASS") as String?) ?: storePassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (!(project.findProperty("ONIMEKU_STORE_FILE") as String?).isNullOrBlank()) signingConfig = signingConfigs.getByName("release")
             // R8: kode lebih kecil + start lebih cepat. Aturan keep ada di proguard-rules.pro.
             isMinifyEnabled = true
             isShrinkResources = true
@@ -51,10 +64,13 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
     implementation("androidx.media3:media3-database:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-session:1.5.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     // Memasang Baseline Profile (src/main/baseline-prof.txt) saat instalasi: start dan scroll pertama lebih mulus.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    testImplementation("junit:junit:4.13.2")
 }

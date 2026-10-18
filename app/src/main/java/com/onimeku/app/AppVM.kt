@@ -93,6 +93,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         initDownloads()
         watchNetwork()
         reloadCatalog()
+        pullAndMerge()
     }
 
     /** Sambungkan DownloadManager Media3 ke state aplikasi (progres asli). */
@@ -231,7 +232,40 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     // ---------- state helpers ----------
-    private fun upd(f: (AppState) -> AppState) { s = f(s); store.save(s) }
+    private fun upd(f: (AppState) -> AppState) { s = f(s); store.save(s); scheduleSync() }
+
+    // ---------- sinkronisasi akun ----------
+    private var syncJob: Job? = null
+    private fun scheduleSync() {
+        if (s.account == null || !Sync.enabled) return
+        syncJob?.cancel()
+        syncJob = viewModelScope.launch {
+            delay(15_000)
+            try { withAccount { Sync.push(it, s.profiles) } } catch (_: Exception) {}
+        }
+    }
+
+    /** Jalankan [block]; bila token kedaluwarsa (401) tukar refresh token sekali lalu ulangi. */
+    private suspend fun <T> withAccount(block: suspend (Account) -> T): T? {
+        var acc = s.account ?: return null
+        return try {
+            block(acc)
+        } catch (e: Sync.Unauthorized) {
+            acc = AuthClient.refresh(acc.refreshToken)
+            s = s.copy(account = acc); store.save(s)
+            block(acc)
+        }
+    }
+
+    fun pullAndMerge() {
+        if (s.account == null || !Sync.enabled) return
+        viewModelScope.launch {
+            try {
+                val remote = withAccount { Sync.pull(it) } ?: return@launch
+                upd { st -> st.copy(profiles = Sync.merge(st.profiles, remote)) }
+            } catch (_: Exception) {}
+        }
+    }
     private fun updP(f: (Profile) -> Profile) =
         upd { st -> st.copy(profiles = st.profiles.mapIndexed { i, pr -> if (i == st.pi) f(pr) else pr }) }
 
@@ -274,6 +308,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             return
         }
         if (hasDl(id, ep)) { toast("Already saved offline"); return }
+        val free = try { android.os.StatFs(app.filesDir.path).availableBytes } catch (e: Exception) { Long.MAX_VALUE }
+        if (free < 300L * 1024 * 1024) { toast("Not enough storage. Free up some space and try again."); return }
         viewModelScope.launch {
             val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
             val url = pb?.streamUrl
@@ -369,6 +405,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun signIn(email: String, password: String) = runAuth {
         val acc = AuthClient.signIn(email.trim(), password)
         upd { it.copy(account = acc) }
+        pullAndMerge()
         toast("Welcome back")
         setTab(Route.ProfileTab)
     }
@@ -395,6 +432,17 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         upd { it.copy(account = null) }
         toast("Signed out")
         viewModelScope.launch { try { AuthClient.signOut(acc.accessToken) } catch (_: Exception) {} }
+    }
+
+    /** Hapus akun permanen (wajib Google Play). Token disegarkan dulu agar tidak kedaluwarsa. */
+    fun deleteAccount() = runAuth {
+        val acc = s.account ?: return@runAuth
+        val fresh = AuthClient.refresh(acc.refreshToken)
+        upd { it.copy(account = fresh) }
+        AuthClient.deleteAccount(fresh.accessToken)
+        syncJob?.cancel()
+        upd { it.copy(account = null) }
+        toast("Account deleted")
     }
 
     // ---------- welcome ----------

@@ -13,6 +13,11 @@ import coil.memory.MemoryCache
  * - RGB_565 dimatikan (kualitas poster); hardware bitmap aktif otomatis di Android 8+ (hemat memori Java).
  */
 class OnimekuApp : Application(), ImageLoaderFactory {
+    override fun onCreate() {
+        super.onCreate()
+        com.onimeku.app.data.CrashLog.install(this)
+    }
+
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.20).build() }

@@ -18,6 +18,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
@@ -50,6 +52,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.onimeku.app.AppVM
+import com.onimeku.app.PlaybackService
 import com.onimeku.app.Route
 import com.onimeku.app.data.Catalog
 import kotlinx.coroutines.async
@@ -125,8 +128,8 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // per-trek dari API), lalu diputar dari file. Trek subtitle yang
             // ditautkan mentah ke pemutar bisa menggagalkan seluruh putar
             // bila server teksnya menolak permintaan pemutar.
-            // Perbaikan agen saat build v6: tipe eksplisit non-null — var
-            // yang ditangkap closure + diubah isinya tidak bisa smart-cast.
+            // Perbaikan agen (berulang dari v6): tipe eksplisit non-null —
+            // var tertangkap closure + diubah isinya tidak bisa smart-cast.
             var ready: com.onimeku.app.data.Playback = res
             if (ready.subtitles.isNotEmpty()) {
                 // Unduh semua trek PARALEL dengan batas waktu total 4 dtk dan
@@ -274,10 +277,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             .build().apply {
             // Seek ke keyframe terdekat: ketuk dua kali/geser bilah jauh lebih cepat.
             setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
-            when (quality) {
-                "1080p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1920, 1080).build()
-                "720p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
-                "480p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
+            quality.removeSuffix("p").toIntOrNull()?.let { h ->
+                trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, h).build()
             }
             val subs = playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
                 val mime = when {
@@ -290,6 +291,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             setMediaItem(
                 MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
+                    .setMediaMetadata(
+                        androidx.media3.common.MediaMetadata.Builder()
+                            .setTitle(a.title).setSubtitle("Episode ${r.ep}")
+                            .setArtworkUri(a.poster?.let { android.net.Uri.parse(it) }).build()
+                    )
                     .setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
                     .setSubtitleConfigurations(subs).build()
             )
@@ -311,6 +317,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var hud by remember { mutableStateOf<String?>(null) }
     var hudTick by remember { mutableIntStateOf(0) }
     val durNow by rememberUpdatedState(dur)
+    var audioLabels by remember(r) { mutableStateOf<List<String>>(emptyList()) }
+    var audioIdx by remember(r) { mutableIntStateOf(0) }
+    var heights by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
+    var sleepMin by remember(r) { mutableIntStateOf(0) }
+    var locked by remember(r) { mutableStateOf(false) }
+    var showEps by remember(r) { mutableStateOf(false) }
+    val bg by rememberUpdatedState(vm.s.settings.bgPlay)
 
     // ---- Fullscreen, kontrol otomatis sembunyi, subtitle, kualitas ----
     var full by remember { mutableStateOf(false) }
@@ -322,8 +335,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     fun subName(i: Int): String = if (i < 0) "Off" else subTracks.getOrNull(i)?.let { it.label.ifBlank { it.lang.uppercase() }.ifBlank { "Sub ${i + 1}" } } ?: "Off"
 
     fun applySub(i: Int) {
-        // Perbaikan agen (sama seperti build v5): konstanta statis Java C
-        // dipakai sebagai qualifier nama lengkap, tidak disimpan ke val.
+        // Perbaikan agen (berulang dari v5/v6): konstanta C dipakai sebagai
+        // qualifier nama lengkap, tidak disimpan ke val (ilegal di Kotlin).
         val b = player.trackSelectionParameters.buildUpon()
         val groups = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
         if (i < 0 || groups.isEmpty()) {
@@ -338,13 +351,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
     fun applyQuality(q: String) {
         val b = player.trackSelectionParameters.buildUpon()
-        when (q) {
-            "1080p" -> b.setMaxVideoSize(1920, 1080)
-            "720p" -> b.setMaxVideoSize(1280, 720)
-            "480p" -> b.setMaxVideoSize(854, 480)
-            else -> b.setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
-        }
+        val h = q.removeSuffix("p").toIntOrNull()
+        if (h != null) b.setMaxVideoSize(Int.MAX_VALUE, h) else b.setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
         player.trackSelectionParameters = b.build()
+    }
+    fun applyAudio(i: Int) {
+        val g = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }.getOrNull(i) ?: return
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0)).build()
+        audioIdx = i
     }
     fun seekBy(ms: Long) {
         val t = (player.currentPosition + ms).coerceIn(0L, if (player.duration > 0) player.duration else Long.MAX_VALUE)
@@ -353,9 +368,24 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
 
     DisposableEffect(player) {
+        val stalls = ArrayDeque<Long>()
+        var wasReady = false
+        var hinted = false
+        var lastSeekAt = 0L
         val l = object : Player.Listener {
+            override fun onPositionDiscontinuity(o: Player.PositionInfo, n: Player.PositionInfo, reason: Int) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) lastSeekAt = System.currentTimeMillis()
+            }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
+                // Saran kualitas: 3x macet dalam 90 dtk (di luar seek) -> tawarkan turunkan kualitas, sekali per sesi.
+                val now = System.currentTimeMillis()
+                if (state == Player.STATE_READY) wasReady = true
+                if (state == Player.STATE_BUFFERING && wasReady && now - lastSeekAt > 3_000) {
+                    stalls.addLast(now)
+                    while (stalls.isNotEmpty() && now - stalls.first() > 90_000) stalls.removeFirst()
+                    if (stalls.size >= 3 && !hinted) { hinted = true; vm.toast("Slow connection. Try a lower quality.") }
+                }
                 if (state == Player.STATE_READY) failed = false
                 if (state == Player.STATE_ENDED) {
                     vm.saveProg(r.id, r.ep, durNow, durNow)
@@ -364,6 +394,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
             }
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                val C0 = androidx.media3.common.C
+                val ag = tracks.groups.filter { it.type == C0.TRACK_TYPE_AUDIO }
+                audioLabels = ag.mapIndexed { i, g ->
+                    val f = g.mediaTrackGroup.getFormat(0)
+                    (f.label ?: f.language?.uppercase() ?: "Track ${i + 1}")
+                }
+                audioIdx = ag.indexOfFirst { it.isSelected }.coerceAtLeast(0)
+                heights = tracks.groups.filter { it.type == C0.TRACK_TYPE_VIDEO }
+                    .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).height } }
+                    .filter { it > 0 }.distinct().sortedDescending()
                 if (!subReady && tracks.groups.any { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }) {
                     subReady = true
                     fun has(i: Int, f: (String) -> Boolean) = subTracks.getOrNull(i)?.let { f((it.lang + " " + it.label).lowercase()) } == true
@@ -377,6 +417,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             override fun onPlayerError(error: PlaybackException) {
                 failed = true; buffering = false
                 errMsg = error.errorCodeName
+                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} ${error.errorCodeName}: ${error.cause ?: error.message}")
                 // Serahkan ke rantai cadangan di PlayerContent (URL
                 // langsung / embed) — ia yang tahu lapisan berikutnya.
                 onFatalError()
@@ -389,6 +430,28 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
             player.release()
             vm.playing = false
+        }
+    }
+
+    // MediaSession + layanan latar: notifikasi, kontrol layar kunci, tombol headset.
+    DisposableEffect(player) {
+        val session = androidx.media3.session.MediaSession.Builder(ctx, player)
+            .setId("onimeku-${System.nanoTime()}").build()
+        PlaybackService.current = session
+        val token = androidx.media3.session.SessionToken(ctx, android.content.ComponentName(ctx, PlaybackService::class.java))
+        val ctrl = androidx.media3.session.MediaController.Builder(ctx, token).buildAsync()
+        onDispose {
+            androidx.media3.session.MediaController.releaseFuture(ctrl)
+            if (PlaybackService.current === session) PlaybackService.current = null
+            session.release()
+        }
+    }
+
+    // Timer tidur.
+    LaunchedEffect(sleepMin) {
+        if (sleepMin > 0) {
+            delay(sleepMin * 60_000L)
+            player.pause(); vm.toast("Sleep timer: paused"); sleepMin = 0
         }
     }
 
@@ -418,10 +481,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
 
-    // pause saat app ke background (kecuali sedang PiP)
+    // Ke background: pause, kecuali PiP atau "Background playback" aktif.
+    // Saat berlanjut di latar, trek video dimatikan (hemat data + baterai).
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner, player) {
-        val o = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP && !vm.inPip) player.pause() }
+        val o = LifecycleEventObserver { _, e ->
+            fun videoOff(off: Boolean) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, off).build()
+            }
+            if (e == Lifecycle.Event.ON_STOP && !vm.inPip) { if (bg) videoOff(true) else player.pause() }
+            if (e == Lifecycle.Event.ON_START) videoOff(false)
+        }
         owner.lifecycle.addObserver(o)
         onDispose { owner.lifecycle.removeObserver(o) }
     }
@@ -468,6 +538,22 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val hasPrev = (if (a.available.isNotEmpty()) a.available.firstOrNull() else 1)?.let { r.ep > it } ?: (r.ep > 1)
     val hasNext = (if (a.available.isNotEmpty()) a.available.lastOrNull() else a.eps)?.let { r.ep < it } ?: (r.ep < a.eps)
 
+    if (showEps) {
+        val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+        AlertDialog(
+            onDismissRequest = { showEps = false },
+            confirmButton = { TextButton(onClick = { showEps = false }) { Text("Close") } },
+            title = { Text(a.title, maxLines = 1) },
+            text = {
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                    androidx.compose.foundation.lazy.items(nums) { n ->
+                        Text("Episode $n", Modifier.fillMaxWidth().clickable { showEps = false; if (n != r.ep) vm.replaceTop(Route.Player(r.id, n)) }.padding(vertical = 12.dp),
+                            color = if (n == r.ep) RedText else Color.Unspecified, fontWeight = if (n == r.ep) FontWeight.SemiBold else FontWeight.Normal)
+                    }
+                }
+            },
+        )
+    }
     if (vm.inPip) {
         Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize()) }
         return
@@ -480,13 +566,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 .pointerInput(player) {
                     detectTapGestures(
                         onTap = { showUi = !showUi; uiTick++ },
-                        onDoubleTap = { o -> if (o.x < size.width / 2f) seekBy(-10_000) else seekBy(10_000) },
+                        onDoubleTap = { o -> if (!locked) { if (o.x < size.width / 2f) seekBy(-10_000) else seekBy(10_000) } },
                     )
                 }
                 .pointerInput(Unit) {
                     var left = true
                     detectVerticalDragGestures(onDragStart = { left = it.x < size.width / 2 }) { change, dy ->
                         change.consume()
+                        if (locked) return@detectVerticalDragGestures
                         val d = -dy / size.height * 1.3f
                         if (left) {
                             br = (br + d).coerceIn(0.2f, 1f)
@@ -513,7 +600,25 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 Text(it, Modifier.align(Alignment.Center).offset(y = (-44).dp).clip(RoundedCornerShape(14.dp)).background(Color(0xB3000000))
                     .padding(horizontal = 14.dp, vertical = 6.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
-            val uiVisible = showUi || !wantPlay || failed || buffering
+            val remain = dur - pos.toInt()
+            if (nextEp != null && dur > 60 && remain in 1..20 && !failed) {
+                Row(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 52.dp).clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column {
+                        Text("Up next", fontSize = 11.sp, color = InkSoft)
+                        Text("Episode $nextEp · ${remain}s", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Chip("Play now") { vm.replaceTop(Route.Player(r.id, nextEp)) }
+                }
+            }
+            if (locked && showUi) {
+                Box(Modifier.align(Alignment.CenterStart).padding(start = 16.dp).size(44.dp).clip(CircleShape).background(Color(0x99000000))
+                    .clickable { locked = false; uiTick++ }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.LockOpen, "Unlock controls")
+                }
+            }
+            val uiVisible = !locked && (showUi || !wantPlay || failed || buffering)
             val uiA by animateFloatAsState(if (uiVisible) 1f else 0f, tween(200), label = "controlsAlpha")
             if (uiA > 0.01f) Box(Modifier.matchParentSize().graphicsLayer { alpha = uiA }) {
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0x8C0A0B10), 0.3f to Color.Transparent, 0.55f to Color.Transparent, 1f to Color(0xCC0A0B10))))
@@ -532,6 +637,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x33FFFFFF))
                         .clickable { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); uiTick++; vm.toast("Subtitles: ${subName(n)}") }
                         .padding(horizontal = 8.dp, vertical = 2.dp))
+                Box(Modifier.padding(start = 4.dp).size(40.dp).clip(CircleShape).clickable { locked = true; showUi = true; uiTick++ }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Lock, "Lock controls", Modifier.size(20.dp))
+                }
                 Box(Modifier.padding(start = 4.dp).size(40.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
                     Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen")
                 }
@@ -568,10 +676,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (!full) {
         Row(Modifier.fillMaxWidth().padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Chip("−10s") { player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)) }
-            Chip("${if (speed == 1.5f) "1.5" else speed.toInt()}×") {
-                speed = when (speed) { 1f -> 1.5f; 1.5f -> 2f; else -> 1f }
+            Chip("${spdLabel(speed)}×") {
+                val all = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                speed = all[(all.indexOf(speed).let { if (it < 0) 2 else it } + 1) % all.size]
                 player.setPlaybackSpeed(speed)
-                vm.toast("Speed ${if (speed == 1.5f) "1.5" else speed.toInt()}×")
+                vm.toast("Speed ${spdLabel(speed)}×")
             }
             Chip("+10s") { player.seekTo(player.currentPosition + 10_000) }
             Chip("Subtitles: ${subName(subIdx)}") {
@@ -579,9 +688,19 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 else { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); vm.toast("Subtitles: ${subName(n)}") }
             }
             Chip("Quality: $quality") {
-                val nx = when (quality) { "Auto" -> "1080p"; "1080p" -> "720p"; "720p" -> "480p"; else -> "Auto" }
+                val opts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p"))
+                val nx = opts[(opts.indexOf(quality).let { if (it < 0) 0 else it } + 1) % opts.size]
                 vm.setSettings { it.copy(quality = nx) }; applyQuality(nx); vm.toast("Quality: $nx")
             }
+            if (audioLabels.size > 1) Chip("Audio: ${audioLabels.getOrElse(audioIdx) { "?" }}") {
+                val n = (audioIdx + 1) % audioLabels.size
+                applyAudio(n); vm.toast("Audio: ${audioLabels[n]}")
+            }
+            Chip(if (sleepMin == 0) "Sleep: Off" else "Sleep: ${sleepMin}m") {
+                sleepMin = when (sleepMin) { 0 -> 15; 15 -> 30; 30 -> 60; else -> 0 }
+            }
+            Chip("Episodes") { showEps = true }
+            Chip("Lock") { locked = true; showUi = true }
             Chip("Fullscreen", icon = Icons.Filled.Fullscreen) { full = true }
             if (hasPrev) Chip("Previous") { step(-1) }
             if (hasNext) Chip("Next") { step(1) }
@@ -595,6 +714,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
 }
+
+private fun spdLabel(f: Float): String = if (f == f.toInt().toFloat()) f.toInt().toString() else f.toString()
 
 private fun isMediaUrl(u: String): Boolean =
     u.contains(".m3u8") || u.contains(".mp4") || u.contains(".mpd")

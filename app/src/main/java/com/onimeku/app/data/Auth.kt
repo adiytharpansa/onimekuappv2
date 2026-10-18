@@ -89,4 +89,26 @@ object AuthClient {
     }
 
     suspend fun signOut(accessToken: String) { call("/auth/v1/logout", "{}", accessToken) }
+
+    /** Tukar refresh token dengan sesi baru (token akses berumur pendek). */
+    suspend fun refresh(refreshToken: String): Account =
+        session(call("/auth/v1/token?grant_type=refresh_token", kotlinx.serialization.json.buildJsonObject {
+            put("refresh_token", kotlinx.serialization.json.JsonPrimitive(refreshToken))
+        }.toString())) ?: throw AuthException("Session expired. Please sign in again.")
+
+    /**
+     * Hapus akun permanen lewat Edge Function `delete-account`
+     * (backend/supabase/functions/delete-account). Klien tidak pernah memegang service_role.
+     */
+    suspend fun deleteAccount(accessToken: String) = withContext(Dispatchers.IO) {
+        if (!configured) throw AuthException("Account service is not available yet.")
+        val rb = Request.Builder()
+            .url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/delete-account")
+            .header("apikey", BuildConfig.SUPABASE_KEY)
+            .header("Authorization", "Bearer $accessToken")
+            .post("{}".toRequestBody(JSON)).build()
+        http.newCall(rb).execute().use { r ->
+            if (!r.isSuccessful) throw AuthException("Could not delete the account (code ${r.code}). Please try again.")
+        }
+    }
 }

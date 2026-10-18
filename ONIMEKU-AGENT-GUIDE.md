@@ -241,6 +241,16 @@ Ditulis tanpa Android SDK: **belum dikompilasi dan belum diukur**. Ukur dulu: wa
 - `ApiClient.prefetchPlayback` dipanggil pada 60 dtk terakhir bila autoplay aktif; `fetchPlayback(fresh = true)` untuk unduhan.
 - Belum diubah (butuh keputusan pemilik): jalur utama MegaPlay lewat proksi worker (`/api/proxy`) menambah satu lompatan + kena batas 600 GET/menit per IP; URL langsung hanya cadangan.
 
+### 7.7 Fitur pemutar + akun (19 Okt 2026, putaran 4)
+Belum dikompilasi/diuji. Titik rawan kompilasi: API Media3 session (`MediaSession.Builder`, `MediaController.buildAsync`), `EncryptedSharedPreferences` (`Store`), dan lambda berlabel di `PlayerScreen`.
+- `PlaybackService` + `MediaSession` dibuat di `PlayerReady` (id unik per sesi, dilepas sebelum `player.release()`). Setting `bgPlay` (default true).
+- `PlayerScreen`: trek audio, kualitas dari `Tracks`, Up next, Episodes (dialog), Sleep, Lock, kecepatan 0,5–2×, saran kualitas.
+- `Store`: akun di `onimeku_secure` (terenkripsi); migrasi otomatis dari JSON lama.
+- `AppVM.withAccount` (retry 401 -> refresh), `pullAndMerge`, `scheduleSync` (debounce 15 dtk), `deleteAccount`.
+- Sinkronisasi bersifat union: penghapusan di satu perangkat tidak merambat.
+- `backend/`: `schema.sql` + Edge Function `delete-account` HARUS dideploy sebelum fitur akun berfungsi.
+- `CrashLog`: log lokal (`diagnostics.log`), dibagikan manual. Belum ada pelaporan otomatis ke server.
+
 ---
 
 ## 8. Pekerjaan tersisa (urut prioritas)

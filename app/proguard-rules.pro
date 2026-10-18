@@ -16,3 +16,5 @@
 -dontwarn org.openjsse.**
 -keepattributes SourceFile, LineNumberTable          # stack trace crash tetap terbaca
 -renamesourcefileattribute SourceFile
+-dontwarn com.google.errorprone.annotations.**   # Tink (security-crypto)
+-dontwarn javax.annotation.**
