@@ -91,7 +91,40 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false
         val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
-        if (res == null || (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank() && res.embedUrl.isNullOrBlank())) pbFailed = true else pb = res
+        if (res == null || (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank() && res.embedUrl.isNullOrBlank())) {
+            pbFailed = true
+        } else {
+            // Subtitle diunduh ke penyimpanan lokal lebih dulu (dengan Referer
+            // per-trek dari API), lalu diputar dari file. Trek subtitle yang
+            // ditautkan mentah ke pemutar bisa menggagalkan seluruh putar
+            // bila server teksnya menolak permintaan pemutar.
+            var ready = res
+            if (ready.subtitles.isNotEmpty()) {
+                val dir = java.io.File(ctx.cacheDir, "subs").apply { mkdirs() }
+                val localized = ready.subtitles.mapIndexedNotNull { i, s ->
+                    try {
+                        val ext = listOf(".vtt", ".srt", ".ass", ".ssa").firstOrNull { s.url.contains(it) } ?: ".vtt"
+                        val fname = "${r.id}_${r.ep}_${s.lang}_$i$ext".replace(Regex("[^A-Za-z0-9._-]"), "_")
+                        val f = java.io.File(dir, fname)
+                        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            val conn = (java.net.URL(s.url).openConnection() as java.net.HttpURLConnection).apply {
+                                connectTimeout = 10000
+                                readTimeout = 15000
+                                setRequestProperty("Referer", s.referer ?: ready.referer ?: "")
+                                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
+                            }
+                            conn.inputStream.use { it.readBytes() }
+                        }
+                        f.writeBytes(bytes)
+                        s.copy(url = android.net.Uri.fromFile(f).toString())
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                ready = ready.copy(subtitles = localized)
+            }
+            pb = ready
+        }
     }
     if (pbFailed) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
@@ -161,7 +194,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             dsFactory.setDefaultRequestProperties(mapOf("Referer" to playback.referer))
         }
         ExoPlayer.Builder(ctx)
-            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsFactory))
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+                    androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
+                )
+            )
             .build().apply {
             when (quality) {
                 "1080p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1920, 1080).build()
