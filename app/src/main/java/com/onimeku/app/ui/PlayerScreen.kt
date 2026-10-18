@@ -258,6 +258,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onFatalError: () -> Unit = {}) {
     val player = remember(r, streamUrl) {
