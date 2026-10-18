@@ -88,6 +88,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     init {
         Downloads.oneTimeResetV13(app)
+        Downloads.oneTimeCleanupV23(app)
         PosterHealer.init(app)
         Reminders.rescheduleAll(app, s)
         initDownloads()

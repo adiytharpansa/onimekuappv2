@@ -108,6 +108,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var pbFailed by remember(r) { mutableStateOf(false) }
     var forceEmbed by remember(r) { mutableStateOf(false) }
     var useDirect by remember(r) { mutableStateOf(false) }
+    var mainRetry by remember(r) { mutableIntStateOf(0) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false
         val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
@@ -167,6 +168,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 } ?: emptyList()
                 ready = ready.copy(subtitles = loaded)
             }
+            com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
             pb = ready
         }
     }
@@ -216,9 +218,15 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         return
     }
 
-    key(useDirect) {
+    key(useDirect, mainRetry) {
         PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, onFatalError = {
-            if (!useDirect && !playback.directUrl.isNullOrBlank()) {
+            // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
+            // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
+            // langsung/embed yang memang lebih rapuh di HP.
+            if (!useDirect && mainRetry == 0) {
+                mainRetry = 1
+                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} jalur utama gagal, mencoba ulang sekali")
+            } else if (!useDirect && !playback.directUrl.isNullOrBlank()) {
                 useDirect = true
             } else if (!embedUrl.isNullOrBlank()) {
                 forceEmbed = true
@@ -419,7 +427,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             override fun onPlayerError(error: PlaybackException) {
                 failed = true; buffering = false
                 errMsg = error.errorCodeName
-                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} ${error.errorCodeName}: ${error.cause ?: error.message}")
+                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} leg=${if (streamUrl.contains("/api/proxy")) "proxy" else "direct"} ${error.errorCodeName}: ${error.cause ?: error.message}")
                 // Serahkan ke rantai cadangan di PlayerContent (URL
                 // langsung / embed) — ia yang tahu lapisan berikutnya.
                 onFatalError()

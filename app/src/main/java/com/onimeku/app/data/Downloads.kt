@@ -84,6 +84,29 @@ object Downloads {
         prefs.edit().putBoolean("reset_v13", true).apply()
     }
 
+    /**
+     * Pembersihan satu kali (debug.23): pada era cache-tulis (<= debug.20)
+     * hasil streaming ikut ditulis ke cache bersama di bawah kunci konten
+     * "dl:<id>:<ep>" — termasuk halaman error yang tersimpan sebagai
+     * "playlist". Pemutar membaca entri rusak itu lebih dulu dan gagal
+     * walau stream dari API sudah sehat; instalasi segar (emulator) tak
+     * punya entri ini sehingga selalu berhasil. Buang entri "dl:" yang
+     * TIDAK terdaftar di indeks unduhan; data unduhan asli tidak disentuh.
+     */
+    fun oneTimeCleanupV23(ctx: Context) {
+        val app = ctx.applicationContext
+        val prefs = app.getSharedPreferences("dl_state", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("cleanup_v23", false)) return
+        runCatching {
+            val keep = states(app).keys
+            val c = cache(app)
+            for (k in c.keys.toList()) {
+                if (k.startsWith("dl:") && k !in keep) c.removeResource(k)
+            }
+        }
+        prefs.edit().putBoolean("cleanup_v23", true).apply()
+    }
+
     // ---- Referer per unduhan ----
     // CDN membedakan asal permintaan; Referer dari respons API disimpan per
     // awalan URL stream (host + segmen path pertama) agar unduhan segmen
