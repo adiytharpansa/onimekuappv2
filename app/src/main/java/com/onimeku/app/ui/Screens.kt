@@ -233,7 +233,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
     Box(Modifier.fillMaxWidth().height(heroH).clipToBounds()) {
         HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) { (pager.currentPage - i) + pager.currentPageOffsetFraction } }
         // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
-        Box(Modifier.fillMaxWidth().height(120.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent))) })
+        Box(Modifier.fillMaxWidth().height(90.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x40000000), Color.Transparent))) })
         if (items.size > 1) {
             Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
                 items.indices.forEach { i ->

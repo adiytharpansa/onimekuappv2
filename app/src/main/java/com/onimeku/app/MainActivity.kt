@@ -239,7 +239,6 @@ fun App(vm: AppVM) {
                 }
                 }
                 }
-                if (vm.route == Route.Home) TopBar(vm)
                 if (vm.route !is Route.Player && vm.route !is Route.Auth) TabBar(vm, Modifier.align(Alignment.BottomCenter))
             }
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.
@@ -266,31 +265,6 @@ fun App(vm: AppVM) {
                 Text(vm.toastMsg ?: lastToast, Modifier.clip(CircleShape).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp),
                     color = Bg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
-        }
-    }
-}
-
-@Composable
-private fun TopBar(vm: AppVM) {
-    // Bilah atas polos: tanpa logo, tanpa latar/scrim. Hanya dua tombol kaca bulat
-    // yang melayang di atas poster (tetap terbaca di poster terang maupun gelap).
-    val sc = vm.homeScroll
-    val barA by animateFloatAsState(
-        if (sc.firstVisibleItemIndex > 0) 1f else 0f, tween(220), label = "topBarBg",
-    )
-    Row(
-        Modifier.fillMaxWidth()
-            .drawBehind { if (barA > 0f) { drawRect(Bg.copy(alpha = barA)); drawLine(Line.copy(alpha = barA), Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) } }
-            .statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Spacer(Modifier.weight(1f))
-        Box {
-            GlassButton(Icons.Outlined.Notifications, "Notifications") { vm.go(Route.Notif) }
-            if (!vm.s.notifRead && vm.s.settings.alerts)
-                Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp)
-                    .clip(CircleShape).background(Red).border(1.5.dp, Color(0xCC000000), CircleShape))
         }
     }
 }
