@@ -253,10 +253,12 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     val p: Profile get() = s.profiles[s.pi]
 
     // ---------- navigation ----------
-    fun go(r: Route) { stack = stack + r; afterNav() }
-    fun back() { stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
-    fun setTab(r: Route) { stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
-    fun replaceTop(r: Route) { stack = stack.dropLast(1) + r; afterNav() }
+    /** Arah transisi terakhir: 1 = masuk (push), -1 = kembali (pop), 0 = sejajar (tab / ganti episode). Dibaca oleh AnimatedContent. */
+    var navDir = 0
+    fun go(r: Route) { navDir = 1; stack = stack + r; afterNav() }
+    fun back(animated: Boolean = true) { navDir = if (animated) -1 else 0; stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
+    fun setTab(r: Route) { navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
+    fun replaceTop(r: Route) { navDir = 0; stack = stack.dropLast(1) + r; afterNav() }
     private fun afterNav() { if (stack.lastOrNull() !is Route.Player) playerFull = false }
     fun openSettings() { stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
 

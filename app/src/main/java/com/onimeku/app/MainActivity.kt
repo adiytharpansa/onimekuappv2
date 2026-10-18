@@ -1,5 +1,18 @@
 package com.onimeku.app
 
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
+import com.onimeku.app.ui.LocalReduceMotion
+import com.onimeku.app.ui.LocalSharedScope
+import com.onimeku.app.ui.LocalAnimScope
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -128,6 +141,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun App(vm: AppVM) {
     // Bahasa antarmuka aktif mengikuti Settings (debug.31).
@@ -149,16 +163,63 @@ fun App(vm: AppVM) {
             vm.refreshIfStale(10 * 60_000L)
         }
     }
-    BackHandler(enabled = vm.stack.size > 1 && !vm.welcomeOpen) { vm.back() }
+    // Predictive back: layar mengecil mengikuti jari saat menggeser dari tepi; lepas = kembali, batal = pulih.
+    var backP by remember { mutableStateOf(0f) }
+    androidx.activity.compose.PredictiveBackHandler(enabled = vm.stack.size > 1 && !vm.welcomeOpen) { progress ->
+        try {
+            progress.collect { ev -> backP = ev.progress }
+            vm.back(animated = false)
+            backP = 0f
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            backP = 0f
+        }
+    }
+    // Hormati "Hapus animasi" / skala animasi 0 di Android.
+    val ctxMotion = androidx.compose.ui.platform.LocalContext.current
+    val reduceMotion = remember {
+        try { android.provider.Settings.Global.getFloat(ctxMotion.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f } catch (e: Exception) { false }
+    }
 
     Surface(Modifier.fillMaxSize(), color = Bg, contentColor = Color.White) {
         Box(Modifier.fillMaxSize()) {
             if (vm.welcomeOpen) WelcomeScreen(vm) else {
+                Box(Modifier.fillMaxSize().graphicsLayer {
+                    val p = backP
+                    val s = 1f - 0.07f * p
+                    scaleX = s; scaleY = s
+                    alpha = 1f - 0.2f * p
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape((28 * p).dp); clip = p > 0f
+                }) {
+                SharedTransitionLayout {
                 AnimatedContent(
                     targetState = vm.route,
-                    transitionSpec = { (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.98f)) togetherWith fadeOut(tween(160)) },
+                    transitionSpec = {
+                        val t = targetState; val i = initialState; val dir = vm.navDir
+                        val ease = androidx.compose.animation.core.FastOutSlowInEasing
+                        val ct = when {
+                            reduceMotion -> EnterTransition.None togetherWith ExitTransition.None
+                            dir == 0 -> fadeIn(tween(220)) togetherWith fadeOut(tween(140))
+                            // MASUK: Player naik dari bawah; Detail dibawa elemen bersama (poster terbang); lainnya geser dari kanan.
+                            dir > 0 && t is Route.Player -> (slideInVertically(tween(340, easing = ease)) { it / 6 } + fadeIn(tween(280))) togetherWith fadeOut(tween(200))
+                            dir > 0 && t is Route.Detail -> fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+                            dir > 0 -> (slideInHorizontally(tween(320, easing = ease)) { it / 4 } + fadeIn(tween(280))) togetherWith
+                                (slideOutHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeOut(tween(220)))
+                            // KEMBALI: kebalikannya.
+                            i is Route.Player -> fadeIn(tween(240)) togetherWith (slideOutVertically(tween(300, easing = ease)) { it / 6 } + fadeOut(tween(240)))
+                            i is Route.Detail -> fadeIn(tween(240)) togetherWith fadeOut(tween(220))
+                            else -> (slideInHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeIn(tween(280))) togetherWith
+                                (slideOutHorizontally(tween(320, easing = ease)) { it / 4 } + fadeOut(tween(220)))
+                        }
+                        ct.also { it.targetContentZIndex = if (dir < 0) -1f else 1f }
+                    },
                     label = "route",
                 ) { r ->
+                    val animScope = this
+                    CompositionLocalProvider(
+                        LocalSharedScope provides this@SharedTransitionLayout,
+                        LocalAnimScope provides animScope,
+                        LocalReduceMotion provides reduceMotion,
+                    ) {
                     when (r) {
                         Route.Home -> HomeScreen(vm)
                         Route.Calendar -> CalendarScreen(vm)
@@ -173,6 +234,9 @@ fun App(vm: AppVM) {
                         is Route.Player -> PlayerScreen(vm, r)
                         is Route.Auth -> AuthScreen(vm, r.signUp)
                     }
+                    }
+                }
+                }
                 }
                 if (vm.route == Route.Home) TopBar(vm)
                 if (vm.route !is Route.Player && vm.route !is Route.Auth) TabBar(vm, Modifier.align(Alignment.BottomCenter))
@@ -241,6 +305,7 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
         T(Route.Search, I18n.t("tab_search", "Search"), Icons.Outlined.Search, Icons.Filled.Search),
         T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), Icons.Outlined.Person, Icons.Filled.Person),
     )
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Row(
         // Solid + garis tipis di atas, supaya konten yang digulir tidak tembus di balik tab bar.
         modifier.fillMaxWidth().background(Bg)
@@ -249,17 +314,19 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
     ) {
         tabs.forEach { t ->
             val sel = vm.tab == t.r
-            Column(Modifier.weight(1f).fillMaxHeight().clickable { vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
+            Column(Modifier.weight(1f).fillMaxHeight().clickable { if (!sel) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                 val tint by animateColorAsState(if (sel) RedText else NavOff, tween(200), label = "tabTint")
                 val pill by animateColorAsState(if (sel) Red.copy(alpha = 0.30f) else Color.Transparent, tween(220), label = "tabPill")
                 // debug.33: pil melebar dengan pegas + ikon sedikit membesar saat aktif.
                 val pw by animateDpAsState(if (sel) 60.dp else 34.dp, spring(dampingRatio = 0.7f, stiffness = 500f), label = "tabPillW")
                 val isc by animateFloatAsState(if (sel) 1.12f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "tabIconScale")
+                val lblA by animateFloatAsState(if (sel) 1f else 0.72f, tween(200), label = "tabLabelA")
                 Box(Modifier.size(width = pw, height = 30.dp).clip(CircleShape).background(pill), contentAlignment = Alignment.Center) {
                     Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(24.dp).graphicsLayer { scaleX = isc; scaleY = isc }, tint = tint)
                 }
-                Text(t.label, fontSize = 11.5.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, color = tint, maxLines = 1)
+                Text(t.label, fontSize = 11.5.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, color = tint, maxLines = 1,
+                    modifier = Modifier.graphicsLayer { alpha = lblA })
             }
         }
     }

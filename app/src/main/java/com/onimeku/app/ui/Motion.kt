@@ -1,5 +1,19 @@
 package com.onimeku.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -80,8 +94,9 @@ fun SkeletonBox(modifier: Modifier = Modifier, radius: Dp = 12.dp) {
 fun Modifier.pressable(onClick: () -> Unit): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
+    val reduceP = LocalReduceMotion.current
     val sc by animateFloatAsState(
-        targetValue = if (pressed) 0.95f else 1f,
+        targetValue = if (pressed && !reduceP) 0.95f else 1f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
         label = "press",
     )
@@ -93,11 +108,12 @@ fun Modifier.pressable(onClick: () -> Unit): Modifier {
 /** Muncul pertama kali: memudar + naik halus, bisa diberi jeda untuk efek berurutan. */
 @Composable
 fun Modifier.fadeSlideIn(delayMs: Int = 0): Modifier {
-    var shown by remember { mutableStateOf(false) }
+    val reduce = LocalReduceMotion.current
+    var shown by remember { mutableStateOf(reduce) }
     LaunchedEffect(Unit) { shown = true }
     val a by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(durationMillis = 450, delayMillis = delayMs),
+        animationSpec = tween(durationMillis = if (reduce) 0 else 450, delayMillis = if (reduce) 0 else delayMs),
         label = "enter",
     )
     return this.graphicsLayer { alpha = a; translationY = (1f - a) * 36f }
@@ -147,4 +163,58 @@ fun SkeletonRows(count: Int = 4) {
             }
         }
     }
+}
+
+
+// ====================================================================== GERAK LANJUTAN
+/** True bila pengguna mematikan animasi di Pengaturan Android (Opsi pengembang / Aksesibilitas). */
+val LocalReduceMotion = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalSharedScope = androidx.compose.runtime.staticCompositionLocalOf<SharedTransitionScope?> { null }
+val LocalAnimScope = androidx.compose.runtime.staticCompositionLocalOf<AnimatedVisibilityScope?> { null }
+
+/** Kunci elemen bersama terakhir yang diketuk (poster -> hero Detail). */
+object SharedArt { var key: String? = null }
+
+/** Elemen bersama: poster "terbang" ke hero Detail dan kembali. Tanpa efek bila kunci/scope tidak ada. */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sharedArt(key: String?): Modifier {
+    val ss = LocalSharedScope.current
+    val av = LocalAnimScope.current
+    if (key == null || ss == null || av == null) return this
+    return with(ss) { this@sharedArt.sharedElement(rememberSharedContentState(key = key), animatedVisibilityScope = av) }
+}
+
+object Entered { val keys = HashSet<String>() }
+
+/** Muncul berurutan (stagger) hanya sekali per item selama aplikasi hidup; tidak mengulang saat digulir kembali. */
+@Composable
+fun Modifier.staggerIn(key: String, index: Int): Modifier {
+    val reduce = LocalReduceMotion.current
+    val already = remember(key) { reduce || key in Entered.keys }
+    var shown by remember(key) { mutableStateOf(already) }
+    LaunchedEffect(key) { Entered.keys.add(key); shown = true }
+    val a by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(durationMillis = if (already) 0 else 380, delayMillis = if (already) 0 else minOf(index, 8) * 45),
+        label = "stagger",
+    )
+    return this.graphicsLayer { alpha = a; translationY = (1f - a) * 28f; val s = 0.94f + 0.06f * a; scaleX = s; scaleY = s }
+}
+
+/** Ikon yang berubah bentuk dengan pantulan pegas (mis. + menjadi centang). */
+@Composable
+fun MorphIcon(on: Boolean, onIcon: ImageVector, offIcon: ImageVector, desc: String, size: Dp, tint: Color) {
+    val reduce = LocalReduceMotion.current
+    AnimatedContent(
+        targetState = on,
+        transitionSpec = {
+            if (reduce) EnterTransition.None togetherWith ExitTransition.None
+            else (scaleIn(spring(0.45f, 450f), initialScale = 0.3f) + fadeIn(tween(120))) togetherWith
+                (scaleOut(tween(100), targetScale = 0.6f) + fadeOut(tween(80)))
+        },
+        label = "morph",
+    ) { st -> Icon(if (st) onIcon else offIcon, desc, Modifier.size(size), tint = tint) }
 }

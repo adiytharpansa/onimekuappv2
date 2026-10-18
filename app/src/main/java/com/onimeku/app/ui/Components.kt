@@ -1,5 +1,6 @@
 package com.onimeku.app.ui
 
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -169,11 +170,12 @@ val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.
 fun Poster(
     a: Anime, w: Dp?, modifier: Modifier = Modifier, ep: Boolean = false, badges: Boolean = false,
     label: Boolean = false, rank: Int? = null, meta: Pair<String, String>? = null,
-    progress: Float? = null, compact: Boolean = false, onClick: () -> Unit,
+    progress: Float? = null, compact: Boolean = false, sharedKey: String? = null, onClick: () -> Unit,
 ) {
     val sized = if (w != null) modifier.width(w) else modifier.fillMaxWidth()
     Box(
-        sized.pressable(onClick).aspectRatio(if (ep) 232f / 150f else 232f / 311f)
+        sized.pressable { if (sharedKey != null) SharedArt.key = sharedKey; onClick() }.aspectRatio(if (ep) 232f / 150f else 232f / 311f)
+            .sharedArt(sharedKey)
             .clip(RoundedCornerShape(if (compact) 12.dp else 18.dp)).artBackground(a),
     ) {
         val img = if (ep) {
@@ -228,9 +230,9 @@ fun Poster(
 
 /** Poster + judul di bawahnya (dua baris tetap, agar baris rail sejajar rapi). */
 @Composable
-fun PosterCard(a: Anime, w: Dp, rank: Int? = null, onClick: () -> Unit) {
-    Column(Modifier.width(w)) {
-        Poster(a, w, badges = true, rank = rank, onClick = onClick)
+fun PosterCard(a: Anime, w: Dp, rank: Int? = null, sharedKey: String? = null, index: Int = 0, onClick: () -> Unit) {
+    Column(Modifier.width(w).let { m -> if (sharedKey != null) m.staggerIn(sharedKey, index) else m }) {
+        Poster(a, w, badges = true, rank = rank, sharedKey = sharedKey, onClick = onClick)
         Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
@@ -238,9 +240,9 @@ fun PosterCard(a: Anime, w: Dp, rank: Int? = null, onClick: () -> Unit) {
 
 /** Kartu untuk grid (3 kolom di ponsel): poster ringkas + judul + genre. */
 @Composable
-fun Tile(a: Anime, vm: AppVM) {
-    Column {
-        Poster(a, null, badges = true, compact = true) { vm.go(Route.Detail(a.id)) }
+fun Tile(a: Anime, vm: AppVM, index: Int = 0) {
+    Column(Modifier.staggerIn("grid:${a.id}", index)) {
+        Poster(a, null, badges = true, compact = true, sharedKey = "grid:${a.id}") { vm.go(Route.Detail(a.id)) }
         Text(a.title, Modifier.padding(top = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(a.genres.take(2).joinToString(", "), fontSize = 11.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp),
@@ -271,7 +273,7 @@ fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
-        items(items, key = { it.id }) { a -> Box(Modifier.animateItem()) { Tile(a, vm) } }
+        itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(Modifier.animateItem()) { Tile(a, vm, i % 9) } }
     }
 }
 

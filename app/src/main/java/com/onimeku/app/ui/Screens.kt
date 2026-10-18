@@ -73,15 +73,24 @@ private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: Strin
         SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
         Rail {
             itemsIndexed(items, key = { _, a -> a.id }) { i, a ->
-                PosterCard(a, railW, rank = if (ranked) i + 1 else null) { vm.go(Route.Detail(a.id)) }
+                PosterCard(a, railW, rank = if (ranked) i + 1 else null, sharedKey = "row:$title:${a.id}", index = i) { vm.go(Route.Detail(a.id)) }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(vm: AppVM) {
+    // Skeleton memudar halus menjadi konten saat katalog tiba (bukan muncul tiba-tiba).
+    val loading = Catalog.all.isEmpty() && Catalog.loading
+    androidx.compose.animation.Crossfade(targetState = loading, animationSpec = androidx.compose.animation.core.tween(380), label = "homeLoad") { l ->
+        if (l) HomeSkeleton(heroHeight(), railW, bottomContentPadding()) else HomeContent(vm)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeContent(vm: AppVM) {
     val p = vm.p
     val heroH = heroHeight()
     if (Catalog.all.isEmpty()) {
@@ -226,7 +235,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
     }
     // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
     Box(Modifier.fillMaxWidth().height(heroH).clipToBounds()) {
-        HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) }
+        HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) { (pager.currentPage - i) + pager.currentPageOffsetFraction } }
         if (items.size > 1) {
             Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
                 items.indices.forEach { i ->
@@ -240,23 +249,30 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
 }
 
 @Composable
-private fun HeroPage(vm: AppVM, a: Anime) {
+private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
     val on = a.id in vm.p.myList
     val firstEp = a.available.firstOrNull() ?: 1
-    Box(Modifier.fillMaxSize().artBackground(a).clickable { vm.go(Route.Detail(a.id)) }) {
+    Box(Modifier.fillMaxSize().artBackground(a).clickable { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
         val req = rememberImg(com.onimeku.app.data.PosterHealer.posterFor(a))
         if (req == null) Box(Modifier.fillMaxSize().shimmer())
         else coil.compose.AsyncImage(
             model = req, contentDescription = a.title,
             // Parallax: gambar bergeser 35% dari jarak scroll.
-            modifier = Modifier.fillMaxSize().graphicsLayer { translationY = vm.homeScrollPx().coerceAtMost(4000) * 0.35f },
+            modifier = Modifier.fillMaxSize().sharedArt("hero:${a.id}").graphicsLayer {
+                translationY = vm.homeScrollPx().coerceAtMost(4000) * 0.35f
+                translationX = -pageOffset() * size.width * 0.3f // parallax: gambar lebih lambat dari halaman
+            },
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             alignment = Alignment.TopCenter,
         )
         Box(Modifier.fillMaxSize().drawBehind {
             drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.26f to Color.Transparent, 0.52f to Color(0x3314161F), 0.8f to Color(0xE614161F), 1f to Bg))
         })
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 44.dp)) {
+        Column(Modifier.align(Alignment.BottomStart).graphicsLayer {
+            val o = pageOffset()
+            alpha = (1f - kotlin.math.abs(o) * 1.6f).coerceIn(0f, 1f) // teks memudar saat geser
+            translationX = o * size.width * 0.2f
+        }.padding(start = 20.dp, end = 20.dp, bottom = 44.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 a.rating?.let { ScorePill(it) }
                 if (a.hd) Tag("HD", Red, Color.White)
@@ -279,7 +295,7 @@ private fun HeroPage(vm: AppVM, a: Anime) {
                         .background(if (on) Color.White else Color(0x59080910))
                         .border(1.dp, if (on) Color.White else Color(0x66FFFFFF), RoundedCornerShape(18.dp)),
                     contentAlignment = Alignment.Center,
-                ) { Icon(if (on) Icons.Filled.Check else Icons.Filled.Add, if (on) "Added" else "My List", Modifier.size(26.dp), tint = if (on) Bg else Color.White) }
+                ) { MorphIcon(on, Icons.Filled.Check, Icons.Filled.Add, if (on) "Added" else "My List", 26.dp, if (on) Bg else Color.White) }
             }
         }
     }
@@ -488,7 +504,7 @@ private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifie
 @Composable
 private fun ActionTile(
     icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier = Modifier,
-    on: Boolean = false, onClick: () -> Unit,
+    on: Boolean = false, iconOn: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
     Column(
@@ -496,7 +512,8 @@ private fun ActionTile(
             .border(1.dp, if (on) Red.copy(alpha = 0.7f) else Line, shape),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, null, Modifier.size(22.dp), tint = if (on) RedText else Color.White)
+        if (iconOn != null) MorphIcon(on, iconOn, icon, label, 22.dp, if (on) RedText else Color.White)
+        else Icon(icon, null, Modifier.size(22.dp), tint = if (on) RedText else Color.White)
         Text(label, Modifier.padding(top = 5.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium,
             color = if (on) RedText else InkSoft, maxLines = 1)
     }
@@ -606,7 +623,7 @@ fun DetailScreen(vm: AppVM, id: String) {
             item(key = "hero") {
                 // ===== HERO: gambar penuh lebar, parallax, judul menempel di bawahnya =====
                 Box(Modifier.fillMaxWidth().height(heroH).clipToBounds().artBackground(a)) {
-                    RealImage(a, Modifier.fillMaxSize().graphicsLayer {
+                    RealImage(a, Modifier.fillMaxSize().sharedArt(SharedArt.key?.takeIf { it.endsWith(":${a.id}") }).graphicsLayer {
                         val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
                         translationY = minOf(off * 0.45f, size.height * 0.12f)
                         scaleX = 1.15f; scaleY = 1.15f
@@ -636,8 +653,8 @@ fun DetailScreen(vm: AppVM, id: String) {
                             ?: if (resume == null) "${I18n.t("start_with", "Start with Episode")} ${a.available.firstOrNull() ?: 1}" else null,
                     ) { vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1)) }
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ActionTile(if (on) Icons.Filled.Check else Icons.Filled.Add, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
-                            Modifier.weight(1f), on = on) { vm.toggleML(id) }
+                        ActionTile(Icons.Filled.Add, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
+                            Modifier.weight(1f), on = on, iconOn = Icons.Filled.Check) { vm.toggleML(id) }
                         ActionTile(Icons.Outlined.Download, I18n.t("download_all", "Download all"), Modifier.weight(1f)) { vm.downloadAll(id) }
                         ActionTile(Icons.Outlined.Share, I18n.t("share", "Share"), Modifier.weight(1f)) { share() }
                     }

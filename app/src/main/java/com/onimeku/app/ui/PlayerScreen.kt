@@ -707,7 +707,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0xB3080910), 0.32f to Color(0x33080910), 0.6f to Color(0x33080910), 1f to Color(0xD9080910))))
 
                 // ---- Bar atas: kembali · judul · (kualitas/CC saat penuh) · kunci · layar penuh ----
-                Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 6.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.align(Alignment.TopStart).graphicsLayer { translationY = -(1f - uiA) * 28.dp.toPx() }.fillMaxWidth().padding(start = 6.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(42.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
@@ -740,9 +740,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         Chip("Retry", icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
                     }
                 } else {
+                    var rotB by remember { mutableStateOf(0f) }
+                    var rotF by remember { mutableStateOf(0f) }
+                    val rb by animateFloatAsState(rotB, tween(380), label = "rotBack")
+                    val rf by animateFloatAsState(rotF, tween(380), label = "rotFwd")
                     Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(26.dp)) {
-                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { seekBy(-10_000); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Replay10, "Back 10 seconds", Modifier.size(26.dp))
+                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { rotB -= 360f; seekBy(-10_000); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Replay10, "Back 10 seconds", Modifier.size(26.dp).graphicsLayer { rotationZ = rb })
                         }
                         Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
                             if (buffering) {
@@ -750,18 +754,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             } else {
                                 Box(Modifier.fillMaxSize().clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFFD01632), Red)))
                                     .pressable { player.playWhenReady = !player.playWhenReady; uiTick++ }, contentAlignment = Alignment.Center) {
-                                    Icon(if (wantPlay) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", Modifier.size(36.dp))
+                                    MorphIcon(wantPlay, Icons.Filled.Pause, Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", 36.dp, Color.White)
                                 }
                             }
                         }
-                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { seekBy(10_000); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Forward10, "Forward 10 seconds", Modifier.size(26.dp))
+                        Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x40000000)).pressable { rotF += 360f; seekBy(10_000); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Forward10, "Forward 10 seconds", Modifier.size(26.dp).graphicsLayer { rotationZ = rf })
                         }
                     }
                 }
 
                 // ---- Bawah: bilah seek + waktu ----
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = if (full) 28.dp else 14.dp)) {
+                Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().padding(horizontal = if (full) 28.dp else 14.dp)) {
                     Slider(pos.coerceIn(0f, dur.toFloat()), { dragging = true; pos = it },
                         valueRange = 0f..dur.toFloat(), modifier = Modifier.height(24.dp),
                         onValueChangeFinished = { player.seekTo((pos * 1000).toLong()); dragging = false },
