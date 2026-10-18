@@ -283,9 +283,13 @@ private fun heroHeight() = (LocalConfiguration.current.screenHeightDp * 0.64f).c
 private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
     // Hero selalu anime TERBARU secara realtime (perintah user 19 Okt 2026):
     // urut updatedAt API terbaru, bukan skor tertinggi — judul lama tamat
-    // tidak lagi mendominasi Beranda. Syarat: punya poster untuk sampul hero.
-    val items = Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { it.poster != null }.take(5)
-        .ifEmpty { Catalog.all.take(1) }
+    // tidak lagi mendominasi Beranda. Kualitas hero (perintah user 19 Okt
+    // 2026 "poster paling atas harus HD"): dari 30 terbaru, yang punya
+    // BANNER (karya lebar, resolusi tertinggi) didahulukan menurut
+    // kebaruan, lalu yang hanya punya poster. Syarat minimum: punya poster.
+    val pool = Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { it.poster != null }.take(30)
+    val items = (pool.filter { !it.banner.isNullOrBlank() } + pool.filter { it.banner.isNullOrBlank() })
+        .take(5).ifEmpty { Catalog.all.take(1) }
     if (items.isEmpty()) return
     val pager = rememberPagerState { items.size }
     LaunchedEffect(pager, items.size) {
