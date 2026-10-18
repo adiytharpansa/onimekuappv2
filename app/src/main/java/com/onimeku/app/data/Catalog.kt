@@ -70,6 +70,11 @@ object Catalog {
         val popular: List<String> = src.sortedWith(byScore).map { it.id }
         val top: List<String> = popular.take(10)
         val airing: List<String> = src.filter { it.apiStatus == "RELEASING" }.sortedWith(byScore).map { it.id }
+        /** Paling baru diperbarui dulu (realtime dari API) — untuk hero Beranda. */
+        val freshest: List<String> = src.sortedByDescending { it.updatedAt ?: "" }.map { it.id }
+        /** Sedang tayang, paling baru diperbarui dulu — untuk halaman Kalender. */
+        val airingFresh: List<String> = src.filter { it.apiStatus == "RELEASING" }
+            .sortedByDescending { it.updatedAt ?: "" }.map { it.id }
         val latest: List<String> = src.sortedWith(
             compareByDescending<Anime> { it.year }.thenByDescending { it.updatedAt ?: "" },
         ).map { it.id }
@@ -108,6 +113,12 @@ object Catalog {
 
     /** Sedang tayang (status RELEASING dari API), skor tertinggi dulu. */
     val airing: List<String> get() = d.airing
+
+    /** Seluruh katalog, paling baru diperbarui dulu (updatedAt API). */
+    val freshest: List<String> get() = d.freshest
+
+    /** Sedang tayang, paling baru diperbarui dulu (updatedAt API). */
+    val airingFresh: List<String> get() = d.airingFresh
 
     /** Rilisan terbaru: tahun paling baru, lalu paling baru diperbarui. */
     val latest: List<String> get() = d.latest

@@ -220,7 +220,11 @@ private fun heroHeight() = (LocalConfiguration.current.screenHeightDp * 0.64f).c
 /** Carousel hero: 5 judul teratas, geser manual atau otomatis tiap 5,5 dtk, indikator animasi, parallax saat digulir. */
 @Composable
 private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
-    val items = Catalog.top.take(5).mapNotNull { Catalog.byId[it] }.ifEmpty { Catalog.all.take(1) }
+    // Hero selalu anime TERBARU secara realtime (perintah user 19 Okt 2026):
+    // urut updatedAt API terbaru, bukan skor tertinggi — judul lama tamat
+    // tidak lagi mendominasi Beranda. Syarat: punya poster untuk sampul hero.
+    val items = Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { it.poster != null }.take(5)
+        .ifEmpty { Catalog.all.take(1) }
     if (items.isEmpty()) return
     val pager = rememberPagerState { items.size }
     LaunchedEffect(pager, items.size) {
@@ -302,8 +306,21 @@ private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
 fun CalendarScreen(vm: AppVM) {
     val ensure = LocalEnsureNotif.current
     val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
-    val dow = days[vm.calDay].dayOfWeek.value % 7
-    val list = remember(dow, Catalog.all) { Catalog.all.filter { it.day == dow }.sortedBy { it.time } }
+    // Kalender SELALU berisi (perintah user 19 Okt 2026): API tidak
+    // menyediakan jadwal tayang per hari, jadi isi halaman diturunkan
+    // dari katalog realtime — judul yang diperbarui pada tanggal
+    // terpilih, lalu daftar Sedang Tayang terbaru yang selalu tampil
+    // di bawahnya agar halaman tidak pernah kosong.
+    val selDate = days[vm.calDay]
+    val dayList = remember(selDate, Catalog.all) {
+        Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { a ->
+            runCatching {
+                java.time.OffsetDateTime.parse(a.updatedAt)
+                    .atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() == selDate
+            }.getOrDefault(false)
+        }
+    }
+    val airingList = remember(Catalog.all) { Catalog.airingFresh.mapNotNull { Catalog.byId[it] }.take(40) }
     // Jadwal ASLI dari API bila sudah termuat: hanya judul dengan episode
     // berikutnya yang benar-benar terjadwal pada tanggal terpilih.
     val sched = vm.schedule
@@ -348,13 +365,27 @@ fun CalendarScreen(vm: AppVM) {
                     onOpen = { vm.go(Route.Detail(a.id)) },
                 ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
             }
-        } else if (list.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
-        else list.forEach { a ->
-            val on = a.id in vm.p.remind
-            ItemRow(
-                a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
-                onOpen = { vm.go(Route.Detail(a.id)) },
-            ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+        } else {
+            if (dayList.isNotEmpty()) {
+                SectionHead(I18n.t("sec_new_eps", "New Episode Releases"))
+                dayList.forEach { a ->
+                    val on = a.id in vm.p.remind
+                    ItemRow(
+                        a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
+                        onOpen = { vm.go(Route.Detail(a.id)) },
+                    ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            SectionHead(I18n.t("sec_airing", "Airing") + " · " + I18n.t("sec_latest", "Latest"))
+            if (airingList.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
+            else airingList.forEach { a ->
+                val on = a.id in vm.p.remind
+                ItemRow(
+                    a, thumbLabel = "", title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
+                    onOpen = { vm.go(Route.Detail(a.id)) },
+                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+            }
         }
         } }
     }
