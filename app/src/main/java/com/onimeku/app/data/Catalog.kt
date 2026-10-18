@@ -29,6 +29,7 @@ data class Anime(
     val apiStatus: String? = null,
     val updatedAt: String? = null,
     val score: Double? = null,
+    val anilistId: Int? = null,
 ) {
     val status: String
         get() = when (apiStatus) {

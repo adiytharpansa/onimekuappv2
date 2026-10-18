@@ -32,6 +32,7 @@ data class ApiAnime(
     val latestEpisode: Int? = null,
     val episodeNumbers: List<Int> = emptyList(),
     val updatedAt: String? = null,
+    val anilistId: Int? = null,
 )
 
 @Serializable
@@ -118,7 +119,24 @@ object ApiClient {
         val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime/${enc(id)}/episode/$ep"))
         return r.data
     }
+
+    /** Poster/cover pengganti (Kitsu) untuk judul berposter AniList. */
+    suspend fun resolvePoster(anilistId: Int): PosterResp? {
+        return try {
+            val r = json.decodeFromString<PosterResp>(getText("$BASE/api/poster/$anilistId"))
+            if (r.ok) r else null
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
+
+@Serializable
+data class PosterResp(
+    val ok: Boolean = false,
+    val poster: String? = null,
+    val cover: String? = null,
+)
 
 private fun ApiAnime.toAnime(): Anime {
     val latest = latestEpisode ?: episodeNumbers.maxOrNull() ?: 0
@@ -153,5 +171,6 @@ private fun ApiAnime.toAnime(): Anime {
         apiStatus = status,
         updatedAt = updatedAt,
         score = score,
+        anilistId = anilistId,
     )
 }

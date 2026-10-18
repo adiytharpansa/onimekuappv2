@@ -42,6 +42,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var playing by mutableStateOf(false)
 
     init {
+        PosterHealer.init(app)
         Reminders.rescheduleAll(app, s)
         reloadCatalog()
     }

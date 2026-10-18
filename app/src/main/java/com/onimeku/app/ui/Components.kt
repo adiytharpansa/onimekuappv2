@@ -133,7 +133,11 @@ fun Poster(
         sized.aspectRatio(if (ep) 232f / 150f else 232f / 311f).clip(RoundedCornerShape(18.dp))
             .artBackground(a).clickable(onClick = onClick),
     ) {
-        val img = if (ep) (a.banner ?: a.poster) else a.poster
+        val img = if (ep) {
+            com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
+        } else {
+            com.onimeku.app.data.PosterHealer.posterFor(a)
+        }
         if (!img.isNullOrBlank()) {
             coil.compose.AsyncImage(
                 model = img, contentDescription = null,
