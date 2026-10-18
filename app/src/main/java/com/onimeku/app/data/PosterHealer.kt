@@ -39,7 +39,8 @@ object PosterHealer {
         val u = url.lowercase()
         return u.contains("anilist.co") || u.contains("samehadaku") ||
             u.contains("placeholder") || u.contains("placehold") ||
-            u.contains("dummyimage") || u.contains("picsum") || u.contains("ui-avatars")
+            u.contains("dummyimage") || u.contains("picsum") || u.contains("ui-avatars") ||
+            u.contains("backblazeb2") || u.contains("amazonaws.com")
     }
 
     fun posterFor(a: Anime): String? {

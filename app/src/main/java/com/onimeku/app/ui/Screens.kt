@@ -139,6 +139,17 @@ fun CalendarScreen(vm: AppVM) {
     val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
     val dow = days[vm.calDay].dayOfWeek.value % 7
     val list = Catalog.all.filter { it.day == dow }.sortedBy { it.time }
+    // Jadwal ASLI dari API bila sudah termuat: hanya judul dengan episode
+    // berikutnya yang benar-benar terjadwal pada tanggal terpilih.
+    val sched = vm.schedule
+    val realList = if (sched.isNotEmpty()) {
+        val sel = days[vm.calDay]
+        Catalog.all.mapNotNull { a ->
+            val s = sched[a.id] ?: return@mapNotNull null
+            val dt = java.time.Instant.ofEpochSecond(s.airingAt).atZone(java.time.ZoneId.systemDefault())
+            if (dt.toLocalDate() == sel) Triple(a, s, dt) else null
+        }.sortedBy { it.second.airingAt }
+    } else null
     Page {
         RootTitle("Release Calendar", "Episodes airing this week.")
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -157,7 +168,17 @@ fun CalendarScreen(vm: AppVM) {
             }
         }
         Spacer(Modifier.height(8.dp))
-        if (list.isEmpty()) EmptyBox("Nothing airing", "No new episodes are scheduled for this day.")
+        if (realList != null) {
+            if (realList.isEmpty()) EmptyBox("Nothing airing", "No new episodes are scheduled for this day.")
+            else realList.forEach { (a, s, dt) ->
+                val on = a.id in vm.p.remind
+                ItemRow(
+                    a, thumbLabel = dt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), title = a.title,
+                    sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
+                    onOpen = { vm.go(Route.Detail(a.id)) },
+                ) { Chip(if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+            }
+        } else if (list.isEmpty()) EmptyBox("Nothing airing", "No new episodes are scheduled for this day.")
         else list.forEach { a ->
             val on = a.id in vm.p.remind
             ItemRow(

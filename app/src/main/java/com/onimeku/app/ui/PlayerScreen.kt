@@ -91,7 +91,19 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false
         val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
-        if (res == null || (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank() && res.embedUrl.isNullOrBlank())) {
+        if (res == null) {
+            // API tak terjangkau (offline): bila episode ini sudah terunduh
+            // penuh, putar dari cache unduhan — unduhan harus benar-benar
+            // bisa diputar tanpa jaringan.
+            val dl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.onimeku.app.data.Downloads.states(ctx)[com.onimeku.app.data.Downloads.key(r.id, r.ep)]
+            }
+            if (dl != null && dl.state == androidx.media3.exoplayer.offline.Download.STATE_COMPLETED) {
+                pb = com.onimeku.app.data.Playback(streamUrl = dl.request.uri.toString(), episode = r.ep)
+            } else {
+                pbFailed = true
+            }
+        } else if (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank() && res.embedUrl.isNullOrBlank()) {
             pbFailed = true
         } else {
             // Subtitle diunduh ke penyimpanan lokal lebih dulu (dengan Referer

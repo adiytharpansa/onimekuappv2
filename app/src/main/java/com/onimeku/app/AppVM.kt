@@ -38,6 +38,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var welcomeOpen by mutableStateOf(!s.welcomeSeen); private set
     var calDay by mutableIntStateOf(0)
     val downloading = mutableStateMapOf<String, Int>()
+
+    /** Jadwal tayang asli dari API: id katalog -> episode berikutnya + waktu. */
+    var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())
+        private set
     var inPip by mutableStateOf(false)
     var playing by mutableStateOf(false)
 
@@ -119,6 +123,13 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         }
         Catalog.loading = Catalog.all.isEmpty()
         Catalog.loadFailed = false
+        viewModelScope.launch {
+            try {
+                schedule = ApiClient.fetchSchedule().associateBy { it.id }
+            } catch (e: Exception) {
+                // Jadwal asli gagal dimuat: Calendar memakai cadangan lama.
+            }
+        }
         viewModelScope.launch {
             try {
                 val items = ApiClient.fetchCatalog(

@@ -168,6 +168,12 @@ object ApiClient {
         }
     }
 
+    /** Jadwal tayang asli dari API (episode berikutnya per judul). */
+    suspend fun fetchSchedule(): List<ApiScheduleItem> {
+        val r = json.decodeFromString<ScheduleResp>(getTextRetry("$BASE/api/schedule"))
+        return if (r.ok) r.data.filter { it.id.isNotBlank() && it.airingAt > 0 } else emptyList()
+    }
+
     suspend fun fetchDetail(id: String): Anime? {
         val r = json.decodeFromString<DetailResp>(getText("$BASE/api/anime/${enc(id)}"))
         return r.data?.takeIf { it.id.isNotBlank() }?.toAnime()
@@ -188,6 +194,19 @@ object ApiClient {
         }
     }
 }
+
+@Serializable
+data class ApiScheduleItem(
+    val id: String = "",
+    val ep: Int = 0,
+    val airingAt: Long = 0,
+)
+
+@Serializable
+private data class ScheduleResp(
+    val ok: Boolean = false,
+    val data: List<ApiScheduleItem> = emptyList(),
+)
 
 @Serializable
 data class PosterResp(
