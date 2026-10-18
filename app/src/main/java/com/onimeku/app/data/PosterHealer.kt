@@ -10,13 +10,15 @@ import kotlinx.coroutines.launch
 import java.util.Collections
 
 /**
- * Poster ber-host s4.anilist.co tidak terjangkau dari jaringan pengguna,
- * jadi untuk judul-judul itu poster/cover diganti padanan Kitsu-nya lewat
- * endpoint /api/poster/:anilistId milik API sendiri. Resolusi berjalan
- * malas (hanya untuk judul yang sedang tampil), hasilnya di-cache di
- * memori + SharedPreferences supaya tampil seketika di buka berikutnya.
- * Selama belum teresolusi (atau tak ada padanan), pemanggil menerima null
- * dan UI menampilkan latar gradasi bawaan.
+ * Poster ber-host s4.anilist.co tidak terjangkau dari jaringan pengguna
+ * (CDN-nya membalas 403 dari mana pun). Penyembuhannya kini hidup di
+ * SERVER (debug.31, perintah user: semua data poster dari API ini):
+ * my-anime-app menyelesaikan padanan Kitsu per anilistId dan
+ * menyajikannya langsung di respons katalog/detail, jadi di sini
+ * poster katalog yang masih ber-host rusak cukup disembunyikan
+ * (null -> latar gradasi) sampai API menyembuhkannya — aplikasi
+ * TIDAK lagi menelepon Kitsu atau API lain sendiri. Cache lokal
+ * hanya menyimpan URL yang disajikan API.
  */
 object PosterHealer {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -28,6 +30,12 @@ object PosterHealer {
     fun init(ctx: Context) {
         if (prefs == null) {
             prefs = ctx.getSharedPreferences("poster_cache", Context.MODE_PRIVATE)
+            // Sekali saja (debug.31): kosongkan cache lama yang berisi
+            // URL hasil resolusi langsung aplikasi (era debug.26-.30) —
+            // mulai sekarang poster hanya berasal dari API.
+            if (prefs?.getBoolean("reset_v31", false) != true) {
+                prefs?.edit()?.clear()?.putBoolean("reset_v31", true)?.apply()
+            }
         }
     }
 

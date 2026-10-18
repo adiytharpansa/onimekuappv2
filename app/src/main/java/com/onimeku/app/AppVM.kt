@@ -39,6 +39,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     var s by mutableStateOf(store.load()); private set
     var stack by mutableStateOf<List<Route>>(listOf(Route.Home)); private set
+    // Keadaan fullscreen pemutar disimpan di VM (debug.31): sebelumnya di
+    // PlayerReady yang dibongkar tiap pindah episode sehingga fullscreen
+    // selalu lepas. Direset otomatis saat rute teratas bukan pemutar.
+    var playerFull by mutableStateOf(false)
     var toastMsg by mutableStateOf<String?>(null); private set
     var welcomeOpen by mutableStateOf(!s.welcomeSeen); private set
     var calDay by mutableIntStateOf(0)
@@ -220,10 +224,11 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     val p: Profile get() = s.profiles[s.pi]
 
     // ---------- navigation ----------
-    fun go(r: Route) { stack = stack + r }
-    fun back() { stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home) }
-    fun setTab(r: Route) { stack = listOf(r) }
-    fun replaceTop(r: Route) { stack = stack.dropLast(1) + r }
+    fun go(r: Route) { stack = stack + r; afterNav() }
+    fun back() { stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
+    fun setTab(r: Route) { stack = listOf(r); afterNav() }
+    fun replaceTop(r: Route) { stack = stack.dropLast(1) + r; afterNav() }
+    private fun afterNav() { if (stack.lastOrNull() !is Route.Player) playerFull = false }
     fun openSettings() { stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
 
     fun toast(m: String) {
@@ -311,22 +316,27 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         if (hasDl(id, ep)) { toast("Already saved offline"); return }
         val free = try { android.os.StatFs(app.filesDir.path).availableBytes } catch (e: Exception) { Long.MAX_VALUE }
         if (free < 300L * 1024 * 1024) { toast("Not enough storage. Free up some space and try again."); return }
-        viewModelScope.launch {
-            val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
-            val url = pb?.streamUrl
-            if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
-                toast("This title can't be downloaded")
-                return@launch
-            }
-            if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
-            downloading[k] = 0
-            Downloads.enqueue(app, id, ep, url, pb.referer) {
-                downloading.remove(k)
-                upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
-                toast("Download failed to start: Episode $ep")
-            }
-            toast("Download started: Episode $ep")
+        viewModelScope.launch { startDownload(id, ep) }
+    }
+
+    /** Isi unduhan (ambil data putar + antrekan). Dipisah dari download()
+     *  agar downloadAll bisa menjalankannya BERURUTAN (debug.31). */
+    private suspend fun startDownload(id: String, ep: Int) {
+        val k = "$id:$ep"
+        val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
+        val url = pb?.streamUrl
+        if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
+            toast("This title can't be downloaded")
+            return
         }
+        if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
+        downloading[k] = 0
+        Downloads.enqueue(app, id, ep, url, pb.referer) {
+            downloading.remove(k)
+            upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
+            toast("Download failed to start: Episode $ep")
+        }
+        toast("Download started: Episode $ep")
     }
 
     fun downloadAll(id: String) {
@@ -335,7 +345,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val todo = nums.filter { !hasDl(id, it) }
         if (todo.isEmpty()) { toast("All episodes already saved"); return }
         toast("Starting ${todo.size} downloads")
-        for (n in todo) download(id, n)
+        // Berurutan (debug.31): satu pengambilan data putar pada satu
+        // waktu. Sebelumnya semua episode menembak fetchPlayback paralel —
+        // untuk judul ratusan episode itu membanjiri jaringan dan hulu.
+        viewModelScope.launch { for (n in todo) startDownload(id, n) }
     }
 
     fun removeDl(id: String, ep: Int) {
@@ -350,6 +363,32 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         downloading.clear()
         upd { it.copy(downloads = emptyList()) }
         toast("All downloads removed")
+    }
+
+    // ---- Komentar per judul (debug.31; backend Supabase, data/Comments.kt) ----
+    var comments by mutableStateOf<List<com.onimeku.app.data.CommentRow>>(emptyList()); private set
+    var commentsBusy by mutableStateOf(false); private set
+    fun loadComments(id: String) {
+        viewModelScope.launch {
+            commentsBusy = true
+            comments = com.onimeku.app.data.Comments.list(id, s.account)
+            commentsBusy = false
+        }
+    }
+    fun postComment(id: String, body: String) {
+        val acc = s.account ?: return
+        val text = body.trim()
+        if (text.isEmpty()) return
+        viewModelScope.launch {
+            if (com.onimeku.app.data.Comments.post(acc, id, p.name, text)) loadComments(id)
+            else toast("Comment failed to send")
+        }
+    }
+    fun deleteComment(id: String, commentId: Long) {
+        val acc = s.account ?: return
+        viewModelScope.launch {
+            if (com.onimeku.app.data.Comments.delete(acc, commentId)) loadComments(id)
+        }
     }
 
     fun saveProg(id: String, ep: Int, t: Int, dur: Int) {

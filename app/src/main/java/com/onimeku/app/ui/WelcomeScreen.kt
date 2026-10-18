@@ -30,6 +30,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.onimeku.app.AppVM
+import com.onimeku.app.I18n
 import kotlinx.coroutines.delay
 
 private val slides = listOf(
@@ -58,7 +59,7 @@ fun WelcomeScreen(vm: AppVM) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
             0.30f to Color.Transparent, 0.56f to Color(0xEB161821), 0.68f to Color(0xFF161821))))
 
-        Text("Skip for now", Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp).clip(CircleShape)
+        Text(I18n.t("skip_for_now", "Skip for now"), Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp).clip(CircleShape)
             .background(Color(0x8C14161F)).clickable { vm.closeWelcome() }.padding(horizontal = 14.dp, vertical = 8.dp),
             fontSize = 13.sp, fontWeight = FontWeight.Medium)
 

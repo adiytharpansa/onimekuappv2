@@ -1,3 +1,14 @@
+## v1.0.0-debug.31 (belum dirilis — menunggu perintah): "bereskan sisanya"
+- AKUN AKTIF: secret CI ONIMEKU_SUPABASE_URL/KEY terpasang (proyek user sendiri); backend Supabase (user_state + RLS + fungsi delete-account) dideploy. Masuk/daftar/sinkron/hapus akun kini berfungsi.
+- KOMENTAR per judul di halaman Detail (tabel comments + RLS: baca publik, tulis/hapus milik sendiri, wajib masuk).
+- BAHASA INDONESIA berfungsi: objek I18n + Settings.lang; tab, Beranda, Detail, pemutar, Unduhan, Kalender, Profil/Pengaturan, layar akun & sambutan. Isi data (judul/sinopsis) dan naskah hukum tidak diterjemahkan.
+- TARIK-UNTUK-SEGAR Beranda buatan sendiri (koneksi gulir bersarang; tanpa PullToRefreshBox yang dulu crash).
+- FULLSCREEN bertahan saat pindah episode (keadaan dipindah ke AppVM, direset saat keluar dari pemutar); downloadAll kini BERURUTAN (satu fetchPlayback pada satu waktu).
+- LOGO kembali ke merah karya pemilik #F20A17 (token LogoRed: logo dalam aplikasi, foreground launcher, ikon Play Store). Tema antarmuka tetap crimson.
+- BACKUP: dataExtractionRules + fullBackupContent mengecualikan onimeku_secure dari cadangan/pindah HP (kunci Keystore tidak ikut pindah; token hasil restore tidak lagi jadi sampah tak terbaca).
+- POSTER: penyembuhan dipindah ke SERVER my-anime-app (poster_map persisten + resolusi Kitsu server-side, URL dikanonikkan ke media.kitsu.app). Aplikasi TIDAK lagi menelepon Kitsu: resolvePoster kembali null dan cache poster lama direset sekali (reset_v31) — semua data poster/stream/download kini dari API sendiri.
+- Yang SENGAJA tidak dikerjakan atas perintah user: build rilis Play Store (AAB/R8) — ditunda.
+
 # Perbaikan pengingat (18 Okt 2026, dari Dokumen Gabungan) — diterapkan agen sebagai debug.29
 
 - `Reminders.kt`: pengingat mingguan tidak lagi mati sesudah bunyi pertama — `ReminderWorker` kini meneruskan detail hasil `fetchDetail` ke `Reminders.schedule(...)` (katalog kosong di proses worker membuat penjadwalan ulang sebelumnya diam-diam batal).

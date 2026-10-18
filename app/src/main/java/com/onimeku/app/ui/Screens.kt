@@ -37,6 +37,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.onimeku.app.AppVM
+import com.onimeku.app.I18n
 import com.onimeku.app.Route
 import com.onimeku.app.data.Anime
 import com.onimeku.app.data.Catalog
@@ -85,20 +88,20 @@ fun HomeScreen(vm: AppVM) {
             HomeSkeleton(heroH, railW, bottomContentPadding())
         } else {
             Page(extraTop = 64.dp) {
-                RootTitle("Home")
-                EmptyBox("Catalog unavailable", "The catalog could not be loaded. Check your connection, then try again.") {
+                RootTitle(I18n.t("home", "Home"))
+                EmptyBox(I18n.t("catalog_unavail_t", "Catalog unavailable"), I18n.t("catalog_unavail_b", "The catalog could not be loaded. Check your connection, then try again.")) {
                     Btn("Try again", BtnStyle.Play) { vm.reloadCatalog() }
                 }
             }
         }
         return
     }
-    // CATATAN PERBAIKAN (agen, 18 Okt 2026): PullToRefreshBox dari dokumen
-    // diganti Box polos — di emulator CI, Home CRASH dengan
-    // "Unsupported concurrent change during composition" yang stack-nya
-    // menembus LazyLayoutPrefetch; PullToRefreshBox (material3 1.3) adalah
-    // tersangka utama (state-nya ditulis saat layout). Tarik-untuk-segarkan
-    // dikorbankan sementara demi Home yang stabil; vm.refresh() dipertahankan.
+    // Tarik-untuk-segar BUATAN SENDIRI (debug.31): riwayatnya,
+    // PullToRefreshBox material3 1.3 membuat Home crash di emulator
+    // (build .17) sehingga fitur ini dimatikan. Implementasi sekarang
+    // tidak memakai komponen perpustakaan: koneksi gulir bersarang
+    // mengakumulasi delta tarikan saat daftar di paling atas; lewat
+    // ambang 90dp -> vm.refresh(). Risiko crash jalur lama tidak ada.
     // LazyColumn: hanya baris yang terlihat (+ prefetch) yang dikomposisi. Dulu seluruh baris
     // (belasan rail genre) digambar sekaligus saat Home dibuka.
     val base = p.base?.let { Catalog.byId[it] }
@@ -107,14 +110,40 @@ fun HomeScreen(vm: AppVM) {
     val lastT = last?.let { p.prog["${it.id}:${it.ep}"] }
     val lastAnime = last?.let { Catalog.byId[it.id] }
     val fresh = Catalog.new
-    LazyColumn(Modifier.fillMaxSize(), state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
+    var pullPx by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val ptrThresholdPx = with(density) { 90.dp.toPx() }
+    val ptrConn = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): Offset {
+                val atTop = vm.homeScroll.firstVisibleItemIndex == 0 && vm.homeScroll.firstVisibleItemScrollOffset == 0
+                if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput && atTop && available.y > 0f && !vm.refreshing) {
+                    pullPx = (pullPx + available.y * 0.5f).coerceAtMost(340f)
+                    return Offset(0f, available.y)
+                }
+                if (pullPx > 0f && available.y < 0f) {
+                    val used = minOf(pullPx, -available.y)
+                    pullPx -= used
+                    return Offset(0f, -used)
+                }
+                return Offset.Zero
+            }
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                if (pullPx > ptrThresholdPx) vm.refresh()
+                pullPx = 0f
+                return super.onPreFling(available)
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().nestedScroll(ptrConn).graphicsLayer { translationY = pullPx }, state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
         item(key = "hero", contentType = "hero") { Hero(vm, heroH) }
 
         if (last != null && lastT != null && lastAnime != null) {
             item(key = "continue", contentType = "rail") {
                 Column(Modifier.fadeSlideIn(0)) {
                     Spacer(Modifier.height(SectionGap))
-                    SectionHead("Continue Watching")
+                    SectionHead(I18n.t("sec_continue", "Continue Watching"))
                     Rail {
                         item {
                             Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(lastT)}") {
@@ -126,14 +155,14 @@ fun HomeScreen(vm: AppVM) {
             }
         }
         if (base != null && similar.isNotEmpty()) {
-            item(key = "because", contentType = "rail") { PosterRow("Because you watched ${base.title}", similar, vm, seeAll = null, delayMs = 0) }
+            item(key = "because", contentType = "rail") { PosterRow("${I18n.t("sec_because", "Because you watched")} ${base.title}", similar, vm, seeAll = null, delayMs = 0) }
         }
-        item(key = "top", contentType = "rail") { PosterRow("Top Hits Anime", Catalog.top, vm, seeAll = "top", ranked = true, delayMs = 0) }
+        item(key = "top", contentType = "rail") { PosterRow(I18n.t("sec_top", "Top Hits Anime"), Catalog.top, vm, seeAll = "top", ranked = true, delayMs = 0) }
         if (fresh.isNotEmpty()) {
             item(key = "new", contentType = "rail") {
                 Column(Modifier.fadeSlideIn(70)) {
                     Spacer(Modifier.height(SectionGap))
-                    SectionHead("New Episode Releases") { vm.go(Route.SeeAll("new")) }
+                    SectionHead(I18n.t("sec_new_eps", "New Episode Releases")) { vm.go(Route.SeeAll("new")) }
                     Rail {
                         items(fresh, key = { it.first }) { (id, ep, whenTxt) ->
                             Catalog.byId[id]?.let { a ->
@@ -145,10 +174,10 @@ fun HomeScreen(vm: AppVM) {
             }
         }
         // delayMs = -1: tanpa animasi masuk (baris di bawah layar tidak mengulang animasi saat digulir kembali).
-        item(key = "airing", contentType = "rail") { PosterRow("Airing Now", Catalog.airing.take(12), vm, seeAll = "airing", delayMs = 140) }
-        item(key = "popular", contentType = "rail") { PosterRow("Popular", Catalog.popular.take(12), vm, seeAll = "popular", delayMs = -1) }
+        item(key = "airing", contentType = "rail") { PosterRow(I18n.t("sec_airing", "Airing Now"), Catalog.airing.take(12), vm, seeAll = "airing", delayMs = 140) }
+        item(key = "popular", contentType = "rail") { PosterRow(I18n.t("sec_popular", "Popular"), Catalog.popular.take(12), vm, seeAll = "popular", delayMs = -1) }
         item(key = "latest", contentType = "rail") { PosterRow("Latest Releases", Catalog.latest.take(12), vm, seeAll = "latest", delayMs = -1) }
-        item(key = "donghua", contentType = "rail") { PosterRow("Donghua", Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = -1) }
+        item(key = "donghua", contentType = "rail") { PosterRow(I18n.t("sec_donghua", "Donghua"), Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = -1) }
         items(Catalog.topGenres, key = { "genre:$it" }, contentType = { "rail" }) { g ->
             PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g", delayMs = -1)
         }
@@ -156,12 +185,19 @@ fun HomeScreen(vm: AppVM) {
         item(key = "all", contentType = "all") {
             Column {
                 Spacer(Modifier.height(SectionGap))
-                SectionHead("All Anime") { vm.go(Route.SeeAll("all")) }
+                SectionHead(I18n.t("sec_all", "All Anime")) { vm.go(Route.SeeAll("all")) }
                 Box(Modifier.padding(horizontal = 16.dp)) {
-                    Btn("Browse all ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView, Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
+                    Btn("${I18n.t("browse_all", "Browse all")} ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView, Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
                 }
             }
         }
+    }
+    if (pullPx > 6f || vm.refreshing) {
+        Box(Modifier.align(Alignment.TopCenter).padding(top = 76.dp).size(38.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape), contentAlignment = Alignment.Center) {
+            if (vm.refreshing) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = Red, strokeWidth = 2.5.dp)
+            else androidx.compose.material3.CircularProgressIndicator(progress = { (pullPx / ptrThresholdPx).coerceIn(0f, 1f) }, Modifier.size(20.dp), color = Red, strokeWidth = 2.5.dp)
+        }
+    }
     }
 }
 
@@ -218,8 +254,8 @@ private fun HeroPage(vm: AppVM, a: Anime) {
             Text(a.genres.take(4).joinToString(", "), Modifier.padding(top = 10.dp), fontSize = 14.sp,
                 color = Color(0xFFF1E8EE), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Btn("Play", BtnStyle.Play, Icons.Filled.PlayCircleFilled) { vm.go(Route.Player(a.id, firstEp)) }
-                Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
+                Btn(I18n.t("play", "Play"), BtnStyle.Play, Icons.Filled.PlayCircleFilled) { vm.go(Route.Player(a.id, firstEp)) }
+                Btn(if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"), if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
                     if (on) Icons.Filled.Check else Icons.Filled.Add) { vm.toggleML(a.id) }
             }
         }
@@ -245,7 +281,7 @@ fun CalendarScreen(vm: AppVM) {
         }.sortedBy { it.second.airingAt }
     } else null
     Page {
-        RootTitle("Release Calendar", "Episodes airing this week.")
+        RootTitle(I18n.t("calendar_t", "Release Calendar"), I18n.t("calendar_sub", "Episodes airing this week."))
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             days.forEachIndexed { k, d ->
                 val sel = k == vm.calDay
@@ -267,22 +303,22 @@ fun CalendarScreen(vm: AppVM) {
             SkeletonRows(5)
         } else key(vm.calDay) { Column(Modifier.fadeSlideIn()) {
         if (realList != null) {
-            if (realList.isEmpty()) EmptyBox("Nothing airing", "No new episodes are scheduled for this day.")
+            if (realList.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
             else realList.forEach { (a, s, dt) ->
                 val on = a.id in vm.p.remind
                 ItemRow(
                     a, thumbLabel = dt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), title = a.title,
                     sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                     onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { Chip(if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+                ) { Chip(if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
             }
-        } else if (list.isEmpty()) EmptyBox("Nothing airing", "No new episodes are scheduled for this day.")
+        } else if (list.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
         else list.forEach { a ->
             val on = a.id in vm.p.remind
             ItemRow(
                 a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                 onOpen = { vm.go(Route.Detail(a.id)) },
-            ) { Chip(if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+            ) { Chip(if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
         }
         } }
     }
@@ -318,17 +354,17 @@ fun ItemRow(
 fun MyListScreen(vm: AppVM) {
     val l = vm.p.myList.mapNotNull { Catalog.byId[it] }
     AnimeGrid(l, vm) {
-        RootTitle("My List")
-        if (l.isEmpty()) EmptyBox("Your list is empty", "Tap My List on any anime to save it here.") { Btn("Browse anime", BtnStyle.Play) { vm.setTab(Route.Home) } }
+        RootTitle(I18n.t("tab_mylist", "My List"))
+        if (l.isEmpty()) EmptyBox(I18n.t("mylist_empty_t", "Your list is empty"), I18n.t("mylist_empty_b", "Tap My List on any anime to save it here.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
         else Text("${l.size} saved", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
     }
 }
 
 @Composable
 fun DownloadsScreen(vm: AppVM) = Page {
-    RootTitle("Download")
+    RootTitle(I18n.t("tab_download", "Download"))
     val d = vm.s.downloads
-    if (d.isEmpty()) EmptyBox("No downloads yet", "Open an anime and tap the download icon on an episode to watch it offline.") { Btn("Browse anime", BtnStyle.Play) { vm.setTab(Route.Home) } }
+    if (d.isEmpty()) EmptyBox(I18n.t("dl_none_t", "No downloads yet"), I18n.t("dl_none_b", "Open an anime and tap the download icon on an episode to watch it offline.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
     else {
         Text("${d.size} episode${if (d.size > 1) "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
         Box(Modifier.padding(bottom = 12.dp)) { Chip("Delete all", icon = Icons.Outlined.Delete) { vm.removeAllDl() } }
@@ -376,6 +412,8 @@ fun DetailScreen(vm: AppVM, id: String) {
     val epNums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val sim = Catalog.similar(id)
     val resume = vm.p.last?.takeIf { it.id == id }
+    var commentText by remember(id) { mutableStateOf("") }
+    LaunchedEffect(id) { if (com.onimeku.app.data.Comments.enabled) vm.loadComments(id) }
     val listState = rememberLazyListState()
     // LazyColumn: judul panjang (ratusan episode) tidak lagi digambar sekaligus.
     LazyColumn(
@@ -417,29 +455,29 @@ fun DetailScreen(vm: AppVM, id: String) {
             }
             Column(Modifier.fadeSlideIn(120)) {
                 Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Btn(if (resume != null) "Resume Ep ${resume.ep}" else "Play", BtnStyle.Play, Icons.Filled.PlayArrow, Modifier.weight(1f)) {
+                    Btn(if (resume != null) "${I18n.t("resume", "Resume Ep")} ${resume.ep}" else I18n.t("play", "Play"), BtnStyle.Play, Icons.Filled.PlayArrow, Modifier.weight(1f)) {
                         vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1))
                     }
-                    Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
+                    Btn(if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"), if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
                         if (on) Icons.Filled.Check else Icons.Filled.Add, Modifier.weight(1f)) { vm.toggleML(id) }
                 }
                 val shareCtx = androidx.compose.ui.platform.LocalContext.current
                 Row(Modifier.padding(top = 10.dp)) {
-                    Chip("Share") {
+                    Chip(I18n.t("share", "Share")) {
                         val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/$id")
                         }
-                        shareCtx.startActivity(android.content.Intent.createChooser(send, "Share").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        shareCtx.startActivity(android.content.Intent.createChooser(send, I18n.t("share", "Share")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
                 }
-                Box(Modifier.padding(top = 14.dp)) { Chip("Download all", icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
+                Box(Modifier.padding(top = 14.dp)) { Chip(I18n.t("download_all", "Download all"), icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
             }
             Column(Modifier.fadeSlideIn(200)) {
                 Text(a.synopsis, Modifier.padding(top = 18.dp).animateContentSize(), color = InkSoft, fontSize = 15.sp, lineHeight = 22.sp,
                     maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
                 if (a.synopsis.length > 180) {
-                    Text(if (expanded) "Show less" else "Read more", Modifier.padding(top = 6.dp).clickable { expanded = !expanded },
+                    Text(if (expanded) I18n.t("read_less", "Show less") else I18n.t("read_more", "Read more"), Modifier.padding(top = 6.dp).clickable { expanded = !expanded },
                         color = RedText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
@@ -450,7 +488,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                 }
             }
             Row(Modifier.padding(top = 26.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
-                Text("Episodes", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(I18n.t("episodes", "Episodes"), Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text("${epNums.size} available", fontSize = 13.sp, color = NavOff)
             }
             if (epNums.isEmpty()) Text("No episodes available yet.", color = NavOff, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
@@ -473,20 +511,68 @@ fun DetailScreen(vm: AppVM, id: String) {
                 }
             }
         }
+        // ==== Komentar (debug.31): backend Supabase (tabel comments).
+        // Tamu bisa membaca; menulis wajib masuk. Bagian ini hanya
+        // dirender bila backend akun aktif. ====
+        if (com.onimeku.app.data.Comments.enabled) {
+            item(key = "comments_head") {
+                Column(Modifier.padding(top = 28.dp)) {
+                    Text("${I18n.t("comments", "Comments")} (${vm.comments.size})", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    if (vm.s.account != null) {
+                        Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp)) {
+                                androidx.compose.foundation.text.BasicTextField(
+                                    commentText, { if (it.length <= 1000) commentText = it },
+                                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp),
+                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Red),
+                                    decorationBox = { inner -> if (commentText.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = 14.sp); inner() },
+                                )
+                            }
+                            Btn(I18n.t("comment_post", "Post"), BtnStyle.Solid) {
+                                vm.postComment(id, commentText); commentText = ""
+                            }
+                        }
+                    } else {
+                        Box(Modifier.padding(top = 14.dp)) {
+                            Chip(I18n.t("sign_in_to_comment", "Sign in to comment")) { vm.go(Route.Auth(false)) }
+                        }
+                    }
+                }
+            }
+            if (vm.commentsBusy && vm.comments.isEmpty()) {
+                item(key = "comments_busy") { Text("…", color = NavOff, modifier = Modifier.padding(top = 16.dp)) }
+            } else if (vm.comments.isEmpty()) {
+                item(key = "comments_empty") { Text(I18n.t("comment_empty", "No comments yet. Be the first."), color = NavOff, fontSize = 14.sp, modifier = Modifier.padding(top = 16.dp)) }
+            }
+            items(vm.comments, key = { "comment:${it.id}" }) { c ->
+                Column(Modifier.padding(top = 18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(c.author.ifBlank { "User" }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (c.user_id == vm.s.account?.userId) RedText else Color.White)
+                        Spacer(Modifier.weight(1f))
+                        Text(if (c.created_at.length >= 16) c.created_at.substring(0, 10) + " " + c.created_at.substring(11, 16) else "", fontSize = 12.sp, color = NavOff)
+                    }
+                    Text(c.body, fontSize = 14.sp, color = InkSoft, lineHeight = 20.sp, modifier = Modifier.padding(top = 4.dp))
+                    if (c.user_id == vm.s.account?.userId) {
+                        Text(I18n.t("comment_delete", "Delete"), fontSize = 12.sp, color = NavOff,
+                            modifier = Modifier.padding(top = 6.dp).clickable { vm.deleteComment(id, c.id) })
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun SeeAllScreen(vm: AppVM, key: String) {
     val (title, ids) = when {
-        key == "top" -> "Top Hits Anime" to Catalog.popular // semua judul urut skor, bukan hanya 10 teratas
-        key == "all" -> "All Anime" to Catalog.alphabetical
-        key == "airing" -> "Airing Now" to Catalog.airing
-        key == "popular" -> "Popular" to Catalog.popular
+        key == "top" -> I18n.t("sec_top", "Top Hits Anime") to Catalog.popular // semua judul urut skor, bukan hanya 10 teratas
+        key == "all" -> I18n.t("sec_all", "All Anime") to Catalog.alphabetical
+        key == "airing" -> I18n.t("sec_airing", "Airing Now") to Catalog.airing
+        key == "popular" -> I18n.t("sec_popular", "Popular") to Catalog.popular
         key == "latest" -> "Latest Releases" to Catalog.latest
-        key == "donghua" -> "Donghua" to Catalog.donghua
+        key == "donghua" -> I18n.t("sec_donghua", "Donghua") to Catalog.donghua
         key.startsWith("genre:") -> key.removePrefix("genre:") to Catalog.byGenre(key.removePrefix("genre:"))
-        else -> "New Episode Releases" to Catalog.new.map { it.first }
+        else -> I18n.t("sec_new_eps", "New Episode Releases") to Catalog.new.map { it.first }
     }
     val items = ids.mapNotNull { Catalog.byId[it] }
     AnimeGrid(items, vm) {
@@ -559,7 +645,7 @@ fun SearchScreen(vm: AppVM) {
 
     // Hasil memakai grid lazy: mengetik di katalog besar tidak lagi menggambar ratusan kartu sekaligus.
     AnimeGrid(results, vm) {
-        SubHead("Search", vm)
+        SubHead(I18n.t("search", "Search"), vm)
         Row(Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.Search, null, Modifier.size(20.dp), tint = NavOff)
@@ -567,7 +653,7 @@ fun SearchScreen(vm: AppVM) {
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { vm.addHist(q) }),
-                decorationBox = { inner -> if (q.isEmpty()) Text("Search anime or genre", color = NavOff); inner() })
+                decorationBox = { inner -> if (q.isEmpty()) Text(I18n.t("search_hint2", "Search anime or genre"), color = NavOff); inner() })
         }
         group("Genre") { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }
         group("Status") { Catalog.statuses.forEach { v -> Chip(v, st == v) { st = if (st == v) "" else v } } }
@@ -590,7 +676,7 @@ fun SearchScreen(vm: AppVM) {
                 }
             }
         } else if (results.isEmpty()) {
-            EmptyBox("No results", "Nothing matches. Try fewer filters or check the spelling.")
+            EmptyBox(I18n.t("no_results_t", "No results"), I18n.t("no_results_b", "Nothing matches. Try fewer filters or check the spelling."))
         } else {
             Text("${results.size} result${if (results.size > 1) "s" else ""}", Modifier.padding(bottom = 2.dp), color = NavOff, fontSize = 13.sp)
         }

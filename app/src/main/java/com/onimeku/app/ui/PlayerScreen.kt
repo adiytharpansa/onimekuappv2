@@ -54,6 +54,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.onimeku.app.AppVM
+import com.onimeku.app.I18n
 import com.onimeku.app.PlaybackService
 import com.onimeku.app.Route
 import com.onimeku.app.data.Catalog
@@ -85,9 +86,9 @@ fun PlayerScreen(vm: AppVM, r: Route.Player) {
     val ctx = LocalContext.current
     if (vm.s.settings.wifi && !onWifi(ctx)) {
         Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
-            SubHead("Wi-Fi only is on", vm)
-            Text("Streaming over mobile data is turned off in Settings. Connect to Wi-Fi or turn the option off.", color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn("Open Settings", BtnStyle.Solid) { vm.openSettings() } }
+            SubHead(I18n.t("wifi_only_title", "Wi-Fi only is on"), vm)
+            Text(I18n.t("wifi_only_body", "Streaming over mobile data is turned off in Settings. Connect to Wi-Fi or turn the option off."), color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("open_settings", "Open Settings"), BtnStyle.Solid) { vm.openSettings() } }
         }
         return
     }
@@ -185,8 +186,8 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     if (pbFailed) {
         Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
-            Text("This episode's stream is unavailable right now.", color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { attempt++ } }
+            Text(I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Solid) { attempt++ } }
         }
         return
     }
@@ -200,7 +201,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             SubHead(a.title, vm)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 CircularProgressIndicator(Modifier.size(28.dp), color = Red, strokeWidth = 3.dp)
-                Text("Loading stream…", color = InkSoft)
+                Text(I18n.t("loading_stream", "Loading stream…"), color = InkSoft)
             }
         }
         return
@@ -230,8 +231,8 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     if (streamUrl == null) {
         Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
-            Text("This episode's stream is unavailable right now.", color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { attempt++ } }
+            Text(I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Solid) { attempt++ } }
         }
         return
     }
@@ -239,8 +240,8 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     if (chainDead) {
         Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
-            Text("This episode's stream is unavailable right now.", color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { chainDead = false; useDirect = false; mainRetry = 0; attempt++ } }
+            Text(I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Solid) { chainDead = false; useDirect = false; mainRetry = 0; attempt++ } }
         }
         return
     }
@@ -383,7 +384,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val bg by rememberUpdatedState(vm.s.settings.bgPlay)
 
     // ---- Fullscreen, kontrol otomatis sembunyi, subtitle, kualitas ----
-    var full by remember { mutableStateOf(false) }
+    // Fullscreen diwarisi dari AppVM (debug.31): pindah episode membongkar
+    // PlayerReady, tetapi keadaan penuhnya tidak ikut hilang.
+    var full by remember { mutableStateOf(vm.playerFull) }
     var showUi by remember(r) { mutableStateOf(true) }
     var uiTick by remember { mutableIntStateOf(0) }
     val subTracks = remember(playback) { playback.subtitles.filter { it.url.isNotBlank() } }
@@ -567,6 +570,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
 
     // Fullscreen: kunci landscape + sembunyikan bilah sistem; dipulihkan saat keluar/pergi dari pemutar.
     LaunchedEffect(full) {
+        vm.playerFull = full
         act?.requestedOrientation = if (full) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         act?.window?.let { w ->
             val c = WindowCompat.getInsetsController(w, w.decorView)
@@ -651,7 +655,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         ) {
             VideoSurface(player, Modifier.fillMaxSize())
             if (vm.s.settings.skipIntro && pos >= 3 && pos < 90) {
-                Text("Skip intro", Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 52.dp).clip(CircleShape)
+                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 52.dp).clip(CircleShape)
                     .background(Color(0x800A0B10)).border(1.dp, Color.White, CircleShape).clickable { player.seekTo(90_000L) }
                     .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
@@ -742,11 +746,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 vm.toast("Speed ${spdLabel(speed)}×")
             }
             Chip("+10s") { player.seekTo(player.currentPosition + 10_000) }
-            Chip("Subtitles: ${subName(subIdx)}") {
+            Chip("${I18n.t("subtitles", "Subtitles")}: ${subName(subIdx)}") {
                 if (subTracks.isEmpty()) vm.toast("No subtitles for this episode")
                 else { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); vm.toast("Subtitles: ${subName(n)}") }
             }
-            Chip("Quality: $quality") {
+            Chip("${I18n.t("quality", "Quality")}: $quality") {
                 val opts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p"))
                 val nx = opts[(opts.indexOf(quality).let { if (it < 0) 0 else it } + 1) % opts.size]
                 vm.setSettings { it.copy(quality = nx) }; applyQuality(nx); vm.toast("Quality: $nx")

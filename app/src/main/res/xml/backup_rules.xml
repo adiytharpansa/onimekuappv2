@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aturan cadangan Android lama (API < 31): kecualikan token terenkripsi. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="onimeku_secure.xml" />
+</full-backup-content>

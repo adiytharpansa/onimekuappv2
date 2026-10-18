@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Token akun disimpan terenkripsi (EncryptedSharedPreferences
+  "onimeku_secure"); kunci Keystore-nya TIDAK ikut cadangan/pindah HP,
+  jadi berkas itu dikecualikan dari backup & transfer — bila ikut,
+  hasil restore adalah token yang tidak bisa dibuka (debug.31).
+  Preferensi biasa tetap dicadangkan seperti biasa.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="onimeku_secure.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="onimeku_secure.xml" />
+    </device-transfer>
+</data-extraction-rules>

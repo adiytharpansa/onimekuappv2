@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.onimeku.app.AppVM
+import com.onimeku.app.I18n
 import com.onimeku.app.Notifier
 import com.onimeku.app.Route
 
@@ -106,12 +107,12 @@ fun ProfileScreen(vm: AppVM) {
         }
 
         CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(200)) {
-            listOf("settings" to "Settings", "language" to "Language", "help" to "Help Center", "about" to "About Onimeku").forEachIndexed { i, (k, label) ->
+            listOf("settings" to I18n.t("settings", "Settings"), "language" to I18n.t("language", "Language"), "help" to I18n.t("help", "Help Center"), "about" to I18n.t("about", "About Onimeku")).forEachIndexed { i, (k, label) ->
                 if (i > 0) HLine()
                 Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = 18.dp, vertical = 17.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(label, Modifier.weight(1f), fontSize = 16.sp)
-                    if (k == "language") Text("English", color = NavOff, fontSize = 14.sp)
+                    if (k == "language") Text(if (vm.s.settings.lang == "id") "Bahasa Indonesia" else "English", color = NavOff, fontSize = 14.sp)
                     Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
                 }
             }
@@ -142,21 +143,21 @@ fun SubScreen(vm: AppVM, key: String) {
     val ensure = LocalEnsureNotif.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val set = vm.s.settings
-    val titles = mapOf("settings" to "Settings", "language" to "Language", "help" to "Help Center", "about" to "About Onimeku",
-        "terms" to "Terms of Service", "privacy" to "Privacy Policy", "licenses" to "Licenses")
+    val titles = mapOf("settings" to I18n.t("settings", "Settings"), "language" to I18n.t("language", "Language"), "help" to I18n.t("help", "Help Center"), "about" to I18n.t("about", "About Onimeku"),
+        "terms" to I18n.t("terms", "Terms of Service"), "privacy" to I18n.t("privacy", "Privacy Policy"), "licenses" to I18n.t("licenses", "Licenses"))
     Page {
         SubHead(titles[key] ?: "", vm)
         when (key) {
             "settings" -> {
-                Grp("Playback")
+                Grp(I18n.t("grp_playback", "Playback"))
                 CardBox {
-                    SwitchRow("Autoplay next episode", "Start the next episode when one ends.", set.autoplay) { v -> vm.setSettings { it.copy(autoplay = v) } }
+                    SwitchRow(I18n.t("autoplay_t", "Autoplay next episode"), I18n.t("autoplay_d", "Start the next episode when one ends."), set.autoplay) { v -> vm.setSettings { it.copy(autoplay = v) } }
                     HLine()
-                    SwitchRow("Skip intro", "Show a button to skip opening songs.", set.skipIntro) { v -> vm.setSettings { it.copy(skipIntro = v) } }
+                    SwitchRow(I18n.t("skip_intro_t", "Skip intro"), I18n.t("skip_intro_d", "Show a button to skip opening songs."), set.skipIntro) { v -> vm.setSettings { it.copy(skipIntro = v) } }
                     HLine()
-                    SwitchRow("Background playback", "Keep audio playing with lock-screen controls when you leave the app.", set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
+                    SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
                 }
-                Grp("Video quality")
+                Grp(I18n.t("quality_s", "Video quality"))
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(18.dp)).padding(5.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("Auto", "1080p", "720p", "480p").forEach { qv ->
@@ -167,29 +168,33 @@ fun SubScreen(vm: AppVM, key: String) {
                         }
                     }
                 }
-                Grp("Data and alerts")
+                Grp(I18n.t("grp_data", "Data and alerts"))
                 CardBox {
-                    SwitchRow("Stream over Wi-Fi only", "Avoid using mobile data.", set.wifi) { v -> vm.setSettings { it.copy(wifi = v) } }
+                    SwitchRow(I18n.t("wifi_only_t", "Stream over Wi-Fi only"), I18n.t("wifi_only_d", "Avoid using mobile data."), set.wifi) { v -> vm.setSettings { it.copy(wifi = v) } }
                     HLine()
-                    SwitchRow("New episode alerts", "Get notified when your list updates.", set.alerts) { v ->
+                    SwitchRow(I18n.t("alerts_t", "New episode alerts"), I18n.t("alerts_d", "Get notified when your list updates."), set.alerts) { v ->
                         vm.setSettings { it.copy(alerts = v) }
                         if (v) ensure { g -> if (g) Notifier.show(ctx, "Alerts on", "You will get new episode and reminder alerts") }
                     }
                 }
             }
             "language" -> {
-                Text("Choose the language used in the app.", Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
+                Text(I18n.t("choose_language", "Choose the language used in the app."), Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
                 CardBox {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("English", Modifier.weight(1f), fontSize = 16.sp)
-                        Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText)
-                    }
-                    listOf("Bahasa Indonesia", "日本語").forEach { l ->
-                        HLine()
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(l, Modifier.weight(1f), fontSize = 16.sp, color = Color(0xA6FFFFFF))
-                            Text("Coming soon", fontSize = 13.sp, color = NavOff)
+                    // Bahasa Indonesia kini BENAR-BENAR berfungsi (debug.31);
+                    // pilihan tersimpan di Settings.lang dan seluruh
+                    // antarmuka utama mengikuti lewat I18n.
+                    listOf("en" to "English", "id" to "Bahasa Indonesia").forEachIndexed { i, (code, label) ->
+                        if (i > 0) HLine()
+                        Row(Modifier.fillMaxWidth().clickable { vm.setSettings { st -> st.copy(lang = code) } }.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(label, Modifier.weight(1f), fontSize = 16.sp)
+                            if (vm.s.settings.lang == code) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText)
                         }
+                    }
+                    HLine()
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("日本語", Modifier.weight(1f), fontSize = 16.sp, color = Color(0xA6FFFFFF))
+                        Text(I18n.t("coming_soon", "Coming soon"), fontSize = 13.sp, color = NavOff)
                     }
                 }
             }

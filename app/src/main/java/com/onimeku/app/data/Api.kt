@@ -254,48 +254,16 @@ object ApiClient {
     }
 
     /**
-     * Resolusi poster pengganti LANGSUNG ke Kitsu (perbaikan debug.26):
-     * poster katalog ber-host s4.anilist.co dibalas 403 oleh CDN-nya —
-     * dari jaringan mana pun, termasuk lewat /api/img (502) — sehingga
-     * 372 judul tampil tanpa poster. Padanan Kitsu dicari lewat API
-     * pemetaan publik Kitsu (anilistId -> item Kitsu -> posterImage/
-     * coverImage original di media.kitsu.app, terverifikasi 200).
-     * PosterHealer meng-cache hasil ini permanen di disk, jadi tiap
-     * judul hanya dicari sekali. Kegagalan = null (coba lagi sesi depan).
+     * Resolusi poster pengganti TIDAK lagi dilakukan aplikasi
+     * (debug.31, perintah user): semua data poster wajib berasal dari
+     * API my-anime-app. Penyembuhan poster ber-host rusak (s4.anilist.co
+     * 403) kini hidup di server (poster_map + resolusi Kitsu di
+     * my-anime-app/src/lib/store.ts: healPosters), sehingga respons
+     * /api/anime sudah membawa poster sembuh. Di sini tetap null agar
+     * tidak ada panggilan keluar selain ke API sendiri; PosterHealer
+     * menampilkan gradasi untuk poster yang memang belum sembuh.
      */
-    /** Ambil teks dari Kitsu: API-nya JSON:API ketat — menolak
-     *  "Accept: application/json" dengan 406 (bug debug.26: resolusi
-     *  poster selalu gagal di dalam aplikasi walau URL-nya benar).
-     *  Wajib "application/vnd.api+json", jadi tidak memakai getText. */
-    private suspend fun getKitsu(url: String): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val req = okhttp3.Request.Builder().url(url)
-            .header("Accept", "application/vnd.api+json")
-            .header("User-Agent", "OnimekuApp/1.0 (Android)")
-            .build()
-        Net.client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw java.io.IOException("kitsu http ${resp.code}")
-            resp.body?.string() ?: throw java.io.IOException("kitsu kosong")
-        }
-    }
-
-    suspend fun resolvePoster(anilistId: Int): PosterResp? {
-        return try {
-            val mapJson = getKitsu(
-                "https://kitsu.io/api/edge/mappings?filter%5BexternalSite%5D=anilist%2Fanime&filter%5BexternalId%5D=$anilistId",
-            )
-            val mapId = Regex(""""id":"(\d+)","type":"mappings"""").find(mapJson)?.groupValues?.get(1)
-                ?: return null
-            val itemJson = getKitsu("https://kitsu.io/api/edge/mappings/$mapId/item")
-            fun original(field: String): String? =
-                Regex(""""$field":\{[^}]*?"original":"([^"]+)"""").find(itemJson)?.groupValues?.get(1)
-                    ?.replace("\\/", "/")
-            val poster = original("posterImage")
-            val cover = original("coverImage")
-            if (poster == null && cover == null) null
-            else PosterResp(ok = true, poster = poster, cover = cover)
-        } catch (e: Exception) {
-            null
-        }
+    suspend fun resolvePoster(anilistId: Int): PosterResp? = null
     }
 }
 

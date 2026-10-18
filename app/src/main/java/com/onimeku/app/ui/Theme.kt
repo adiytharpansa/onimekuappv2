@@ -13,6 +13,10 @@ val InkSoft = Color(0xFFC9CCD8)
 val Red = Color(0xFFA6122D)
 val RedDeep = Color(0xFF6E0F1F)
 val RedText = Color(0xFFE8566F)
+// Merah karya pemilik untuk LOGO di semua tempat (aturan 16 Okt 2026);
+// tema antarmuka tetap crimson Red di atas (debug.31: logo dikembalikan
+// dari #A6122D ke #F20A17 sesuai karya aslinya).
+val LogoRed = Color(0xFFF20A17)
 val Line = Color(0xFF2A2D3B)
 val NavOff = Color(0xFF9EA4B8)
 val Solid = Color(0xFF2B2E3B)

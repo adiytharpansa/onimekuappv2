@@ -30,6 +30,9 @@ data class Settings(
     val alerts: Boolean = true,
     val quality: String = "Auto",
     val bgPlay: Boolean = true,
+    // Bahasa antarmuka: "en" atau "id" (debug.31). Default Inggris agar
+    // keadaan lama tidak berubah; dipilih di Profil -> Language.
+    val lang: String = "en",
 )
 
 @Serializable

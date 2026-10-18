@@ -122,6 +122,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun App(vm: AppVM) {
+    // Bahasa antarmuka aktif mengikuti Settings (debug.31).
+    androidx.compose.runtime.SideEffect { I18n.lang = vm.s.settings.lang }
     BackHandler(enabled = vm.stack.size > 1 && !vm.welcomeOpen) { vm.back() }
 
     Surface(Modifier.fillMaxSize(), color = Bg, contentColor = Color.White) {
@@ -210,11 +212,11 @@ private fun IconBtn(icon: ImageVector, desc: String, onClick: () -> Unit) {
 private fun TabBar(vm: AppVM, modifier: Modifier) {
     data class T(val r: Route, val label: String, val icon: ImageVector, val sel: ImageVector)
     val tabs = listOf(
-        T(Route.Home, "Home", Icons.Outlined.Home, Icons.Filled.Home),
-        T(Route.Calendar, "Calendar", Icons.Outlined.CalendarMonth, Icons.Outlined.CalendarMonth),
-        T(Route.MyList, "My List", Icons.Outlined.BookmarkBorder, Icons.Outlined.BookmarkBorder),
-        T(Route.Downloads, "Download", Icons.Outlined.Download, Icons.Outlined.Download),
-        T(Route.ProfileTab, "Profile", Icons.Outlined.Person, Icons.Filled.Person),
+        T(Route.Home, I18n.t("tab_home", "Home"), Icons.Outlined.Home, Icons.Filled.Home),
+        T(Route.Calendar, I18n.t("tab_calendar", "Calendar"), Icons.Outlined.CalendarMonth, Icons.Outlined.CalendarMonth),
+        T(Route.MyList, I18n.t("tab_mylist", "My List"), Icons.Outlined.BookmarkBorder, Icons.Outlined.BookmarkBorder),
+        T(Route.Downloads, I18n.t("tab_download", "Download"), Icons.Outlined.Download, Icons.Outlined.Download),
+        T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), Icons.Outlined.Person, Icons.Filled.Person),
     )
     Row(
         // Solid + garis tipis di atas, supaya konten yang digulir tidak tembus di balik tab bar.

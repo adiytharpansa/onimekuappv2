@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.onimeku.app.AppVM
+import com.onimeku.app.I18n
 import com.onimeku.app.Route
 import com.onimeku.app.data.AuthClient
 
@@ -89,7 +90,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
     Page(extraTop = 8.dp) {
         SubHead("", vm)
         Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp, bottom = 14.dp)) { Logo(64.dp) }
-        Text(if (signUp) "Create your account" else "Welcome back", Modifier.fillMaxWidth(), fontSize = 28.sp,
+        Text(if (signUp) I18n.t("create_account_t", "Create your account") else I18n.t("welcome_back", "Welcome back"), Modifier.fillMaxWidth(), fontSize = 28.sp,
             fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Text(
             if (signUp) "Save your list and keep watching on any device." else "Sign in to sync your list and progress.",
@@ -103,8 +104,8 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
             }
         }
 
-        AuthField("Email", email, { email = it }, emailErr, KeyboardType.Email, ImeAction.Next)
-        AuthField("Password", pass, { pass = it }, passErr, KeyboardType.Password, if (signUp) ImeAction.Next else ImeAction.Done,
+        AuthField(I18n.t("email", "Email"), email, { email = it }, emailErr, KeyboardType.Email, ImeAction.Next)
+        AuthField(I18n.t("password", "Password"), pass, { pass = it }, passErr, KeyboardType.Password, if (signUp) ImeAction.Next else ImeAction.Done,
             password = true, onDone = { submit() })
         if (signUp) AuthField("Confirm password", confirm, { confirm = it }, confErr, KeyboardType.Password, ImeAction.Done,
             password = true, onDone = { submit() })
@@ -114,7 +115,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
         }
 
         Box(Modifier.padding(top = 6.dp)) {
-            Btn(if (vm.authBusy) "Please wait…" else if (signUp) "Create account" else "Sign in", BtnStyle.Play,
+            Btn(if (vm.authBusy) I18n.t("please_wait", "Please wait…") else if (signUp) I18n.t("create_account_b", "Create account") else I18n.t("sign_in", "Sign in"), BtnStyle.Play,
                 modifier = Modifier.fillMaxWidth(), height = 54.dp) { if (!vm.authBusy) submit() }
             if (vm.authBusy) CircularProgressIndicator(Modifier.align(Alignment.CenterStart).padding(start = 22.dp).size(20.dp),
                 color = Color.White, strokeWidth = 2.dp)
@@ -129,7 +130,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
 
         Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (signUp) "Already have an account? " else "New to Onimeku? ", color = InkSoft, fontSize = 14.sp)
-            Text(if (signUp) "Sign in" else "Sign up", color = RedText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            Text(if (signUp) I18n.t("sign_in", "Sign in") else I18n.t("sign_up", "Sign up"), color = RedText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { signUp = !signUp; tried = false; vm.authError = null }.padding(6.dp))
         }
 
