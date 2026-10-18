@@ -90,7 +90,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false
         val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
-        if (res == null || (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank())) pbFailed = true else pb = res
+        if (res == null || (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank() && res.embedUrl.isNullOrBlank())) pbFailed = true else pb = res
     }
     if (pbFailed) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
@@ -111,7 +111,24 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         }
         return
     }
-    val streamUrl = playback.streamUrl ?: playback.streamProxyUrl ?: return
+    // Sebagian judul hanya menyediakan pemutar embed (streamUrl-nya halaman
+    // web, bukan berkas media) — untuk itu tampilkan pemutar embed resmi.
+    val mediaUrl = playback.streamUrl?.takeIf { isMediaUrl(it) }
+        ?: playback.streamProxyUrl?.takeIf { isMediaUrl(it) }
+    val embedUrl = playback.embedUrl ?: playback.streamUrl?.takeIf { !isMediaUrl(it) }
+    if (mediaUrl == null && !embedUrl.isNullOrBlank()) {
+        EmbedPlayer(vm, r, a, embedUrl)
+        return
+    }
+    val streamUrl = mediaUrl
+    if (streamUrl == null) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+            SubHead(a.title, vm)
+            Text("This episode's stream is unavailable right now.", color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { attempt++ } }
+        }
+        return
+    }
 
     PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl)
 
@@ -120,12 +137,15 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 @Composable
 private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String) {
     val player = remember(r, streamUrl) {
-        val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
+        // Transport OkHttp: menyimpan cookie antar-permintaan + UA peramban +
+        // Referer dari API. CDN sumber menolak klien tanpa pola ini.
+        val cookieJar = okhttp3.JavaNetCookieJar(java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL))
+        val okClient = okhttp3.OkHttpClient.Builder().cookieJar(cookieJar).build()
+        val dsFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(okClient)
+            .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
         if (!playback.referer.isNullOrBlank()) {
-            httpFactory.setDefaultRequestProperties(mapOf("Referer" to playback.referer))
+            dsFactory.setDefaultRequestProperties(mapOf("Referer" to playback.referer))
         }
-        val dsFactory = androidx.media3.datasource.DefaultDataSource.Factory(ctx, httpFactory)
         ExoPlayer.Builder(ctx)
             .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsFactory))
             .build().apply {
@@ -323,5 +343,50 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             Chip("Cast") { vm.toast("Cast belum tersedia di versi ini") }
         }
+    }
+}
+
+private fun isMediaUrl(u: String): Boolean =
+    u.contains(".m3u8") || u.contains(".mp4") || u.contains(".mpd")
+
+/** Pemutar embed untuk judul yang sumbernya hanya menyediakan embed resmi. */
+@Composable
+private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, url: String) {
+    val ctx = LocalContext.current
+    val act = ctx.findActivity()
+    DisposableEffect(Unit) {
+        act?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { act?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+    val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+    val idx = nums.indexOf(r.ep)
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+        SubHead(a.title, vm)
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).background(Color.Black),
+        ) {
+            AndroidView(
+                factory = { c ->
+                    android.webkit.WebView(c).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        webChromeClient = android.webkit.WebChromeClient()
+                        loadUrl(url)
+                    }
+                },
+                update = { wv -> if (wv.url != null && wv.url != url) wv.loadUrl(url) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Text("Episode ${r.ep}", Modifier.padding(top = 14.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (idx > 0) Chip("Previous") { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
+            if (idx >= 0 && idx < nums.size - 1) Chip("Next") { vm.replaceTop(Route.Player(r.id, nums[idx + 1])) }
+        }
+        Text(
+            "Judul ini diputar lewat pemutar resmi sumbernya. Ketuk tombol putar di dalam video.",
+            Modifier.padding(top = 14.dp), fontSize = 12.sp, color = InkSoft,
+        )
     }
 }
