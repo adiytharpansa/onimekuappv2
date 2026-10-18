@@ -193,7 +193,10 @@ object ApiClient {
     // bertoken kedaluwarsa, jadi hanya dipakai sekali dan dalam TTL pendek.
     private class Prefetched(val at: Long, val pb: Playback)
     private val prefetched = java.util.concurrent.ConcurrentHashMap<String, Prefetched>()
-    private const val PREFETCH_TTL_MS = 120_000L
+    // 10 menit (debug.37): URL nexabloom berumur jam-jaman; jendela
+    // prefetch panjang membuat ketukan Play lama sesudah Detail dibuka
+    // tetap mengenai hasil pemanasan.
+    private const val PREFETCH_TTL_MS = 600_000L
 
     /** Panggil saat episode hampir habis: episode berikutnya langsung siap diputar. */
     suspend fun prefetchPlayback(id: String, ep: Int) {

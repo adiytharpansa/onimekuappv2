@@ -120,13 +120,15 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var mainRetry by remember(r) { mutableIntStateOf(0) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false; pbOffline = false
-        // Batas waktu TOTAL memuat data putar (debug.30): endpoint hulu
-        // kadang lambat/flaky (terukur 4,6 dtk dan sesekali 503 untuk
-        // Bleach ep1) dan timeout baca per percobaan 12 dtk x 2 putaran
-        // bisa membuat "Loading stream..." menggantung ~25-40 dtk di
-        // jaringan seluler. Lewat 26 dtk: tampilkan galat jujur + tombol
-        // coba lagi, jangan menggantung tanpa kepastian.
-        val res = kotlinx.coroutines.withTimeoutOrNull(26_000) {
+        // Batas waktu TOTAL memuat data putar (debug.30, dilonggarkan
+        // debug.37): endpoint hulu kadang lambat/flaky (terukur 4,6 dtk
+        // dan sesekali 503 untuk Bleach ep1) dan timeout baca per
+        // percobaan 12 dtk x 2 putaran bisa membuat "Loading stream..."
+        // menggantung di jaringan seluler. debug.37: data putar kini
+        // dipanaskan sejak halaman Detail dibuka + endpoint di-cache di
+        // tepi, jadi batas ini hanya jaring pengaman terakhir (35 dtk)
+        // sebelum galat jujur + tombol coba lagi tampil.
+        val res = kotlinx.coroutines.withTimeoutOrNull(35_000) {
             try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
         }
         if (res == null) {

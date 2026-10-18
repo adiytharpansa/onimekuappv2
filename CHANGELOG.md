@@ -1,3 +1,8 @@
+## v1.0.0-debug.37 (belum dirilis — menunggu perintah): Perbaikan "Stream Unavailable" di HP
+- Laporan HP user atas .36: AoT S3P2 ep1 berhenti di "Stream unavailable" padahal stream hidup (terverifikasi dari server: endpoint 200, playlist + segmen via proksi 200 utuh). Tersangka: fase DATA putar kehabisan waktu di 4G — resolusi dingin endpoint ~5 dtk, timeout 12 dtk x 2 putaran + batas UI 26 dtk.
+- Aplikasi: data putar DIPANASKAN sejak Detail dibuka (prefetchPlayback utk episode tombol Play + episode lanjutan), TTL prefetch 2 -> 10 menit, batas total fase data 26 -> 35 dtk (jaring pengaman terakhir).
+- API (my-anime-app): respons putar kini di-cache tepi Cloudflare (s-maxage=120, SWR 600) — putar ulang/episode populer dijawab seketika, tanpa resolusi dingin.
+
 ## v1.0.0-debug.36 (belum dirilis — menunggu perintah): Redesain Lengkap (paket Claude)
 - Tab bar baru: pil aktif MELEBAR dgn pegas (60dp) + ikon membesar; ikon terisi (filled) utk tab aktif Calendar/My List/Download.
 - Kalender: strip 7 hari lebar-sama + lonceng pengingat; My List/Unduhan/Kalender memakai kartu baris baru (ItemRow); Pencarian: kolom 54dp + tombol hapus + keadaan kosong baru.

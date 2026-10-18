@@ -568,6 +568,16 @@ fun DetailScreen(vm: AppVM, id: String) {
     val resume = vm.p.last?.takeIf { it.id == id }
     var commentText by remember(id) { mutableStateOf("") }
     LaunchedEffect(id) { if (com.onimeku.app.data.Comments.enabled) vm.loadComments(id) }
+    // Pemanasan data putar (debug.37): ambil info stream episode sasaran
+    // tombol Play (dan episode lanjutan terakhir) SEKARANG, selagi user
+    // membaca Detail. Di HP user, resolusi dingin endpoint putar ~5 dtk+
+    // di 4G sempat menghabiskan batas tunggu pemutar -> "Stream
+    // unavailable" padahal stream-nya hidup. Dengan prefetch, ketukan
+    // Play mengenai cache dan video mulai nyaris seketika.
+    LaunchedEffect(id) {
+        com.onimeku.app.data.ApiClient.prefetchPlayback(id, a.available.firstOrNull() ?: 1)
+        resume?.let { if (it.ep != (a.available.firstOrNull() ?: 1)) com.onimeku.app.data.ApiClient.prefetchPlayback(id, it.ep) }
+    }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val heroH = (LocalConfiguration.current.screenHeightDp * 0.5f).coerceIn(320f, 470f).dp
