@@ -10,6 +10,8 @@ import android.util.Rational
 import android.view.WindowManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -394,14 +396,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
             }
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-                val C0 = androidx.media3.common.C
-                val ag = tracks.groups.filter { it.type == C0.TRACK_TYPE_AUDIO }
+                // Perbaikan agen: alias C0 sama ilegalnya dengan val C.
+                val ag = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }
                 audioLabels = ag.mapIndexed { i, g ->
                     val f = g.mediaTrackGroup.getFormat(0)
                     (f.label ?: f.language?.uppercase() ?: "Track ${i + 1}")
                 }
                 audioIdx = ag.indexOfFirst { it.isSelected }.coerceAtLeast(0)
-                heights = tracks.groups.filter { it.type == C0.TRACK_TYPE_VIDEO }
+                heights = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
                     .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).height } }
                     .filter { it > 0 }.distinct().sortedDescending()
                 if (!subReady && tracks.groups.any { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }) {
@@ -545,8 +547,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             confirmButton = { TextButton(onClick = { showEps = false }) { Text("Close") } },
             title = { Text(a.title, maxLines = 1) },
             text = {
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    androidx.compose.foundation.lazy.items(nums) { n ->
+                // Perbaikan agen: items() wajib lewat import, bukan nama
+                // lengkap — resolusi ekstensi LazyListScope gagal sebaliknya.
+                LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                    items(nums) { n ->
                         Text("Episode $n", Modifier.fillMaxWidth().clickable { showEps = false; if (n != r.ep) vm.replaceTop(Route.Player(r.id, n)) }.padding(vertical = 12.dp),
                             color = if (n == r.ep) RedText else Color.Unspecified, fontWeight = if (n == r.ep) FontWeight.SemiBold else FontWeight.Normal)
                     }
