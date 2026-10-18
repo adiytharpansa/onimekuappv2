@@ -88,11 +88,11 @@ fun HomeScreen(vm: AppVM) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 /** Satu kartu Continue Watching: anime, episode untuk dilanjutkan, posisi (detik), durasi episode (detik, 0 = tak diketahui). */
 private data class ContItem(val a: Anime, val ep: Int, val pos: Int, val dur: Int)
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun HomeContent(vm: AppVM) {
     val p = vm.p
     val heroH = heroHeight()
