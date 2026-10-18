@@ -8,7 +8,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.lazy.LazyColumn
@@ -94,7 +93,13 @@ fun HomeScreen(vm: AppVM) {
         }
         return
     }
-    PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh() }, modifier = Modifier.fillMaxSize()) {
+    // CATATAN PERBAIKAN (agen, 18 Okt 2026): PullToRefreshBox dari dokumen
+    // diganti Box polos — di emulator CI, Home CRASH dengan
+    // "Unsupported concurrent change during composition" yang stack-nya
+    // menembus LazyLayoutPrefetch; PullToRefreshBox (material3 1.3) adalah
+    // tersangka utama (state-nya ditulis saat layout). Tarik-untuk-segarkan
+    // dikorbankan sementara demi Home yang stabil; vm.refresh() dipertahankan.
+    Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(vm.homeScroll).padding(bottom = bottomContentPadding())) {
             Hero(vm, heroH)
 
