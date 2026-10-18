@@ -97,14 +97,18 @@ object Downloads {
         val app = ctx.applicationContext
         val prefs = app.getSharedPreferences("dl_state", Context.MODE_PRIVATE)
         if (prefs.getBoolean("cleanup_v23", false)) return
-        runCatching {
+        // Bendera hanya dipasang bila pembersihan BENAR-BENAR berjalan;
+        // kegagalan diam-diam (mis. indeks unduhan belum siap) tidak boleh
+        // menandai selesai untuk selamanya (perbaikan debug.25).
+        val done = runCatching {
             val keep = states(app).keys
             val c = cache(app)
             for (k in c.keys.toList()) {
                 if (k.startsWith("dl:") && k !in keep) c.removeResource(k)
             }
-        }
-        prefs.edit().putBoolean("cleanup_v23", true).apply()
+            true
+        }.getOrDefault(false)
+        if (done) prefs.edit().putBoolean("cleanup_v23", true).apply()
     }
 
     // ---- Referer per unduhan ----

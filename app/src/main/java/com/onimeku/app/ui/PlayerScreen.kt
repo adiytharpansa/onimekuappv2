@@ -105,12 +105,13 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     // Data putar diambil dari API per episode (stream + referer + subtitle).
     var attempt by remember(r) { mutableIntStateOf(0) }
     var pb by remember(r) { mutableStateOf<com.onimeku.app.data.Playback?>(null) }
+    var pbOffline by remember(r) { mutableStateOf(false) }
     var pbFailed by remember(r) { mutableStateOf(false) }
     var chainDead by remember(r) { mutableStateOf(false) }
     var useDirect by remember(r) { mutableStateOf(false) }
     var mainRetry by remember(r) { mutableIntStateOf(0) }
     LaunchedEffect(r, attempt) {
-        pb = null; pbFailed = false
+        pb = null; pbFailed = false; pbOffline = false
         val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
         if (res == null) {
             // API tak terjangkau (offline): bila episode ini sudah terunduh
@@ -120,6 +121,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 com.onimeku.app.data.Downloads.states(ctx)[com.onimeku.app.data.Downloads.key(r.id, r.ep)]
             }
             if (dl != null && dl.state == androidx.media3.exoplayer.offline.Download.STATE_COMPLETED) {
+                pbOffline = true
                 pb = com.onimeku.app.data.Playback(streamUrl = dl.request.uri.toString(), episode = r.ep)
             } else {
                 pbFailed = true
@@ -232,7 +234,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     }
 
     key(useDirect, mainRetry) {
-        PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, onFatalError = {
+        PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline, onFatalError = {
             // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
             // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
             // langsung/embed yang memang lebih rapuh di HP.
@@ -254,24 +256,32 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 }
 
 @Composable
-private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, onFatalError: () -> Unit = {}) {
+private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onFatalError: () -> Unit = {}) {
     val player = remember(r, streamUrl) {
         // Transport OkHttp BERSAMA (Net): pool koneksi + cookie dipakai ulang
         // antar-episode; UA peramban + Referer dari API (CDN menolak klien
         // tanpa pola ini).
         val dsFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(com.onimeku.app.data.Net.client)
-            .setUserAgent(com.onimeku.app.data.Net.UA)
-        // CDN MegaPlay hanya menerima Referer akar origin; URL halaman embed
-        // lengkap dibalas halaman error (HTTP 403). Paksa akar origin untuk
-        // stream ber-host nexabloom apa pun nilai dari API.
-        val streamHost = runCatching { java.net.URL(streamUrl).host }.getOrNull().orEmpty()
-        val effReferer = if (streamHost == "nexabloom.top" || streamHost.endsWith(".nexabloom.top")) {
-            "https://megaplay.buzz/"
-        } else {
-            playback.referer
-        }
-        if (!effReferer.isNullOrBlank()) {
-            dsFactory.setDefaultRequestProperties(mapOf("Referer" to effReferer))
+        // Perbaikan debug.25 (audit vs web): identitas permintaan dibedakan
+        // per jalur. Ke PROKSI (workers.dev) JANGAN pakai samaran UA
+        // peramban dan JANGAN kirim header Referer situs asing — panggilan
+        // API aplikasi sendiri ("OnimekuApp/1.0", tanpa Referer) terbukti
+        // lolos di jaringan HP, sedangkan pemutar ber-UA Chrome + Referer
+        // megaplay gagal; proksi hanya membaca parameter ref. Samaran +
+        // Referer akar origin HANYA untuk jalur langsung ke CDN (di sana
+        // memang syaratnya: CDN menolak Referer halaman penuh/asing).
+        val viaProxy = streamUrl.contains("/api/proxy")
+        if (!viaProxy) {
+            dsFactory.setUserAgent(com.onimeku.app.data.Net.UA)
+            val streamHost = runCatching { java.net.URL(streamUrl).host }.getOrNull().orEmpty()
+            val effReferer = if (streamHost == "nexabloom.top" || streamHost.endsWith(".nexabloom.top")) {
+                "https://megaplay.buzz/"
+            } else {
+                playback.referer
+            }
+            if (!effReferer.isNullOrBlank()) {
+                dsFactory.setDefaultRequestProperties(mapOf("Referer" to effReferer))
+            }
         }
         // Pemutar MEMBACA cache unduhan (episode terunduh diputar dari disk)
         // tetapi TIDAK menulis ke dalamnya: sebelumnya tiap segmen yang
@@ -293,7 +303,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             .setBackBuffer(20_000, true)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
-        val sourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cacheFactory)
+        // Perbaikan debug.25: STREAMING tidak lagi membaca cache bersama.
+        // Entri cache era lama (playlist/segmen rusak yang tersimpan di
+        // bawah kunci URL/konten yang stabil) dibaca pemutar lebih dulu
+        // dan menggagalkan putar walau server+jaringan sehat — instalasi
+        // segar tidak pernah mengalaminya. Cache bersama hanya dipakai
+        // untuk memutar UNDUHAN (offline); streaming murni dari jaringan.
+        val playFactory = if (offline) cacheFactory else androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
+        val sourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playFactory)
             // 5 percobaan ulang per segmen (bawaan 3) sebelum dianggap galat fatal.
             .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(5))
         val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(ctx)
@@ -316,16 +333,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
                     .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase()).build()
             }
-            setMediaItem(
-                MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
-                    .setMediaMetadata(
-                        androidx.media3.common.MediaMetadata.Builder()
-                            .setTitle(a.title).setSubtitle("Episode ${r.ep}")
-                            .setArtworkUri(a.poster?.let { android.net.Uri.parse(it) }).build()
-                    )
-                    .setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
-                    .setSubtitleConfigurations(subs).build()
-            )
+            val itemBuilder = MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
+                .setMediaMetadata(
+                    androidx.media3.common.MediaMetadata.Builder()
+                        .setTitle(a.title).setSubtitle("Episode ${r.ep}")
+                        .setArtworkUri(a.poster?.let { android.net.Uri.parse(it) }).build()
+                )
+                .setSubtitleConfigurations(subs)
+            // Kunci cache unduhan HANYA untuk putar offline (lihat
+            // playFactory): item streaming tidak menyentuh cache bersama.
+            if (offline) itemBuilder.setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
+            setMediaItem(itemBuilder.build())
             seekTo((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L)
             playWhenReady = true
             prepare()
