@@ -1,6 +1,7 @@
 package com.onimeku.app
 
 import android.app.Application
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -38,6 +39,9 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var welcomeOpen by mutableStateOf(!s.welcomeSeen); private set
     var calDay by mutableIntStateOf(0)
     val downloading = mutableStateMapOf<String, Int>()
+
+    /** Posisi scroll Home disimpan di sini agar tidak kembali ke atas setelah membuka Detail lalu Back. */
+    val homeScroll = ScrollState(0)
 
     /** Jadwal tayang asli dari API: id katalog -> episode berikutnya + waktu. */
     var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())

@@ -7,6 +7,10 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -71,9 +75,10 @@ fun Logo(size: Dp) {
 }
 
 @Composable
-fun Tag(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier) {
-    Text(text, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-        modifier = modifier.clip(RoundedCornerShape(7.dp)).background(bg).padding(horizontal = 9.dp, vertical = 3.dp))
+fun Tag(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier, small: Boolean = false) {
+    Text(text, color = fg, fontSize = if (small) 11.sp else 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+        modifier = modifier.clip(RoundedCornerShape(if (small) 6.dp else 7.dp)).background(bg)
+            .padding(horizontal = if (small) 7.dp else 9.dp, vertical = if (small) 2.dp else 3.dp))
 }
 
 @Composable
@@ -149,11 +154,11 @@ val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.
 fun Poster(
     a: Anime, w: Dp?, modifier: Modifier = Modifier, ep: Boolean = false, badges: Boolean = false,
     label: Boolean = false, rank: Int? = null, meta: Pair<String, String>? = null,
-    progress: Float? = null, onClick: () -> Unit,
+    progress: Float? = null, compact: Boolean = false, onClick: () -> Unit,
 ) {
     val sized = if (w != null) modifier.width(w) else modifier.fillMaxWidth()
     Box(
-        sized.aspectRatio(if (ep) 232f / 150f else 232f / 311f).clip(RoundedCornerShape(18.dp))
+        sized.aspectRatio(if (ep) 232f / 150f else 232f / 311f).clip(RoundedCornerShape(if (compact) 12.dp else 18.dp))
             .artBackground(a).clickable(onClick = onClick),
     ) {
         val img = if (ep) {
@@ -184,12 +189,12 @@ fun Poster(
             )
         }
         if (badges) {
-            a.rating?.let { Tag(it, Color.White, Bg, Modifier.align(Alignment.TopStart).padding(12.dp)) }
-            if (a.hd) Tag("HD", Red, Color.White, Modifier.align(Alignment.TopEnd).padding(10.dp))
+            a.rating?.let { Tag(it, Color.White, Bg, Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 12.dp), small = compact) }
+            if (a.hd) Tag("HD", Red, Color.White, Modifier.align(Alignment.TopEnd).padding(if (compact) 6.dp else 10.dp), small = compact)
         }
         if (rank != null) {
-            val big = 72.sp
-            Box(Modifier.align(Alignment.BottomStart).padding(start = 12.dp).offset(y = 14.dp)) {
+            val big = 60.sp
+            Box(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 2.dp)) {
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Bg,
                     style = TextStyle(drawStyle = Stroke(width = 14f)), lineHeight = big)
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Color.White, lineHeight = big)
@@ -213,40 +218,67 @@ fun Poster(
     }
 }
 
+/** Poster + judul di bawahnya (dua baris tetap, agar baris rail sejajar rapi). */
 @Composable
-fun Tile(a: Anime, vm: AppVM) {
-    Column {
-        Poster(a, null, badges = true) { vm.go(Route.Detail(a.id)) }
-        Text(a.title, Modifier.padding(top = 8.dp), fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(a.genres.take(2).joinToString(", "), fontSize = 12.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+fun PosterCard(a: Anime, w: Dp, rank: Int? = null, onClick: () -> Unit) {
+    Column(Modifier.width(w)) {
+        Poster(a, w, badges = true, rank = rank, onClick = onClick)
+        Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
+            minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
+/** Kartu untuk grid (3 kolom di ponsel): poster ringkas + judul + genre. */
 @Composable
-fun TileGrid(items: List<Anime>, vm: AppVM) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val cols = maxOf(2, (maxWidth / 141.dp).toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            items.chunked(cols).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                    row.forEach { a -> Box(Modifier.weight(1f)) { Tile(a, vm) } }
-                    repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
-        }
+fun Tile(a: Anime, vm: AppVM) {
+    Column {
+        Poster(a, null, badges = true, compact = true) { vm.go(Route.Detail(a.id)) }
+        Text(a.title, Modifier.padding(top = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
+            minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(a.genres.take(2).joinToString(", "), fontSize = 11.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp),
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Jarak konten ke bawah supaya tidak tertutup tab bar + navigation bar sistem. */
+val TabBarHeight: Dp = 68.dp
+
+@Composable
+fun bottomContentPadding(): Dp =
+    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + TabBarHeight + 16.dp
+
+/**
+ * Grid anime berbasis LazyVerticalGrid: hanya sel yang terlihat yang digambar,
+ * jadi "See all", Search, dan My List tetap ringan walau katalog ribuan judul.
+ * [header] tampil satu baris penuh di atas grid.
+ */
+@Composable
+fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
+    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(100.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = bottomContentPadding()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
+        items(items, key = { it.id }) { a -> Tile(a, vm) }
     }
 }
 
 @Composable
 fun Rail(content: LazyListScope.() -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(13.dp), contentPadding = PaddingValues(horizontal = 16.dp), content = content)
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = 16.dp), content = content)
 }
 
 @Composable
 fun SectionHead(title: String, onAll: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 14.dp), verticalAlignment = Alignment.Bottom) {
-        Text(title, Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        if (onAll != null) Text("See all", color = RedText, fontWeight = FontWeight.Medium, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAll))
+        Text(title, Modifier.weight(1f).padding(end = 12.dp), fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (onAll != null) Text("See all", color = RedText, fontWeight = FontWeight.Medium, fontSize = 15.sp,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onAll).padding(horizontal = 6.dp, vertical = 4.dp))
     }
 }
 
@@ -255,7 +287,7 @@ fun Page(extraTop: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = top + extraTop, bottom = 110.dp),
+            .padding(start = 16.dp, end = 16.dp, top = top + extraTop, bottom = bottomContentPadding()),
         content = content,
     )
 }

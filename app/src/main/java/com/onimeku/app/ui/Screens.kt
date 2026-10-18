@@ -2,7 +2,10 @@ package com.onimeku.app.ui
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -25,7 +28,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +45,22 @@ import java.time.format.TextStyle as DateTextStyle
 import java.util.Locale
 
 // ------------------------------------------------------------------ HOME
+private val SectionGap = 26.dp
+
+/** Satu baris poster bergulir horizontal dengan judul bagian + "See all". */
+@Composable
+private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: String?, ranked: Boolean = false) {
+    val items = ids.mapNotNull { Catalog.byId[it] }
+    if (items.isEmpty()) return
+    Spacer(Modifier.height(SectionGap))
+    SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
+    Rail {
+        itemsIndexed(items, key = { _, a -> a.id }) { i, a ->
+            PosterCard(a, railW, rank = if (ranked) i + 1 else null) { vm.go(Route.Detail(a.id)) }
+        }
+    }
+}
+
 @Composable
 fun HomeScreen(vm: AppVM) {
     val p = vm.p
@@ -47,7 +68,10 @@ fun HomeScreen(vm: AppVM) {
         Page(extraTop = 64.dp) {
             RootTitle("Home")
             if (Catalog.loading) {
-                Text("Loading catalog…", color = InkSoft, modifier = Modifier.padding(top = 12.dp))
+                Box(Modifier.fillMaxWidth().padding(top = 56.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.CircularProgressIndicator(color = Red)
+                }
+                Text("Loading catalog…", Modifier.fillMaxWidth().padding(top = 16.dp), color = InkSoft, textAlign = TextAlign.Center)
             } else {
                 EmptyBox("Catalog unavailable", "The catalog could not be loaded. Check your connection, then try again.") {
                     Btn("Try again", BtnStyle.Play) { vm.reloadCatalog() }
@@ -56,93 +80,56 @@ fun HomeScreen(vm: AppVM) {
         }
         return
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 110.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(vm.homeScroll).padding(bottom = bottomContentPadding())) {
         Hero(vm)
 
         val last = p.last
         val t = last?.let { p.prog["${it.id}:${it.ep}"] }
-        if (last != null && t != null && Catalog.byId[last.id] != null) {
-            val a = Catalog.byId[last.id]!!
-            Spacer(Modifier.height(26.dp))
+        val lastAnime = last?.let { Catalog.byId[it.id] }
+        if (last != null && t != null && lastAnime != null) {
+            Spacer(Modifier.height(SectionGap))
             SectionHead("Continue Watching")
             Rail {
                 item {
-                    Poster(a, railW, ep = true, meta = a.title to "Episode ${last.ep} · ${fmt(t)}") {
+                    Poster(lastAnime, railW, ep = true, meta = lastAnime.title to "Episode ${last.ep} · ${fmt(t)}") {
                         vm.go(Route.Player(last.id, last.ep))
                     }
                 }
             }
         }
 
-        val rec = p.base?.let { Catalog.byId[it] }?.let { Catalog.similar(it.id) }.orEmpty()
-        if (rec.isNotEmpty()) {
-            Spacer(Modifier.height(26.dp))
-            SectionHead("Because you watched ${p.base?.let { Catalog.byId[it]?.title }.orEmpty()}")
-            Rail { items(rec) { a -> Poster(a, railW, badges = true) { vm.go(Route.Detail(a.id)) } } }
+        val base = p.base?.let { Catalog.byId[it] }
+        if (base != null) {
+            PosterRow("Because you watched ${base.title}", Catalog.similar(base.id).map { it.id }, vm, seeAll = null)
         }
 
-        Spacer(Modifier.height(26.dp))
-        SectionHead("Top Hits Anime") { vm.go(Route.SeeAll("top")) }
-        Rail {
-            items(Catalog.top.size) { i ->
-                val a = Catalog.byId[Catalog.top[i]]!!
-                Poster(a, railW, badges = true, rank = i + 1) { vm.go(Route.Detail(a.id)) }
-            }
-        }
+        PosterRow("Top Hits Anime", Catalog.top, vm, seeAll = "top", ranked = true)
 
-        Spacer(Modifier.height(26.dp))
-        SectionHead("New Episode Releases") { vm.go(Route.SeeAll("new")) }
-        Rail {
-            items(Catalog.new) { (id, ep, whenTxt) ->
-                val a = Catalog.byId[id]!!
-                Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
-            }
-        }
-
-        if (Catalog.airing.isNotEmpty()) {
-            Spacer(Modifier.height(26.dp))
-            SectionHead("Airing Now") { vm.go(Route.SeeAll("airing")) }
+        val fresh = Catalog.new
+        if (fresh.isNotEmpty()) {
+            Spacer(Modifier.height(SectionGap))
+            SectionHead("New Episode Releases") { vm.go(Route.SeeAll("new")) }
             Rail {
-                items(Catalog.airing.take(12)) { id ->
-                    Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
+                items(fresh, key = { it.first }) { (id, ep, whenTxt) ->
+                    Catalog.byId[id]?.let { a ->
+                        Poster(a, railW, ep = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(26.dp))
-        SectionHead("Popular") { vm.go(Route.SeeAll("popular")) }
-        Rail {
-            items(Catalog.popular.take(12)) { id ->
-                Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
-            }
-        }
+        PosterRow("Airing Now", Catalog.airing.take(12), vm, seeAll = "airing")
+        PosterRow("Popular", Catalog.popular.take(12), vm, seeAll = "popular")
+        PosterRow("Latest Releases", Catalog.latest.take(12), vm, seeAll = "latest")
+        PosterRow("Donghua", Catalog.donghua.take(12), vm, seeAll = "donghua")
+        Catalog.topGenres.forEach { g -> PosterRow(g, Catalog.byGenre(g).take(12), vm, seeAll = "genre:$g") }
 
-        Spacer(Modifier.height(26.dp))
-        SectionHead("Latest Releases") { vm.go(Route.SeeAll("latest")) }
-        Rail {
-            items(Catalog.latest.take(12)) { id ->
-                Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
-            }
-        }
-
-        if (Catalog.donghua.isNotEmpty()) {
-            Spacer(Modifier.height(26.dp))
-            SectionHead("Donghua") { vm.go(Route.SeeAll("donghua")) }
-            Rail {
-                items(Catalog.donghua.take(12)) { id ->
-                    Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
-                }
-            }
-        }
-
-        Catalog.topGenres.forEach { g ->
-            Spacer(Modifier.height(26.dp))
-            SectionHead(g) { vm.go(Route.SeeAll("genre:$g")) }
-            Rail {
-                items(Catalog.byGenre(g).take(12)) { id ->
-                    Poster(Catalog.byId[id]!!, railW, badges = true) { vm.go(Route.Detail(id)) }
-                }
-            }
+        // Pintu masuk ke SELURUH katalog (grid lazy, tanpa batas 12 judul).
+        Spacer(Modifier.height(SectionGap))
+        SectionHead("All Anime") { vm.go(Route.SeeAll("all")) }
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            Btn("Browse all ${Catalog.all.size} anime", BtnStyle.Solid, Icons.Filled.GridView,
+                Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
         }
     }
 }
@@ -152,23 +139,27 @@ private fun Hero(vm: AppVM) {
     val a = Catalog.top.firstOrNull()?.let { Catalog.byId[it] } ?: Catalog.all.firstOrNull() ?: return
     val on = a.id in vm.p.myList
     val firstEp = a.available.firstOrNull() ?: 1
-    Box(Modifier.fillMaxWidth().height(560.dp).artBackground(a)) {
-        // Hero menampilkan POSTER ASLI judul (portrait), bukan cover/banner —
-        // banner lebar ter-crop parah di layar portrait dan bukan posternya.
+    // Tinggi mengikuti layar (±64%), bukan angka tetap, supaya rapi di ponsel kecil maupun tablet.
+    val heroH = (LocalConfiguration.current.screenHeightDp * 0.64f).coerceIn(420f, 640f).dp
+    Box(Modifier.fillMaxWidth().height(heroH).artBackground(a).clickable { vm.go(Route.Detail(a.id)) }) {
+        // Hero menampilkan POSTER ASLI judul (portrait), bukan cover/banner.
         val img = com.onimeku.app.data.PosterHealer.posterFor(a)
         if (!img.isNullOrBlank()) {
             coil.compose.AsyncImage(
                 model = img, contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                alignment = Alignment.TopCenter,
             )
         }
         Box(Modifier.fillMaxSize().drawBehind {
-            drawRect(Brush.verticalGradient(0f to Color(0x5914161F), 0.3f to Color.Transparent, 0.72f to Color(0xB814161F), 1f to Bg))
+            drawRect(Brush.verticalGradient(0f to Color(0x8014161F), 0.28f to Color.Transparent, 0.68f to Color(0xC014161F), 1f to Bg))
         })
         Column(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = 28.dp)) {
-            Text(a.title, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp)
-            Text(a.genres.joinToString(", "), Modifier.padding(top = 10.dp), fontSize = 14.sp, color = Color(0xFFF1E8EE))
+            Text(a.title, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp,
+                maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(a.genres.take(4).joinToString(", "), Modifier.padding(top = 10.dp), fontSize = 14.sp,
+                color = Color(0xFFF1E8EE), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Btn("Play", BtnStyle.Play, Icons.Filled.PlayCircleFilled) { vm.go(Route.Player(a.id, firstEp)) }
                 Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
@@ -252,7 +243,7 @@ fun ItemRow(
             }
             Column(Modifier.weight(1f).clickable(onClick = onOpen)) {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(sub, fontSize = 12.sp, color = if (subOk) RedText else NavOff, modifier = Modifier.padding(top = 2.dp))
+                Text(sub, fontSize = 12.sp, color = if (subOk) RedText else NavOff, modifier = Modifier.padding(top = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             trailing()
         }
@@ -262,13 +253,12 @@ fun ItemRow(
 
 // ------------------------------------------------------------------ MY LIST / DOWNLOADS
 @Composable
-fun MyListScreen(vm: AppVM) = Page {
-    RootTitle("My List")
+fun MyListScreen(vm: AppVM) {
     val l = vm.p.myList.mapNotNull { Catalog.byId[it] }
-    if (l.isEmpty()) EmptyBox("Your list is empty", "Tap My List on any anime to save it here.") { Btn("Browse anime", BtnStyle.Play) { vm.setTab(Route.Home) } }
-    else {
-        Text("${l.size} saved", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-        TileGrid(l, vm)
+    AnimeGrid(l, vm) {
+        RootTitle("My List")
+        if (l.isEmpty()) EmptyBox("Your list is empty", "Tap My List on any anime to save it here.") { Btn("Browse anime", BtnStyle.Play) { vm.setTab(Route.Home) } }
+        else Text("${l.size} saved", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
     }
 }
 
@@ -306,37 +296,54 @@ fun DownloadsScreen(vm: AppVM) = Page {
 fun DetailScreen(vm: AppVM, id: String) {
     val a = Catalog.byId[id] ?: return
     val on = id in vm.p.myList
-    Page {
-        SubHead("Details", vm)
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(18.dp)).artBackground(a)) {
-            RealImage(a, Modifier.fillMaxSize())
-            Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color(0xB314161F))) })
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(a.title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 31.sp)
-        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            a.rating?.let { Tag(it, Color.White, Bg) }
-            if (a.hd) Tag("HD", Red, Color.White)
-            Text("${a.eps} episodes · ${a.genres.joinToString(", ")}", fontSize = 13.sp, color = InkSoft, modifier = Modifier.weight(1f))
-        }
-        Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Btn("Play", BtnStyle.Play, Icons.Filled.PlayArrow) { vm.go(Route.Player(id, a.available.firstOrNull() ?: 1)) }
-            Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
-                if (on) Icons.Filled.Check else Icons.Filled.Add) { vm.toggleML(id) }
-        }
-        Box(Modifier.padding(top = 14.dp)) { Chip("Download all", icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
-        Text(a.synopsis, Modifier.padding(top = 18.dp), color = InkSoft, fontSize = 15.sp)
-
-        val sim = Catalog.similar(id)
-        if (sim.isNotEmpty()) {
-            Text("More like this", Modifier.padding(top = 26.dp, bottom = 12.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                sim.forEach { x -> Poster(x, railW, badges = true) { vm.go(Route.Detail(x.id)) } }
+    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    var expanded by rememberSaveable(id) { mutableStateOf(false) }
+    val epNums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+    val sim = Catalog.similar(id)
+    // LazyColumn: judul panjang (ratusan episode) tidak lagi digambar sekaligus.
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = bottomContentPadding()),
+    ) {
+        item {
+            SubHead("Details", vm)
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(18.dp)).artBackground(a)) {
+                RealImage(a, Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color(0xB314161F))) })
             }
+            Spacer(Modifier.height(16.dp))
+            Text(a.title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 31.sp)
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                a.rating?.let { Tag(it, Color.White, Bg) }
+                if (a.hd) Tag("HD", Red, Color.White)
+                Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.status).joinToString(" · "),
+                    fontSize = 13.sp, color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (a.genres.isNotEmpty()) {
+                Text(a.genres.joinToString(", "), Modifier.padding(top = 6.dp), fontSize = 13.sp, color = NavOff)
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Btn("Play", BtnStyle.Play, Icons.Filled.PlayArrow, Modifier.weight(1f)) { vm.go(Route.Player(id, a.available.firstOrNull() ?: 1)) }
+                Btn(if (on) "Added" else "My List", if (on) BtnStyle.OutlineOn else BtnStyle.Outline,
+                    if (on) Icons.Filled.Check else Icons.Filled.Add, Modifier.weight(1f)) { vm.toggleML(id) }
+            }
+            Box(Modifier.padding(top = 14.dp)) { Chip("Download all", icon = Icons.Outlined.Download) { vm.downloadAll(id) } }
+            Text(a.synopsis, Modifier.padding(top = 18.dp), color = InkSoft, fontSize = 15.sp, lineHeight = 22.sp,
+                maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
+            if (a.synopsis.length > 180) {
+                Text(if (expanded) "Show less" else "Read more", Modifier.padding(top = 6.dp).clickable { expanded = !expanded },
+                    color = RedText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            if (sim.isNotEmpty()) {
+                Text("More like this", Modifier.padding(top = 26.dp, bottom = 12.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(sim, key = { it.id }) { x -> PosterCard(x, railW) { vm.go(Route.Detail(x.id)) } }
+                }
+            }
+            Text("Episodes", Modifier.padding(top = 26.dp, bottom = 4.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            if (epNums.isEmpty()) Text("No episodes available yet.", color = NavOff, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
         }
-        Text("Episodes", Modifier.padding(top = 26.dp, bottom = 4.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        val epNums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
-        for (n in epNums) {
+        items(epNums, key = { it }) { n ->
             val k = "$id:$n"
             val seen = k in vm.p.seen
             val prog = vm.p.prog[k]
@@ -358,9 +365,10 @@ fun DetailScreen(vm: AppVM, id: String) {
 }
 
 @Composable
-fun SeeAllScreen(vm: AppVM, key: String) = Page {
+fun SeeAllScreen(vm: AppVM, key: String) {
     val (title, ids) = when {
-        key == "top" -> "Top Hits Anime" to Catalog.top
+        key == "top" -> "Top Hits Anime" to Catalog.popular // semua judul urut skor, bukan hanya 10 teratas
+        key == "all" -> "All Anime" to Catalog.alphabetical
         key == "airing" -> "Airing Now" to Catalog.airing
         key == "popular" -> "Popular" to Catalog.popular
         key == "latest" -> "Latest Releases" to Catalog.latest
@@ -368,8 +376,11 @@ fun SeeAllScreen(vm: AppVM, key: String) = Page {
         key.startsWith("genre:") -> key.removePrefix("genre:") to Catalog.byGenre(key.removePrefix("genre:"))
         else -> "New Episode Releases" to Catalog.new.map { it.first }
     }
-    SubHead(title, vm)
-    TileGrid(ids.mapNotNull { Catalog.byId[it] }, vm)
+    val items = ids.mapNotNull { Catalog.byId[it] }
+    AnimeGrid(items, vm) {
+        SubHead(title, vm)
+        Text("${items.size} anime", color = NavOff, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+    }
 }
 
 // ------------------------------------------------------------------ NOTIFICATIONS
@@ -384,7 +395,7 @@ fun NotifScreen(vm: AppVM) = Page {
         }
     }
     Catalog.notifs.forEach { (id, ep, whenTxt) ->
-        val a = Catalog.byId[id]!!
+        val a = Catalog.byId[id] ?: return@forEach
         Column {
             Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Detail(id)) }.padding(vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -424,7 +435,17 @@ fun SearchScreen(vm: AppVM) {
         }
     }
 
-    Page {
+    val query = appliedQ.trim().lowercase()
+    val results = remember(query, gs, yr, st, Catalog.all) {
+        if (query.isEmpty() && !any) emptyList()
+        else Catalog.all.filter { c ->
+            (query.isEmpty() || c.title.lowercase().contains(query) || c.genres.joinToString(" ").lowercase().contains(query)) &&
+                gs.all { it in c.genres } && (yr.isEmpty() || c.year.toString() == yr) && (st.isEmpty() || c.status == st)
+        }
+    }
+
+    // Hasil memakai grid lazy: mengetik di katalog besar tidak lagi menggambar ratusan kartu sekaligus.
+    AnimeGrid(results, vm) {
         SubHead("Search", vm)
         Row(Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -443,7 +464,6 @@ fun SearchScreen(vm: AppVM) {
         }
         Spacer(Modifier.height(8.dp))
 
-        val query = appliedQ.trim().lowercase()
         if (query.isEmpty() && !any) {
             if (vm.s.hist.isEmpty()) Text("Search a title, or pick filters above", Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)
             else {
@@ -453,16 +473,10 @@ fun SearchScreen(vm: AppVM) {
                     Chip("Clear history") { vm.clearHist() }
                 }
             }
+        } else if (results.isEmpty()) {
+            EmptyBox("No results", "Nothing matches. Try fewer filters or check the spelling.")
         } else {
-            val r = Catalog.all.filter { c ->
-                (query.isEmpty() || c.title.lowercase().contains(query) || c.genres.joinToString(" ").lowercase().contains(query)) &&
-                    gs.all { it in c.genres } && (yr.isEmpty() || c.year.toString() == yr) && (st.isEmpty() || c.status == st)
-            }
-            if (r.isEmpty()) EmptyBox("No results", "Nothing matches. Try fewer filters or check the spelling.")
-            else {
-                Text("${r.size} result${if (r.size > 1) "s" else ""}", Modifier.padding(bottom = 10.dp), color = NavOff, fontSize = 13.sp)
-                TileGrid(r, vm)
-            }
+            Text("${results.size} result${if (results.size > 1) "s" else ""}", Modifier.padding(bottom = 2.dp), color = NavOff, fontSize = 13.sp)
         }
     }
 }

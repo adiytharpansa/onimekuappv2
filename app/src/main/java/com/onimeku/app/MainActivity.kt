@@ -10,6 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -116,7 +117,7 @@ fun App(vm: AppVM) {
                 if (vm.route !is Route.Player) TabBar(vm, Modifier.align(Alignment.BottomCenter))
             }
             vm.toastMsg?.let { m ->
-                val bottom = if (vm.route is Route.Player || vm.welcomeOpen) 24.dp else 86.dp
+                val bottom = if (vm.route is Route.Player || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp
                 Text(m, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = bottom, start = 16.dp, end = 16.dp)
                     .clip(CircleShape).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp),
                     color = Bg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -127,7 +128,10 @@ fun App(vm: AppVM) {
 
 @Composable
 private fun TopBar(vm: AppVM) {
-    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp),
+    // Transparan di atas hero; setelah digulir menjadi latar solid supaya ikon
+    // tidak bertabrakan dengan poster di bawahnya.
+    val solid by animateColorAsState(if (vm.homeScroll.value > 360) Color(0xF214161F) else Color.Transparent, label = "topBarBg")
+    Row(Modifier.fillMaxWidth().background(solid).statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.clickable { vm.setTab(Route.Home) }) { Logo(40.dp) }
         Spacer(Modifier.weight(1f))
@@ -159,12 +163,12 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
     )
     Row(
         modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xE6141621), Color(0xFF141621))))
-            .navigationBarsPadding().padding(top = 10.dp, bottom = 10.dp, start = 8.dp, end = 8.dp),
+            .navigationBarsPadding().height(TabBarHeight).padding(horizontal = 8.dp),
     ) {
         tabs.forEach { t ->
             val sel = vm.tab == t.r
-            Column(Modifier.weight(1f).clickable { vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight().clickable { vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                 Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(26.dp), tint = if (sel) RedText else NavOff)
                 Text(t.label, fontSize = 12.sp, color = if (sel) RedText else NavOff, maxLines = 1)
             }
