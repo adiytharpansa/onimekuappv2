@@ -79,7 +79,7 @@ fun Logo(size: Dp) {
 
 @Composable
 fun Tag(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier, small: Boolean = false) {
-    Text(text, color = fg, fontSize = if (small) 11.sp else 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+    Text(text, color = fg, fontSize = if (small) 11.sp else 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
         modifier = modifier.clip(RoundedCornerShape(if (small) 6.dp else 7.dp)).background(bg)
             .padding(horizontal = if (small) 7.dp else 9.dp, vertical = if (small) 2.dp else 3.dp))
 }
@@ -159,6 +159,9 @@ fun RealImage(a: Anime, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** Teks status yang mengikuti bahasa aktif (nilai mentah "Airing"/"Completed" tetap dipakai untuk filter). */
+fun statusText(status: String): String = I18n.t("st_" + status.lowercase(), status)
 
 val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.4f).coerceIn(142f, 230f).dp
 

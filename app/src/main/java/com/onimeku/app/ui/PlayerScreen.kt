@@ -689,10 +689,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column {
-                        Text("Up next", fontSize = 11.sp, color = InkSoft)
+                        Text(I18n.t("up_next", "Up next"), fontSize = 11.sp, color = InkSoft)
                         Text("Episode $nextEp · ${remain}s", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
-                    Chip("Play now") { vm.replaceTop(Route.Player(r.id, nextEp)) }
+                    Chip(I18n.t("play_now", "Play now")) { vm.replaceTop(Route.Player(r.id, nextEp)) }
                 }
             }
             if (locked && showUi) {
@@ -722,9 +722,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF))
                                 .clickable { val n = if (subIdx + 1 >= subTracks.size) -1 else subIdx + 1; applySub(n); uiTick++; vm.toast("Subtitles: ${subName(n)}") }
                                 .padding(horizontal = 9.dp, vertical = 4.dp))
-                    }
-                    Box(Modifier.padding(start = 2.dp).size(42.dp).clip(CircleShape).clickable { locked = true; showUi = true; uiTick++ }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Lock, "Lock controls", Modifier.size(20.dp))
                     }
                     Box(Modifier.size(42.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
                         Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen")
@@ -795,16 +792,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                     Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp,
                         letterSpacing = (-0.3).sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.genres.take(2).joinToString(", ").ifBlank { null }, a.status).joinToString("  ·  "),
+                    Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.genres.take(2).joinToString(", ").ifBlank { null }, statusText(a.status)).joinToString("  ·  "),
                         Modifier.padding(top = 4.dp), fontSize = 13.sp, color = InkSoft, maxLines = 1)
 
                     if (hasPrev || hasNext) Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (hasPrev) Btn("Previous", BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { step(-1) }
-                        if (hasNext) Btn("Next episode", BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { step(1) }
+                        if (hasPrev) Btn(I18n.t("previous", "Previous"), BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { step(-1) }
+                        if (hasNext) Btn(I18n.t("next_episode", "Next episode"), BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { step(1) }
                     }
 
                     val tiles = buildList {
-                        add(CtlTile(Icons.Filled.Speed, "Speed", "${spdLabel(speed)}×", speed != 1f) {
+                        add(CtlTile(Icons.Filled.Speed, I18n.t("ctl_speed", "Speed"), "${spdLabel(speed)}×", speed != 1f) {
                             val all = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
                             speed = all[(all.indexOf(speed).let { if (it < 0) 2 else it } + 1) % all.size]
                             player.setPlaybackSpeed(speed)
@@ -823,20 +820,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             val n = (audioIdx + 1) % audioLabels.size
                             applyAudio(n); vm.toast("Audio: ${audioLabels[n]}")
                         })
-                        add(CtlTile(Icons.Filled.Bedtime, "Sleep", if (sleepMin == 0) "Off" else "${sleepMin}m", sleepMin > 0) {
+                        add(CtlTile(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep"), if (sleepMin == 0) I18n.t("ctl_off", "Off") else "${sleepMin}m", sleepMin > 0) {
                             sleepMin = when (sleepMin) { 0 -> 15; 15 -> 30; 30 -> 60; else -> 0 }
                         })
                         add(CtlTile(Icons.Filled.PictureInPictureAlt, "PiP", "Mini") {
                             try { act?.enterPictureInPictureMode(pipParams(wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
                         })
-                        add(CtlTile(Icons.Filled.Lock, "Lock", "Screen") { locked = true; showUi = true })
-                        add(CtlTile(Icons.Filled.Fullscreen, "Display", "Full") { full = true })
+                        add(CtlTile(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock"), I18n.t("ctl_screen", "Screen")) { locked = true; showUi = true })
                     }
                     Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         tiles.chunked(4).forEach { row ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 row.forEach { t -> ControlTile(t, Modifier.weight(1f)) }
-                                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
                     }
@@ -844,17 +839,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(Icons.Filled.TouchApp, null, Modifier.size(16.dp), tint = NavOff)
-                        Text("Swipe left: brightness · right: volume · double-tap sides: ±10s", fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
+                        Text(I18n.t("swipe_hint", "Swipe left: brightness · right: volume · double-tap sides: ±10s"), fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
                     }
                 }
             }
             if (nextEp != null) item(key = "upnext") {
                 val k = "${r.id}:$nextEp"
                 Column(Modifier.padding(top = 24.dp)) {
-                    SectionTitle("Up next")
+                    SectionTitle(I18n.t("up_next", "Up next"))
                     Spacer(Modifier.height(12.dp))
                     EpisodeCard(a, nextEp, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = false,
-                        onOpen = { vm.replaceTop(Route.Player(r.id, nextEp)) }) {}
+                        onOpen = { vm.replaceTop(Route.Player(r.id, nextEp)) }, nextUp = true) {}
                 }
             }
             item(key = "ephead") {
@@ -867,7 +862,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Icon(Icons.Filled.MyLocation, null, Modifier.size(14.dp), tint = RedText)
-                            Text("Current", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
+                            Text(I18n.t("current", "Current"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
                         }
                     }
                 }
@@ -1027,7 +1022,7 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
             Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
             if (idx > 0 || (idx >= 0 && idx < nums.size - 1)) Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (idx > 0) Btn("Previous", BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
+                if (idx > 0) Btn(I18n.t("previous", "Previous"), BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
                 if (idx >= 0 && idx < nums.size - 1) Btn("Next episode", BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx + 1])) }
             }
             Text(

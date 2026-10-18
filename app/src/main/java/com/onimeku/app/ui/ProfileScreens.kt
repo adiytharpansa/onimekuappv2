@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Language
@@ -118,7 +119,24 @@ fun ProfileScreen(vm: AppVM) {
             )
         }
 
-        CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(200)) {
+        CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(160)) {
+            Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Downloads) }.padding(horizontal = 18.dp, vertical = 17.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(Red.copy(alpha = 0.28f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Download, null, Modifier.size(18.dp), tint = RedText)
+                }
+                Column(Modifier.weight(1f).padding(start = 2.dp)) {
+                    Text(I18n.t("tab_download", "Download"), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        if (vm.s.downloads.isEmpty()) I18n.t("dl_profile_empty", "Watch offline") else "${vm.s.downloads.size} ${I18n.t("dl_saved", "episodes saved")}",
+                        fontSize = 12.5.sp, color = NavOff,
+                    )
+                }
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
+            }
+        }
+
+        CardBox(Modifier.padding(top = 16.dp).fadeSlideIn(200)) {
             listOf("settings" to I18n.t("settings", "Settings"), "language" to I18n.t("language", "Language"), "help" to I18n.t("help", "Help Center"), "about" to I18n.t("about", "About Onimeku")).forEachIndexed { i, (k, label) ->
                 if (i > 0) HLine()
                 Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = 18.dp, vertical = 17.dp),

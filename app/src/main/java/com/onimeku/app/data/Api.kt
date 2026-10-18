@@ -309,7 +309,7 @@ private fun ApiAnime.toAnime(): Anime {
     val cleanSyn = (synopsis ?: "")
         .substringBefore("(Source:").trim()
         .ifBlank { "No synopsis available yet." }
-    val scoreTxt = score?.let { s ->
+    val scoreTxt = score?.takeIf { it > 0.0 }?.let { s ->
         val t = if (s % 1.0 == 0.0) s.toInt().toString() else s.toString()
         "★ $t"
     }
@@ -319,7 +319,7 @@ private fun ApiAnime.toAnime(): Anime {
         genres = genres,
         rating = scoreTxt,
         hd = false, // API tidak menyediakan info kualitas; jangan klaim HD
-        eps = if (total > 0) total else latest,
+        eps = maxOf(total, latest, episodeNumbers.maxOrNull() ?: 0),
         ep = latest,
         label = false,
         synopsis = cleanSyn,

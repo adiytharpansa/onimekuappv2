@@ -228,7 +228,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp) {
     Box(Modifier.fillMaxWidth().height(heroH).clipToBounds()) {
         HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) }
         if (items.size > 1) {
-            Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
                 items.indices.forEach { i ->
                     val sel = pager.currentPage == i
                     val w by animateDpAsState(if (sel) 22.dp else 6.dp, label = "dotW")
@@ -254,7 +254,7 @@ private fun HeroPage(vm: AppVM, a: Anime) {
             alignment = Alignment.TopCenter,
         )
         Box(Modifier.fillMaxSize().drawBehind {
-            drawRect(Brush.verticalGradient(0f to Color(0x99080910), 0.26f to Color.Transparent, 0.52f to Color(0x3314161F), 0.8f to Color(0xE614161F), 1f to Bg))
+            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.26f to Color.Transparent, 0.52f to Color(0x3314161F), 0.8f to Color(0xE614161F), 1f to Bg))
         })
         Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 44.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -351,7 +351,7 @@ fun CalendarScreen(vm: AppVM) {
 @Composable
 fun ItemRow(
     a: Anime, thumbLabel: String, title: String, sub: String, subOk: Boolean = false,
-    onThumb: (() -> Unit)? = null, onOpen: () -> Unit, trailing: @Composable () -> Unit,
+    onThumb: (() -> Unit)? = null, onOpen: () -> Unit, nextUp: Boolean = false, trailing: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
     Row(
@@ -385,7 +385,7 @@ fun MyListScreen(vm: AppVM) {
 
 @Composable
 fun DownloadsScreen(vm: AppVM) = Page {
-    RootTitle(I18n.t("tab_download", "Download"))
+    SubHead(I18n.t("tab_download", "Download"), vm)
     val d = vm.s.downloads
     if (d.isEmpty()) EmptyBox(I18n.t("dl_none_t", "No downloads yet"), I18n.t("dl_none_b", "Open an anime and tap the download icon on an episode to watch it offline.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
     else {
@@ -434,8 +434,8 @@ private val GoodGreen = Color(0xFF3DDC97)
 @Composable
 fun GlassButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(42.dp).clip(CircleShape).background(Color(0x66080910))
-            .border(1.dp, Color(0x33FFFFFF), CircleShape).pressable(onClick),
+        Modifier.size(44.dp).clip(CircleShape).background(Color(0x4D000000))
+            .border(1.dp, Color(0x40FFFFFF), CircleShape).pressable(onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, Modifier.size(22.dp), tint = Color.White) }
 }
@@ -460,7 +460,7 @@ private fun StatusPill(status: String) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(if (live) GoodGreen else NavOff))
-        Text(status, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(statusText(status), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, softWrap = false)
     }
 }
 
@@ -515,7 +515,7 @@ fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
 @Composable
 fun EpisodeCard(
     a: Anime, n: Int, seen: Boolean, progSec: Int?, current: Boolean,
-    onOpen: () -> Unit, trailing: @Composable () -> Unit,
+    onOpen: () -> Unit, nextUp: Boolean = false, trailing: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
     val frac = when { seen -> 1f; progSec != null -> (progSec / 1440f).coerceIn(0.03f, 0.97f); else -> 0f }
@@ -541,15 +541,17 @@ fun EpisodeCard(
             Text("Episode $n", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                 color = if (seen) Color(0xB3FFFFFF) else Color.White)
             val (txt, col) = when {
-                current -> "Now watching" to RedText
-                seen -> "Watched" to GoodGreen
-                progSec != null -> "Resume at ${fmt(progSec)}" to RedText
-                else -> "Tap to play" to NavOff
+                current -> I18n.t("now_watching", "Now watching") to RedText
+                seen -> I18n.t("watched", "Watched") to GoodGreen
+                progSec != null -> "${I18n.t("resume_at", "Resume at")} ${fmt(progSec)}" to RedText
+                nextUp -> I18n.t("up_next", "Up next") to RedText
+                else -> I18n.t("not_watched", "Not watched yet") to NavOff
             }
             Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (seen && !current) Icon(Icons.Filled.CheckCircle, null, Modifier.size(13.dp), tint = col)
                 Text(txt, fontSize = 12.sp, color = col, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            if (nextUp && !seen && progSec == null) Text(a.title, Modifier.padding(top = 2.dp), fontSize = 12.sp, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         trailing()
     }
@@ -603,7 +605,7 @@ fun DetailScreen(vm: AppVM, id: String) {
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
             item(key = "hero") {
                 // ===== HERO: gambar penuh lebar, parallax, judul menempel di bawahnya =====
-                Box(Modifier.fillMaxWidth().height(heroH).artBackground(a)) {
+                Box(Modifier.fillMaxWidth().height(heroH).clipToBounds().artBackground(a)) {
                     RealImage(a, Modifier.fillMaxSize().graphicsLayer {
                         val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
                         translationY = minOf(off * 0.45f, size.height * 0.12f)
@@ -620,7 +622,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                         }
                         Text(a.title, Modifier.padding(top = 10.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold,
                             lineHeight = 33.sp, letterSpacing = (-0.5).sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.genres.firstOrNull()).joinToString("  ·  "),
+                        Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.genres.take(2).joinToString(", ").ifBlank { null }).joinToString("  ·  "),
                             Modifier.padding(top = 6.dp), fontSize = 13.sp, color = InkSoft, maxLines = 1)
                     }
                 }
@@ -630,8 +632,8 @@ fun DetailScreen(vm: AppVM, id: String) {
                     Spacer(Modifier.height(16.dp))
                     PlayButton(
                         label = if (resume != null) "${I18n.t("resume", "Resume Ep")} ${resume.ep}" else I18n.t("play", "Play"),
-                        sub = resume?.let { r -> vm.p.prog["$id:${r.ep}"]?.let { "Continue from ${fmt(it)}" } }
-                            ?: if (resume == null) "Start with Episode ${a.available.firstOrNull() ?: 1}" else null,
+                        sub = resume?.let { r -> vm.p.prog["$id:${r.ep}"]?.let { "${I18n.t("continue_from", "Continue from")} ${fmt(it)}" } }
+                            ?: if (resume == null) "${I18n.t("start_with", "Start with Episode")} ${a.available.firstOrNull() ?: 1}" else null,
                     ) { vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1)) }
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ActionTile(if (on) Icons.Filled.Check else Icons.Filled.Add, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
@@ -652,7 +654,7 @@ fun DetailScreen(vm: AppVM, id: String) {
             }
             item(key = "synopsis") {
                 Column(Modifier.padding(horizontal = Gutter).padding(top = 20.dp).fadeSlideIn(160)) {
-                    Text("Synopsis", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(I18n.t("synopsis", "Synopsis"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Box(Modifier.padding(top = 8.dp).animateContentSize()) {
                         Text(a.synopsis, color = InkSoft, fontSize = 14.5.sp, lineHeight = 22.sp,
                             maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
@@ -800,7 +802,7 @@ fun SeeAllScreen(vm: AppVM, key: String) {
 // ------------------------------------------------------------------ NOTIFICATIONS
 @Composable
 fun NotifScreen(vm: AppVM) = Page {
-    SubHead("Notifications", vm)
+    SubHead(I18n.t("notifications", "Notifications"), vm)
     if (!vm.s.settings.alerts) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(14.dp)).background(Bg2)
             .border(1.dp, Line, RoundedCornerShape(14.dp)).padding(12.dp)) {
@@ -824,7 +826,7 @@ fun NotifScreen(vm: AppVM) = Page {
             HLine()
         }
     }
-    if (!vm.s.notifRead) Box(Modifier.padding(top = 16.dp)) { Btn("Mark all as read", BtnStyle.Solid) { vm.markAllRead() } }
+    if (!vm.s.notifRead) Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("mark_all_read", "Mark all as read"), BtnStyle.Solid) { vm.markAllRead() } }
 }
 
 // ------------------------------------------------------------------ SEARCH

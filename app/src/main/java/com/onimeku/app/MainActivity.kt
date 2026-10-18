@@ -21,6 +21,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -205,31 +207,19 @@ fun App(vm: AppVM) {
 
 @Composable
 private fun TopBar(vm: AppVM) {
-    // Transparan di atas hero; setelah digulir menjadi latar solid supaya ikon
-    // tidak bertabrakan dengan poster di bawahnya.
-    // Transisi halus: scrim gradasi di atas hero, solid bertahap mulai ±80px gulir (tanpa lonjakan mendadak).
-    // derivedStateOf + kuantisasi 5%: hanya recompose saat nilai benar-benar berubah, bukan tiap piksel gulir.
-    // Perbaikan debug.32: dulu solid hanya 97% sehingga judul hero tembus samar di balik bilah; kini 100% + garis halus.
-    val k by remember { derivedStateOf { (((vm.homeScrollPx() - 24) / 56f).coerceIn(0f, 1f) * 20f).toInt() / 20f } }
+    // Bilah atas polos: tanpa logo, tanpa latar/scrim. Hanya dua tombol kaca bulat
+    // yang melayang di atas poster (tetap terbaca di poster terang maupun gelap).
     Row(
-        Modifier.fillMaxWidth()
-            .drawBehind {
-                // debug.33: scrim hitam transparan di belakang logo DIHAPUS. Bilah polos di atas hero,
-                // lalu cepat menjadi solid saat digulir (tidak ada keadaan setengah tembus).
-                // Setelah digulir: latar solid penuh + garis tipis di tepi bawah.
-                if (k > 0f) drawRect(Bg.copy(alpha = k))
-                if (k >= 1f) drawLine(Line, Offset(0f, size.height - 0.5.dp.toPx()), Offset(size.width, size.height - 0.5.dp.toPx()), 1.dp.toPx())
-            }
-            .statusBarsPadding().padding(start = 24.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(Modifier.clickable { vm.setTab(Route.Home) }) { Logo(48.dp) }
         Spacer(Modifier.weight(1f))
-        IconBtn(Icons.Outlined.Search, "Search") { vm.go(Route.Search) }
         Box {
-            IconBtn(Icons.Outlined.Notifications, "Notifications") { vm.go(Route.Notif) }
+            GlassButton(Icons.Outlined.Notifications, "Notifications") { vm.go(Route.Notif) }
             if (!vm.s.notifRead && vm.s.settings.alerts)
-                Box(Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 10.dp).size(9.dp).clip(CircleShape).background(Red))
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp)
+                    .clip(CircleShape).background(Red).border(1.5.dp, Color(0xCC000000), CircleShape))
         }
     }
 }
@@ -248,7 +238,7 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
         T(Route.Home, I18n.t("tab_home", "Home"), Icons.Outlined.Home, Icons.Filled.Home),
         T(Route.Calendar, I18n.t("tab_calendar", "Calendar"), Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth),
         T(Route.MyList, I18n.t("tab_mylist", "My List"), Icons.Outlined.BookmarkBorder, Icons.Filled.Bookmark),
-        T(Route.Downloads, I18n.t("tab_download", "Download"), Icons.Outlined.Download, Icons.Filled.Download),
+        T(Route.Search, I18n.t("tab_search", "Search"), Icons.Outlined.Search, Icons.Filled.Search),
         T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), Icons.Outlined.Person, Icons.Filled.Person),
     )
     Row(
