@@ -62,6 +62,28 @@ object Downloads {
             ).also { simpleCache = it }
         }
 
+    /**
+     * Reset satu kali (debug.13): cache media dari era sebelum proksi bisa
+     * menyimpan entri playlist rusak/terpotong (kegagalan jaringan di tengah
+     * penulisan) yang dipakai ulang pemutar sebagai kunci cache yang sama,
+     * sehingga episode tetap gagal diputar walau stream-nya sudah sehat.
+     * Buang isi cache + kosongkan indeks unduhan lama. Wajib dipanggil
+     * SEBELUM ensureInit/cache pertama kali disentuh dalam proses ini.
+     */
+    fun oneTimeResetV13(ctx: Context) {
+        val app = ctx.applicationContext
+        val prefs = app.getSharedPreferences("dl_state", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("reset_v13", false)) return
+        if (simpleCache == null && manager == null) {
+            runCatching { File(app.filesDir, "media_downloads").deleteRecursively() }
+            runCatching {
+                val m = ensureInit(ctx)
+                for (d in states(ctx)) m.removeDownload(d.request.id)
+            }
+        }
+        prefs.edit().putBoolean("reset_v13", true).apply()
+    }
+
     // ---- Referer per unduhan ----
     // CDN membedakan asal permintaan; Referer dari respons API disimpan per
     // awalan URL stream (host + segmen path pertama) agar unduhan segmen

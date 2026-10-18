@@ -88,6 +88,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var pb by remember(r) { mutableStateOf<com.onimeku.app.data.Playback?>(null) }
     var pbFailed by remember(r) { mutableStateOf(false) }
     var forceEmbed by remember(r) { mutableStateOf(false) }
+    var useDirect by remember(r) { mutableStateOf(false) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false
         val res = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
@@ -161,12 +162,20 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     // web, bukan berkas media) — untuk itu tampilkan pemutar embed resmi.
     val mediaUrl = playback.streamUrl?.takeIf { isMediaUrl(it) }
         ?: playback.streamProxyUrl?.takeIf { isMediaUrl(it) }
-    val embedUrl = playback.embedUrl ?: playback.streamUrl?.takeIf { !isMediaUrl(it) }
+    val embedUrl = playback.embedUrl ?: playback.pageUrl
+        ?: playback.streamUrl?.takeIf { !isMediaUrl(it) }
     if ((mediaUrl == null || forceEmbed) && !embedUrl.isNullOrBlank()) {
         EmbedPlayer(vm, r, a, embedUrl)
         return
     }
-    val streamUrl = mediaUrl
+    // Rantai cadangan putar: URL utama (untuk MegaPlay = proksi API) ->
+    // URL CDN langsung -> pemutar embed resmi. Tiap lapisan menembus
+    // jenis kegagalan jaringan yang berbeda di sisi HP.
+    val streamUrl = if (useDirect) {
+        playback.directUrl?.takeIf { isMediaUrl(it) } ?: mediaUrl
+    } else {
+        mediaUrl
+    }
     if (streamUrl == null) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
             SubHead(a.title, vm)
@@ -176,7 +185,15 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         return
     }
 
-    PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, onFatalError = { forceEmbed = true })
+    key(useDirect) {
+        PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, onFatalError = {
+            if (!useDirect && !playback.directUrl.isNullOrBlank()) {
+                useDirect = true
+            } else if (!embedUrl.isNullOrBlank()) {
+                forceEmbed = true
+            }
+        })
+    }
 
 }
 
@@ -281,8 +298,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             override fun onPlayerError(error: PlaybackException) {
                 failed = true; buffering = false
                 errMsg = error.errorCodeName
-                // Bila judul ini punya embed resmi, alihkan ke sana otomatis.
-                if (!playback.embedUrl.isNullOrBlank()) onFatalError()
+                // Serahkan ke rantai cadangan di PlayerContent (URL
+                // langsung / embed) — ia yang tahu lapisan berikutnya.
+                onFatalError()
             }
         }
         player.addListener(l)

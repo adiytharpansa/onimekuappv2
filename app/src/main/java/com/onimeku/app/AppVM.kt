@@ -46,6 +46,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var playing by mutableStateOf(false)
 
     init {
+        Downloads.oneTimeResetV13(app)
         PosterHealer.init(app)
         Reminders.rescheduleAll(app, s)
         initDownloads()

@@ -59,6 +59,8 @@ data class ApiSubtitle(
 data class Playback(
     val streamUrl: String? = null,
     val streamProxyUrl: String? = null,
+    val directUrl: String? = null,
+    val pageUrl: String? = null,
     val embedUrl: String? = null,
     val referer: String? = null,
     val downloadUrl: String? = null,
