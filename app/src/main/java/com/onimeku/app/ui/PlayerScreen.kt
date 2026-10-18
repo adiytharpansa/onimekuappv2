@@ -1,140 +1,265 @@
 package com.onimeku.app.ui
 
-import android.app.Activity
 import android.app.PictureInPictureParams
-import android.content.ComponentName
-import android.content.pm.ActivityInfo
+import android.content.Context
+import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Rational
-import android.view.ViewGroup
-import androidx.compose.foundation.background
+import android.view.WindowManager
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.*
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.onimeku.app.data.*
-import com.onimeku.app.media.MediaKit
-import com.onimeku.app.data.Repo
-import com.google.firebase.FirebaseApp
-import com.google.firebase.auth.FirebaseAuth
-import androidx.compose.foundation.shape.RoundedCornerShape
-import com.onimeku.app.media.PlaybackService
-import kotlinx.coroutines.*
+import com.onimeku.app.AppVM
+import com.onimeku.app.Route
+import com.onimeku.app.data.Catalog
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
-object PlayerState { var active by mutableStateOf(false); var inPip by mutableStateOf(false) }
+private fun pipParams(auto: Boolean): PictureInPictureParams {
+    val b = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+    if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(auto)
+    return b.build()
+}
 
-@UnstableApi @Composable
-fun PlayerScreen(animeId: String, title: String, ep: Int, total: Int, onEpisode: (Int) -> Unit, onBack: () -> Unit) {
-    val ctx = LocalContext.current; val act = ctx as Activity
-    val settings by SettingsStore.of(ctx).flow.collectAsState(Settings())
-    val cfg by rememberUpdatedState(settings); val epNow by rememberUpdatedState(ep)
-    val dao = remember { AppDb.get(ctx).progress() }
-    val scope = rememberCoroutineScope()
-    var player by remember { mutableStateOf<MediaController?>(null) }
-    var showSkip by remember { mutableStateOf(false) }
-    var wifiBlocked by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
-    var showComments by remember { mutableStateOf(false) }; var liveOn by remember { mutableStateOf(true) }
-    var comments by remember { mutableStateOf<List<CommentDto>>(emptyList()) }; var pos by remember { mutableLongStateOf(0L) }
-    var cmsg by remember { mutableStateOf<String?>(null) }; var lastPost by remember { mutableLongStateOf(0L) }
-    val blockedUsers = settings.blocked; val store = remember { SettingsStore.of(ctx) }
-    val key = "$animeId:$ep"
+private fun onWifi(ctx: Context): Boolean {
+    val cm = ctx.getSystemService(ConnectivityManager::class.java)
+    val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+    return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+}
 
-    fun save(p: Player?, k: String) { p ?: return; val d = p.duration; if (d <= 0) return
-        val pos = p.currentPosition; scope.launch(Dispatchers.IO) { dao.upsert(Progress(k, pos, d, System.currentTimeMillis())) } }
+@Composable
+private fun VideoSurface(player: Player, modifier: Modifier) {
+    AndroidView(factory = { c -> PlayerView(c).also { it.player = player; it.useController = false } }, modifier = modifier)
+}
 
-    // Landscape + fullscreen selama pemutar tampil
-    DisposableEffect(Unit) {
-        act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        val c = WindowCompat.getInsetsController(act.window, act.window.decorView)
-        c.hide(WindowInsetsCompat.Type.systemBars()); c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        PlayerState.active = true
-        onDispose { c.show(WindowInsetsCompat.Type.systemBars()); act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT; PlayerState.active = false }
+@Composable
+fun PlayerScreen(vm: AppVM, r: Route.Player) {
+    val ctx = LocalContext.current
+    if (vm.s.settings.wifi && !onWifi(ctx)) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+            SubHead("Wi-Fi only is on", vm)
+            Text("Streaming over mobile data is turned off in Settings. Connect to Wi-Fi or turn the option off.", color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn("Open Settings", BtnStyle.Solid) { vm.openSettings() } }
+        }
+        return
     }
-    // Sambung ke MediaSession
-    DisposableEffect(Unit) {
-        val f = MediaController.Builder(ctx, SessionToken(ctx, ComponentName(ctx, PlaybackService::class.java))).buildAsync()
-        f.addListener({ player = f.get() }, ContextCompat.getMainExecutor(ctx))
-        onDispose { player?.let { save(it, "$animeId:$epNow"); it.stop() }; MediaController.releaseFuture(f); player = null }
+    PlayerContent(vm, r)
+}
+
+@Composable
+private fun PlayerContent(vm: AppVM, r: Route.Player) {
+    val a = Catalog.byId[r.id] ?: return
+    val ctx = LocalContext.current
+    val act = ctx.findActivity()
+    val audio = remember { ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val quality = vm.s.settings.quality
+
+    val player = remember(r) {
+        ExoPlayer.Builder(ctx).build().apply {
+            when (quality) {
+                "1080p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1920, 1080).build()
+                "720p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
+                "480p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
+            }
+            setMediaItem(MediaItem.fromUri(Catalog.streamUrl(r.id, r.ep)))
+            seekTo((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L)
+            playWhenReady = true
+            prepare()
+        }
     }
-    // Muat episode: pakai URI unduhan bila ada (offline), kalau tidak minta URL stream ke API
-    LaunchedEffect(player, ep) {
-        val p = player ?: return@LaunchedEffect
-        failed = false
-        val local = withContext(Dispatchers.IO) { MediaKit.downloadedUri(ctx, key) }
-        wifiBlocked = cfg.wifiOnly && MediaKit.isMetered(ctx) && local == null
-        if (wifiBlocked) return@LaunchedEffect
-        val url = local?.toString() ?: runCatching { Repo.of(ctx).stream(animeId, ep) }.getOrNull()
-        if (url == null) { failed = true; return@LaunchedEffect }
-        val saved = withContext(Dispatchers.IO) { dao.get(key) }
-        val start = saved?.takeIf { it.positionMs < it.durationMs * 0.95 }?.positionMs ?: 0L
-        p.setMediaItem(MediaItem.Builder().setMediaId(key).setUri(url)
-            .setMediaMetadata(MediaMetadata.Builder().setTitle("$title · Episode $ep").build()).build(), start)
-        p.prepare(); p.playWhenReady = true
-    }
-    LaunchedEffect(ep) { comments = runCatching { Repo.of(ctx).comments(animeId, ep) }.getOrDefault(emptyList()) }
-    // Kualitas video dari Settings
-    LaunchedEffect(player, settings.quality) {
-        val p = player ?: return@LaunchedEffect
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().apply {
-            when (settings.quality) { "1080p" -> setMaxVideoSize(1920, 1080); "720p" -> setMaxVideoSize(1280, 720)
-                "480p" -> setMaxVideoSize(854, 480); else -> clearVideoSizeConstraints() } }.build()
-    }
-    // Simpan progres tiap 5 dtk + tombol Skip Intro
-    LaunchedEffect(player) { while (true) { delay(5000); save(player, "$animeId:$epNow") } }
-    LaunchedEffect(player) { while (true) { val cp = player?.currentPosition ?: 0L; pos = cp; showSkip = cfg.skipIntro && cp in 3_000L..89_000L; delay(500) } }
-    // Autoplay episode berikutnya
+
+    var pos by remember(r) { mutableFloatStateOf((vm.p.prog["${r.id}:${r.ep}"] ?: 0).toFloat()) }
+    var dur by remember(r) { mutableIntStateOf(1440) }
+    var wantPlay by remember(r) { mutableStateOf(true) }
+    var buffering by remember(r) { mutableStateOf(true) }
+    var failed by remember(r) { mutableStateOf(false) }
+    var dragging by remember(r) { mutableStateOf(false) }
+    var speed by remember(r) { mutableFloatStateOf(1f) }
+    var br by remember { mutableFloatStateOf(1f) }
+    var hud by remember { mutableStateOf<String?>(null) }
+    var hudTick by remember { mutableIntStateOf(0) }
+    val durNow by rememberUpdatedState(dur)
+
     DisposableEffect(player) {
         val l = object : Player.Listener {
-            override fun onPlaybackStateChanged(s: Int) {
-                if (s == Player.STATE_ENDED) {
-                    val d = player?.duration ?: 0L; val k = "$animeId:$epNow"
-                    scope.launch(Dispatchers.IO) { dao.upsert(Progress(k, d, d, System.currentTimeMillis())) }
-                    if (cfg.autoplay && epNow < total) onEpisode(epNow + 1)
-                } } }
-        player?.addListener(l); onDispose { player?.removeListener(l) }
+            override fun onPlaybackStateChanged(state: Int) {
+                buffering = state == Player.STATE_BUFFERING
+                if (state == Player.STATE_READY) failed = false
+                if (state == Player.STATE_ENDED) {
+                    vm.saveProg(r.id, r.ep, durNow, durNow)
+                    if (vm.s.settings.autoplay && r.ep < a.eps) vm.replaceTop(Route.Player(r.id, r.ep + 1))
+                }
+            }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
+            override fun onPlayerError(error: PlaybackException) { failed = true; buffering = false }
+        }
+        player.addListener(l)
+        vm.playing = true
+        onDispose {
+            player.removeListener(l)
+            vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
+            player.release()
+            vm.playing = false
+        }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(modifier = Modifier.fillMaxSize(), factory = { c ->
-            PlayerView(c).apply { layoutParams = ViewGroup.LayoutParams(-1, -1); setShowSubtitleButton(true) } // ikon gear bawaan: audio & subtitle
-        }, update = { it.player = player })
-        if (wifiBlocked) Text("Stream over Wi-Fi only aktif. Sambungkan Wi-Fi atau unduh episode ini.", Modifier.align(Alignment.Center).padding(24.dp), color = Color.White)
-        if (failed) Text("Gagal memuat video. Periksa koneksi lalu coba lagi.", Modifier.align(Alignment.Center).padding(24.dp), color = Color.White)
-        if (!PlayerState.inPip) {
-            TextButton(onBack, Modifier.align(Alignment.TopStart).statusBarsPadding()) { Text("‹ Back", color = Color.White) }
-            if (showSkip) Button({ player?.seekTo(90_000L) }, Modifier.align(Alignment.BottomEnd).padding(24.dp, 72.dp)) { Text("Skip intro") }
-            Row(Modifier.align(Alignment.TopEnd).statusBarsPadding()) {
-                TextButton({ showComments = !showComments }) { Text("Komentar (${comments.count { it.userId !in blockedUsers }})", color = Color.White) }
-                TextButton({ liveOn = !liveOn }) { Text(if (liveOn) "Live ✓" else "Live ✗", color = Color.White) }
-                TextButton({ act.enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }) { Text("PiP", color = Color.White) }
-            }
-            // Komentar "live": muncul sesuai menit tontonan
-            if (liveOn && !showComments) Column(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 72.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                comments.filter { it.userId !in blockedUsers && pos - it.timeMs in 0L..6000L }.takeLast(3).forEach {
-                    Surface(color = Color.Black.copy(alpha = .55f), shape = RoundedCornerShape(12.dp)) { Text(it.text, Modifier.padding(10.dp, 4.dp), color = Color.White, maxLines = 1) } } }
-            if (showComments) CommentsPanel(Modifier.align(Alignment.CenterEnd), comments.filter { it.userId !in blockedUsers },
-                canPost = FirebaseApp.getApps(ctx).isNotEmpty() && FirebaseAuth.getInstance().currentUser != null, message = cmsg, posMs = pos,
-                onClose = { showComments = false }, onSeek = { player?.seekTo(it) },
-                onPost = { t -> if (System.currentTimeMillis() - lastPost < 3000) cmsg = "Tunggu beberapa detik sebelum mengirim lagi." else { lastPost = System.currentTimeMillis()
-                    scope.launch { runCatching { Repo.of(ctx).postComment(animeId, epNow, t, player?.currentPosition ?: 0L) }
-                        .onSuccess { comments = (comments + it).sortedBy { c -> c.timeMs }; cmsg = null }.onFailure { cmsg = "Gagal mengirim komentar." } } } },
-                onDelete = { c -> scope.launch { if (Repo.of(ctx).deleteComment(c.id)) comments = comments - c else cmsg = "Gagal menghapus." } },
-                onReport = { c -> scope.launch { cmsg = if (Repo.of(ctx).reportComment(c.id)) "Laporan terkirim. Terima kasih." else "Gagal melapor." } },
-                onBlock = { c -> scope.launch { store.block(c.userId); cmsg = "${c.user} diblokir." } })
+    LaunchedEffect(player) {
+        var n = 0
+        while (true) {
+            if (!dragging) pos = player.currentPosition / 1000f
+            val d = player.duration
+            if (d > 0) dur = (d / 1000).toInt()
+            if (++n % 10 == 0 && wantPlay) vm.saveProg(r.id, r.ep, pos.toInt(), durNow)
+            delay(500)
         }
+    }
+
+    // pause saat app ke background (kecuali sedang PiP)
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner, player) {
+        val o = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP && !vm.inPip) player.pause() }
+        owner.lifecycle.addObserver(o)
+        onDispose { owner.lifecycle.removeObserver(o) }
+    }
+
+    // PiP: auto-enter saat video diputar (Android 12+), layar tetap menyala, kecerahan dipulihkan
+    LaunchedEffect(wantPlay) { act?.setPictureInPictureParams(pipParams(wantPlay)) }
+    DisposableEffect(Unit) {
+        act?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            act?.setPictureInPictureParams(pipParams(false))
+            act?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
+        }
+    }
+    LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null } }
+
+    fun step(d: Int) { val n = r.ep + d; if (n in 1..a.eps) vm.replaceTop(Route.Player(r.id, n)) }
+
+    if (vm.inPip) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize()) }
+        return
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(16.dp)) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).background(Color.Black)
+                .pointerInput(Unit) {
+                    var left = true
+                    detectVerticalDragGestures(onDragStart = { left = it.x < size.width / 2 }) { change, dy ->
+                        change.consume()
+                        val d = -dy / size.height * 1.3f
+                        if (left) {
+                            br = (br + d).coerceIn(0.2f, 1f)
+                            act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = br } }
+                            hud = "Brightness ${(br * 100).roundToInt()}%"
+                        } else {
+                            val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                            val cur = audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max.toFloat()
+                            val v = (cur + d).coerceIn(0f, 1f)
+                            audio.setStreamVolume(AudioManager.STREAM_MUSIC, (v * max).roundToInt(), 0)
+                            hud = "Volume ${(v * 100).roundToInt()}%"
+                        }
+                        hudTick++
+                    }
+                },
+        ) {
+            VideoSurface(player, Modifier.fillMaxSize())
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0x8C0A0B10), 0.3f to Color.Transparent, 0.55f to Color.Transparent, 1f to Color(0xCC0A0B10))))
+
+            Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text("Episode ${r.ep}", fontSize = 12.sp, color = Color(0xFFE6E8F0))
+                }
+                Text(quality, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0x33FFFFFF)).padding(horizontal = 8.dp, vertical = 2.dp))
+            }
+
+            if (failed) {
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Can’t play this video", fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    Chip("Retry") { failed = false; player.prepare(); player.playWhenReady = true }
+                }
+            } else if (buffering) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center).size(44.dp), color = Red, strokeWidth = 3.dp)
+            } else {
+                Box(Modifier.align(Alignment.Center).size(64.dp).clip(CircleShape).background(Color(0xEBE50914))
+                    .clickable { player.playWhenReady = !player.playWhenReady }, contentAlignment = Alignment.Center) {
+                    Icon(if (wantPlay) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", Modifier.size(32.dp))
+                }
+            }
+
+            if (vm.s.settings.skipIntro && pos >= 3 && pos < 90) {
+                Text("Skip intro", Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 52.dp).clip(CircleShape)
+                    .background(Color(0x800A0B10)).border(1.dp, Color.White, CircleShape).clickable { player.seekTo(90_000L) }
+                    .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+            hud?.let {
+                Text(it, Modifier.align(Alignment.Center).offset(y = (-44).dp).clip(RoundedCornerShape(14.dp)).background(Color(0xB3000000))
+                    .padding(horizontal = 14.dp, vertical = 6.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp)) {
+                Slider(pos.coerceIn(0f, dur.toFloat()), { dragging = true; pos = it },
+                    valueRange = 0f..dur.toFloat(), modifier = Modifier.height(24.dp),
+                    onValueChangeFinished = { player.seekTo((pos * 1000).toLong()); dragging = false },
+                    colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red, inactiveTrackColor = Color(0x55FFFFFF)))
+                Text("${fmt(pos.toInt())} / ${fmt(dur)}", fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
+            }
+        }
+
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("−10s") { player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)) }
+            Chip("${if (speed == 1.5f) "1.5" else speed.toInt()}×") {
+                speed = when (speed) { 1f -> 1.5f; 1.5f -> 2f; else -> 1f }
+                player.setPlaybackSpeed(speed)
+                vm.toast("Speed ${if (speed == 1.5f) "1.5" else speed.toInt()}×")
+            }
+            Chip("+10s") { player.seekTo(player.currentPosition + 10_000) }
+            if (r.ep > 1) Chip("Previous") { step(-1) }
+            if (r.ep < a.eps) Chip("Next") { step(1) }
+        }
+        Text("Swipe left side: brightness · right side: volume", Modifier.padding(top = 12.dp), fontSize = 11.sp, color = InkSoft)
+        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("PiP") {
+                try { act?.enterPictureInPictureMode(pipParams(wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
+            }
+            Chip("Cast") { vm.toast("Cast belum tersedia di versi ini") }
+        }
+        Text("Video contoh diputar dari Catalog.SAMPLE_STREAM. Ganti dengan URL stream Anda.",
+            Modifier.padding(top = 16.dp), fontSize = 12.sp, color = NavOff)
     }
 }

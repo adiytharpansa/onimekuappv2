@@ -1,1 +1,7 @@
-<resources><style name="Theme.Onimeku" parent="android:Theme.Material.NoActionBar"><item name="android:windowBackground">#0F1019</item></style></resources>
+<resources>
+    <style name="Theme.Onimeku" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#14161F</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

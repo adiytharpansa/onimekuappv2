@@ -1,1 +1,3 @@
-<resources><string name="app_name">Onimeku</string><string name="downloads">Downloads</string></resources>
+<resources>
+    <string name="app_name">Onimeku</string>
+</resources>

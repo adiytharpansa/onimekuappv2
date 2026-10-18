@@ -1,101 +1,161 @@
 package com.onimeku.app
 
-import android.app.PictureInPictureParams
-import android.content.res.Configuration
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Rational
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.media3.common.util.UnstableApi
-import com.google.firebase.FirebaseApp
-import com.google.firebase.auth.FirebaseAuth
-import com.onimeku.app.data.Repo
-import com.onimeku.app.data.Settings
-import com.onimeku.app.data.SettingsStore
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.onimeku.app.ui.*
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
+import android.util.Rational
+import androidx.activity.viewModels
 
-@UnstableApi
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            val s by remember { SettingsStore.of(this@MainActivity) }.flow.collectAsState(Settings())
-            OnimekuTheme(s.theme) { Surface(color = MaterialTheme.colorScheme.background) { App() } }
+    private val vm: AppVM by viewModels()
+    private var permCb: ((Boolean) -> Unit)? = null
+    private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { g ->
+        permCb?.invoke(g); permCb = null
+    }
+
+    private fun ensureNotif(cb: (Boolean) -> Unit) {
+        if (Build.VERSION.SDK_INT < 33 ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) cb(true)
+        else { permCb = cb; permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 12+ memakai auto-enter (diatur di PlayerScreen); di bawahnya masuk PiP manual di sini.
+        if (Build.VERSION.SDK_INT < 31 && vm.route is Route.Player && vm.playing) {
+            try { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) } catch (_: Exception) {}
         }
     }
-    // Home saat video tampil -> otomatis Picture-in-Picture
-    override fun onUserLeaveHint() {
-        if (PlayerState.active && Build.VERSION.SDK_INT >= 26)
-            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
-    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig); PlayerState.inPip = isInPictureInPictureMode
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        vm.inPip = isInPictureInPictureMode
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
+        setContent {
+            OnimekuTheme {
+                CompositionLocalProvider(LocalEnsureNotif provides { cb -> ensureNotif(cb) }) {
+                    val appVm: AppVM = viewModel()
+                    App(appVm)
+                }
+            }
+        }
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class) @UnstableApi @Composable
-fun App() {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    var overlay by rememberSaveable { mutableStateOf<String?>(null) }   // null | settings | detail | player | signin | signup
-    var from by rememberSaveable { mutableStateOf<String?>(null) }      // layar asal pemutar
-    var anime by rememberSaveable { mutableStateOf("a1") }
-    var ep by rememberSaveable { mutableIntStateOf(1) }
-    var posterKey by rememberSaveable { mutableStateOf<String?>(null) }   // kunci poster untuk transisi shared element
-    val homeList = rememberLazyListState()
-    var email by remember { mutableStateOf<String?>(null) }
-    DisposableEffect(Unit) {
-        if (FirebaseApp.getApps(ctx).isEmpty()) onDispose { } else {
-            val auth = FirebaseAuth.getInstance(); val l = FirebaseAuth.AuthStateListener { email = it.currentUser?.email }
-            auth.addAuthStateListener(l); onDispose { auth.removeAuthStateListener(l) } }
-    }
-    val open = { id: String, key: String -> anime = id; posterKey = key; overlay = "detail" }
-    val play = { id: String, e: Int -> anime = id; ep = e; from = overlay; overlay = "player" }
-    BackHandler(overlay != null) { overlay = if (overlay == "player") from else null }
-    BackHandler(overlay == null && tab != 0) { tab = 0 }
+@Composable
+fun App(vm: AppVM) {
+    BackHandler(enabled = vm.stack.size > 1 && !vm.welcomeOpen) { vm.back() }
 
-    SharedTransitionLayout {
-        CompositionLocalProvider(LocalSharedScope provides this) {
-            AnimatedContent(overlay, transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(180)) }, label = "nav") { ov ->
-                CompositionLocalProvider(LocalAnimScope provides this) {
-                    when (ov) {
-                        "settings" -> SettingsScreen { overlay = null }
-                        "signin", "signup" -> AuthScreen(ov == "signup", { overlay = null }) { overlay = null }
-                        "detail" -> DetailScreen(anime, posterKey, { overlay = null }) { play(anime, it) }
-                        "player" -> { val a = remember(anime) { Repo.of(ctx).one(anime) }.collectAsState(null).value
-                            if (a != null) PlayerScreen(a.id, a.title, ep, a.eps, { ep = it }) { overlay = from } }
-                        else -> Scaffold(containerColor = MaterialTheme.colorScheme.background, bottomBar = {
-                            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                                listOf("Home" to Icons.Filled.Home, "Release Cal." to Icons.Filled.DateRange, "My List" to Icons.Filled.Bookmark,
-                                    "Download" to Icons.Filled.Download, "Profile" to Icons.Filled.Person).forEachIndexed { i, (label, icon) ->
-                                    NavigationBarItem(tab == i, { tab = i }, { Icon(icon, label) }, label = { Text(label, maxLines = 1) }) } } }) { pad ->
-                            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(bottom = pad.calculateBottomPadding())) {
-                                when (tab) {
-                                    0 -> HomeTab(homeList, open, play); 1 -> CalendarTab(); 2 -> MyListTab(play); 3 -> DownloadTab(play)
-                                    else -> ProfileScreen(email, { overlay = "settings" }, { overlay = "signin" }, { overlay = "signup" },
-                                        { if (FirebaseApp.getApps(ctx).isNotEmpty()) FirebaseAuth.getInstance().signOut() })
-                                } } }
-                    }
+    Surface(Modifier.fillMaxSize(), color = Bg, contentColor = Color.White) {
+        Box(Modifier.fillMaxSize()) {
+            if (vm.welcomeOpen) WelcomeScreen(vm) else {
+                when (val r = vm.route) {
+                    Route.Home -> HomeScreen(vm)
+                    Route.Calendar -> CalendarScreen(vm)
+                    Route.MyList -> MyListScreen(vm)
+                    Route.Downloads -> DownloadsScreen(vm)
+                    Route.ProfileTab -> ProfileScreen(vm)
+                    is Route.Sub -> SubScreen(vm, r.key)
+                    is Route.Detail -> DetailScreen(vm, r.id)
+                    is Route.SeeAll -> SeeAllScreen(vm, r.key)
+                    Route.Notif -> NotifScreen(vm)
+                    Route.Search -> SearchScreen(vm)
+                    is Route.Player -> PlayerScreen(vm, r)
                 }
+                if (vm.route == Route.Home) TopBar(vm)
+                if (vm.route !is Route.Player) TabBar(vm, Modifier.align(Alignment.BottomCenter))
+            }
+            vm.toastMsg?.let { m ->
+                val bottom = if (vm.route is Route.Player || vm.welcomeOpen) 24.dp else 86.dp
+                Text(m, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = bottom, start = 16.dp, end = 16.dp)
+                    .clip(CircleShape).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp),
+                    color = Bg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopBar(vm: AppVM) {
+    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 10.dp, top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.clickable { vm.setTab(Route.Home) }) { Logo(40.dp) }
+        Spacer(Modifier.weight(1f))
+        IconBtn(Icons.Outlined.Search, "Search") { vm.go(Route.Search) }
+        Box {
+            IconBtn(Icons.Outlined.Notifications, "Notifications") { vm.go(Route.Notif) }
+            if (!vm.s.notifRead && vm.s.settings.alerts)
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 10.dp).size(9.dp).clip(CircleShape).background(Red))
+        }
+    }
+}
+
+@Composable
+private fun IconBtn(icon: ImageVector, desc: String, onClick: () -> Unit) {
+    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, desc, Modifier.size(26.dp))
+    }
+}
+
+@Composable
+private fun TabBar(vm: AppVM, modifier: Modifier) {
+    data class T(val r: Route, val label: String, val icon: ImageVector, val sel: ImageVector)
+    val tabs = listOf(
+        T(Route.Home, "Home", Icons.Outlined.Home, Icons.Filled.Home),
+        T(Route.Calendar, "Calendar", Icons.Outlined.CalendarMonth, Icons.Outlined.CalendarMonth),
+        T(Route.MyList, "My List", Icons.Outlined.BookmarkBorder, Icons.Outlined.BookmarkBorder),
+        T(Route.Downloads, "Download", Icons.Outlined.Download, Icons.Outlined.Download),
+        T(Route.ProfileTab, "Profile", Icons.Outlined.Person, Icons.Filled.Person),
+    )
+    Row(
+        modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xE6141621), Color(0xFF141621))))
+            .navigationBarsPadding().padding(top = 10.dp, bottom = 10.dp, start = 8.dp, end = 8.dp),
+    ) {
+        tabs.forEach { t ->
+            val sel = vm.tab == t.r
+            Column(Modifier.weight(1f).clickable { vm.setTab(t.r) }, horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(if (sel) t.sel else t.icon, t.label, Modifier.size(26.dp), tint = if (sel) RedText else NavOff)
+                Text(t.label, fontSize = 12.sp, color = if (sel) RedText else NavOff, maxLines = 1)
             }
         }
     }
