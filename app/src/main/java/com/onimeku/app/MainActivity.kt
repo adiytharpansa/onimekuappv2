@@ -78,6 +78,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        // Kait tes otomatis (emulator CI): buka pemutar langsung ke satu
+        // episode lewat intent agar putar bisa diverifikasi ujung-ke-ujung
+        // tanpa mengetuk UI. Tidak berpengaruh pada pemakaian normal.
+        val testId = intent?.getStringExtra("test_id")
+        if (!testId.isNullOrBlank()) {
+            val testEp = intent?.getIntExtra("test_ep", 1) ?: 1
+            vm.closeWelcome()
+            vm.go(Route.Player(testId, testEp))
+        }
     }
 }
 
