@@ -12,6 +12,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.animation.core.LinearEasing
