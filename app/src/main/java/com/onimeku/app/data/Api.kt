@@ -229,12 +229,14 @@ object ApiClient {
         val subs = pb.subtitles.map { s -> if (s.lang.isBlank() && s.label.isNotBlank()) s.copy(lang = s.label) else s }
         val raw = pb.streamUrl
         // Stream MegaPlay (CDN nexabloom): bungkus lewat proksi media
-        // hulu dengan Referer akar origin (CDN menolak Referer halaman
-        // penuh); simpan URL asli + halaman putar untuk rantai cadangan
-        // di pemutar (langsung -> embed), persis perilaku era API v2.
+        // hulu, MENIRU pemutar web persis: ref = referer UTUH dari API
+        // (proksi yang memilah kandidat referer di sisi server); field
+        // referer sendiri tetap akar origin untuk header jalur langsung.
+        // Rantai cadangan di pemutar meniru web: proksi -> langsung ->
+        // gagal jujur (embed BUKAN cadangan untuk judul ber-stream).
         return if (raw != null && raw.contains("nexabloom", ignoreCase = true)) {
             val origin = originOf(pb.referer) ?: "https://megaplay.buzz/"
-            val proxied = "$BASE/api/proxy?u=${enc(raw)}&ref=${enc(origin)}"
+            val proxied = "$BASE/api/proxy?u=${enc(raw)}&ref=${enc(pb.referer?.takeIf { it.isNotBlank() } ?: origin)}"
             pb.copy(
                 streamUrl = proxied,
                 streamProxyUrl = proxied,

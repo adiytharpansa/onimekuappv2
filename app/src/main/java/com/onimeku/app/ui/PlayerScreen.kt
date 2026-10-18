@@ -106,7 +106,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var attempt by remember(r) { mutableIntStateOf(0) }
     var pb by remember(r) { mutableStateOf<com.onimeku.app.data.Playback?>(null) }
     var pbFailed by remember(r) { mutableStateOf(false) }
-    var forceEmbed by remember(r) { mutableStateOf(false) }
+    var chainDead by remember(r) { mutableStateOf(false) }
     var useDirect by remember(r) { mutableStateOf(false) }
     var mainRetry by remember(r) { mutableIntStateOf(0) }
     LaunchedEffect(r, attempt) {
@@ -197,13 +197,17 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         ?: playback.streamProxyUrl?.takeIf { isMediaUrl(it) }
     val embedUrl = playback.embedUrl ?: playback.pageUrl
         ?: playback.streamUrl?.takeIf { !isMediaUrl(it) }
-    if ((mediaUrl == null || forceEmbed) && !embedUrl.isNullOrBlank()) {
+    // Meniru pemutar web: embed HANYA untuk judul yang memang tanpa
+    // stream media (embed-only). Judul ber-stream tidak pernah jatuh ke
+    // embed — halaman embed MegaPlay bisa sudah mati (Error 410) dan
+    // menampilkannya menyembunyikan kegagalan jalur utama yang sebenarnya.
+    if (mediaUrl == null && !embedUrl.isNullOrBlank()) {
         EmbedPlayer(vm, r, a, embedUrl)
         return
     }
-    // Rantai cadangan putar: URL utama (untuk MegaPlay = proksi API) ->
-    // URL CDN langsung -> pemutar embed resmi. Tiap lapisan menembus
-    // jenis kegagalan jaringan yang berbeda di sisi HP.
+    // Rantai cadangan putar (meniru web): URL utama (untuk MegaPlay =
+    // proksi API) -> coba ulang utama sekali -> URL CDN langsung ->
+    // gagal jujur. Embed bukan bagian rantai untuk judul ber-stream.
     val streamUrl = if (useDirect) {
         playback.directUrl?.takeIf { isMediaUrl(it) } ?: mediaUrl
     } else {
@@ -218,6 +222,15 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         return
     }
 
+    if (chainDead) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+            SubHead(a.title, vm)
+            Text("This episode's stream is unavailable right now.", color = InkSoft)
+            Box(Modifier.padding(top = 16.dp)) { Btn("Try again", BtnStyle.Solid) { chainDead = false; useDirect = false; mainRetry = 0; attempt++ } }
+        }
+        return
+    }
+
     key(useDirect, mainRetry) {
         PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, onFatalError = {
             // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
@@ -228,8 +241,12 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} jalur utama gagal, mencoba ulang sekali")
             } else if (!useDirect && !playback.directUrl.isNullOrBlank()) {
                 useDirect = true
-            } else if (!embedUrl.isNullOrBlank()) {
-                forceEmbed = true
+            } else {
+                // Rantai habis (sama seperti fail() di web): tampilkan
+                // kegagalan apa adanya + tombol coba lagi yang mengambil
+                // ulang data putar, BUKAN halaman embed yang mungkin mati.
+                chainDead = true
+                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} rantai putar habis (proksi+gagal langsung)")
             }
         })
     }
