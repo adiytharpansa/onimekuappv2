@@ -168,9 +168,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 "720p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
                 "480p" -> trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
             }
-            // Subtitle hanya dipasang bila CC aktif di Pengaturan — trek teks
-            // yang gagal dimuat tidak boleh ikut menggagalkan video.
-            val subs = if (vm.settings.value.cc) playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
+            val subs = playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
                 val mime = when {
                     s.url.contains(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
                     s.url.contains(".ass") || s.url.contains(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
@@ -178,7 +176,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
                     .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase()).build()
-            } else emptyList()
+            }
             setMediaItem(
                 MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
                     .setSubtitleConfigurations(subs).build()
