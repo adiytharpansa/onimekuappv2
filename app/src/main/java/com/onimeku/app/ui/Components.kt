@@ -93,9 +93,9 @@ fun Tag(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier, small
 
 @Composable
 fun Chip(text: String, on: Boolean = false, minW: Dp = 0.dp, icon: ImageVector? = null, onClick: () -> Unit) {
-    val fg = Color.White
+    val fg = if (on) RedText else Color.White
     Row(
-        Modifier.height(34.dp).widthIn(min = minW).clip(CircleShape).background(if (on) Red else Bg2)
+        Modifier.height(34.dp).widthIn(min = minW).clip(CircleShape).background(Bg2)
             .border(1.dp, if (on) Red else Line, CircleShape).clickable(onClick = onClick).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
@@ -294,7 +294,7 @@ fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
-        itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(motionGridItem()) { Tile(a, vm, i % 9) } }
+        itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(Modifier.animateItem()) { Tile(a, vm, i % 9) } }
     }
 }
 

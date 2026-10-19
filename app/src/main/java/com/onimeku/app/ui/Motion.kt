@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -56,7 +55,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
 import androidx.compose.animation.core.animateDpAsState
@@ -196,37 +194,6 @@ fun Modifier.sharedArt(key: String?): Modifier {
     val av = LocalAnimScope.current
     if (key == null || ss == null || av == null) return this
     return with(ss) { this@sharedArt.sharedElement(rememberSharedContentState(key = key), animatedVisibilityScope = av) }
-}
-
-/**
- * Titik asal transisi pemutar: posisi sentuhan terakhir (pecahan lebar/tinggi layar) sebelum pemutar dibuka.
- * Diisi oleh pointerInput di akar App (tanpa menelan sentuhan). Pemutar tumbuh dari titik ini dan kembali ke sana.
- */
-object PlayerOrigin {
-    var origin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.4f)
-    fun set(x: Float, y: Float) { origin = androidx.compose.ui.graphics.TransformOrigin(x.coerceIn(0f, 1f), y.coerceIn(0f, 1f)) }
-    /** Kembali ke titik bawaan (dipanggil setiap rute meninggalkan pemutar, agar bukaan berikutnya dari widget/notifikasi tidak tumbuh dari titik sentuhan lama yang acak). */
-    fun reset() { origin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.4f) }
-}
-
-/** Animasi item daftar (LazyRow/LazyColumn): memudar saat masuk/keluar, item lain menutup celah dengan pegas. Mati bila reduce-motion. */
-@Composable
-fun androidx.compose.foundation.lazy.LazyItemScope.motionItem(): Modifier {
-    if (LocalReduceMotion.current) return Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
-    return Modifier.animateItem(
-        fadeInSpec = tween(260), fadeOutSpec = tween(180),
-        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold),
-    )
-}
-
-/** Sama seperti [motionItem], untuk LazyVerticalGrid. */
-@Composable
-fun androidx.compose.foundation.lazy.grid.LazyGridItemScope.motionGridItem(): Modifier {
-    if (LocalReduceMotion.current) return Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
-    return Modifier.animateItem(
-        fadeInSpec = tween(260), fadeOutSpec = tween(180),
-        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold),
-    )
 }
 
 object Entered { val keys = HashSet<String>() }

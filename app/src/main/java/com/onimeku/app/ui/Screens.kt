@@ -279,7 +279,7 @@ private fun HomeContent(vm: AppVM) {
                     Rail {
                         items(contItems, key = { it.a.id }) { c ->
                             Poster(
-                                c.a, contW, modifier = motionItem(), ep = true,
+                                c.a, contW, ep = true,
                                 meta = c.a.title to ("Episode ${c.ep}" + when {
                                     c.pos > 0 && c.dur > c.pos -> " · ${fmt(c.dur - c.pos)} ${I18n.t("time_left", "left")}"
                                     c.pos > 0 -> " · ${fmt(c.pos)}"
@@ -328,7 +328,7 @@ private fun HomeContent(vm: AppVM) {
                         items(fresh, key = { it.first }) { (id, ep, whenTxt) ->
                             Catalog.byId[id]?.let { a ->
                                 // Judul anime di bawah kartu (dulu kartu hanya bertuliskan "Episode N" tanpa nama anime).
-                                Column(motionItem().width(railW)) {
+                                Column(Modifier.width(railW)) {
                                     // debug.33: ukuran poster potret SAMA dengan rail lain (dulu kartu lanskap 232:150).
                                     Poster(a, railW, badges = true, meta = "Episode $ep" to whenTxt, newBadge = whenTxt == "Today" || whenTxt == "Yesterday") { vm.go(Route.Detail(id)) }
                                     Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
@@ -436,7 +436,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
     LaunchedEffect(pager.settledPage, n) {
         if (n > 1) {
             delay(5500)
-            while (pager.isScrollInProgress || held || vm.overlayOpen) delay(100)
+            while (pager.isScrollInProgress || held) delay(100)
             pager.animateScrollToPage(
                 pager.settledPage + 1,
                 animationSpec = tween(if (reduceMotion) 0 else 850, easing = androidx.compose.animation.core.CubicBezierEasing(0.33f, 0f, 0.15f, 1f)),

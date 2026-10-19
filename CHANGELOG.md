@@ -1,11 +1,3 @@
-# v15.1 — Penyempurnaan transisi (19 Okt 2026)
-**Belum dikompilasi.** Jalankan `gradle :app:assembleDebug` dulu.
-- ExitDialog terpasang (`ui/ExitDialog.kt`), hero dijeda saat `AppVM.overlayOpen`; teks `exit_body` baru.
-- Pemutar tumbuh dari titik sentuhan (`PlayerOrigin`) dan menyusut kembali; rotasi portrait/landscape dianimasikan (`fullA`).
-- Transisi tab sadar arah (`AppVM.tabDir/tabIndex`).
-- `motionItem()/motionGridItem()`: animasi item di Daftarku, Continue Watching, New Episode, grid hasil/All Anime.
-- Kunci i18n `filters_active`, `reset`, `start_here`; `Chip` aktif berisi merah; import `animateFloat` ditambahkan ke `Screens.kt`.
-
 # v14.1 — Hero carousel dirapikan (19 Okt 2026)
 **Belum dikompilasi** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu.
 - Slide otomatis presisi: efek auto-slide dikunci ke `settledPage` (dulu `currentPage` membatalkan animasi di tengah jalan sehingga hero berhenti setengah-geser).
