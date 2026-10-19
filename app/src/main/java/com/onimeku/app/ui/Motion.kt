@@ -184,7 +184,21 @@ val LocalSharedScope = androidx.compose.runtime.staticCompositionLocalOf<SharedT
 val LocalAnimScope = androidx.compose.runtime.staticCompositionLocalOf<AnimatedVisibilityScope?> { null }
 
 /** Kunci elemen bersama terakhir yang diketuk (poster -> hero Detail). */
-object SharedArt { var key: String? = null }
+object SharedArt {
+    private var k: String? = null
+    private var at = 0L
+    var key: String?
+        get() = k
+        set(v) { k = v; at = android.os.SystemClock.uptimeMillis() }
+
+    /**
+     * Buang kunci yang sudah usang. Klik dari sumber tanpa poster-bertanda (daftar, notifikasi, pencarian, menu cepat)
+     * tidak boleh memakai kunci klik lama: elemen bersama bisa "terbang" dari poster yang salah.
+     */
+    fun expireStale(maxAgeMs: Long = 800L) {
+        if (k != null && android.os.SystemClock.uptimeMillis() - at > maxAgeMs) k = null
+    }
+}
 
 /** Elemen bersama: poster "terbang" ke hero Detail dan kembali. Tanpa efek bila kunci/scope tidak ada. */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -194,6 +208,35 @@ fun Modifier.sharedArt(key: String?): Modifier {
     val av = LocalAnimScope.current
     if (key == null || ss == null || av == null) return this
     return with(ss) { this@sharedArt.sharedElement(rememberSharedContentState(key = key), animatedVisibilityScope = av) }
+}
+
+/**
+ * Titik asal transisi pemutar: posisi sentuhan terakhir (pecahan lebar/tinggi layar) sebelum pemutar dibuka.
+ * Diisi oleh pointerInput di akar App (tanpa menelan sentuhan). Pemutar tumbuh dari titik ini dan kembali ke sana.
+ */
+object PlayerOrigin {
+    var origin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.4f)
+    fun set(x: Float, y: Float) { origin = androidx.compose.ui.graphics.TransformOrigin(x.coerceIn(0f, 1f), y.coerceIn(0f, 1f)) }
+}
+
+/** Animasi item daftar (LazyRow/LazyColumn): memudar saat masuk/keluar, item lain menutup celah dengan pegas. Mati bila reduce-motion. */
+@Composable
+fun androidx.compose.foundation.lazy.LazyItemScope.motionItem(): Modifier {
+    if (LocalReduceMotion.current) return Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+    return Modifier.animateItem(
+        fadeInSpec = tween(260), fadeOutSpec = tween(180),
+        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold),
+    )
+}
+
+/** Sama seperti [motionItem], untuk LazyVerticalGrid. */
+@Composable
+fun androidx.compose.foundation.lazy.grid.LazyGridItemScope.motionGridItem(): Modifier {
+    if (LocalReduceMotion.current) return Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
+    return Modifier.animateItem(
+        fadeInSpec = tween(260), fadeOutSpec = tween(180),
+        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold),
+    )
 }
 
 object Entered { val keys = HashSet<String>() }

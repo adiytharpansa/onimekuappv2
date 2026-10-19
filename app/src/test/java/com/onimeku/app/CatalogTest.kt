@@ -27,6 +27,32 @@ class CatalogTest {
         assertTrue("x" in out)
     }
 
+    @Test fun dedupeMergesSameImageFromDifferentFolders() {
+        val list = listOf(
+            a("1", "#Zombie Sagashitemasu", poster = "https://img.example/cover/medium/bx150001-abcdef123.jpg"),
+            a("2", "#I'm Looking For a Zombie", poster = "https://img.example/cover/large/bx150001-abcdef123.jpg?v=2"),
+        )
+        assertEquals(1, Catalog.dedupe(list).size)
+    }
+
+    @Test fun dedupeMergesSameTitleWithDifferentPosterUrls() {
+        val list = listOf(
+            a("1", "#Compass2.0 Animation Project", poster = "https://a.example/one.jpg"),
+            a("2", "#Compass2.0: Animation Project", poster = "https://b.example/two.jpg", rating = "6.2"),
+        )
+        val out = Catalog.dedupe(list)
+        assertEquals(1, out.size)
+        assertEquals("2", out[0].id)
+    }
+
+    @Test fun dedupeKeepsRemakesWithDifferentYearInTitle() {
+        val list = listOf(
+            a("1", "Fruits Basket (2001)", poster = "https://a.example/fb1.jpg"),
+            a("2", "Fruits Basket (2019)", poster = "https://a.example/fb2.jpg"),
+        )
+        assertEquals(2, Catalog.dedupe(list).size)
+    }
+
     @Test fun dedupeFallsBackToNormalizedTitleWithoutPoster() {
         val list = listOf(a("1", "Lord of Mysteries"), a("2", "Lord  of  Mysteries!"))
         assertEquals(1, Catalog.dedupe(list).size)

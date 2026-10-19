@@ -33,6 +33,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -196,13 +201,9 @@ fun App(vm: AppVM) {
     BackHandler(enabled = vm.stack.size <= 1 && !vm.welcomeOpen && !vm.inPip) {
         if (vm.route != Route.Home) vm.setTab(Route.Home) else confirmExit = true
     }
-    if (confirmExit) androidx.compose.material3.AlertDialog(
-        onDismissRequest = { confirmExit = false },
-        title = { androidx.compose.material3.Text(I18n.t("exit_title", "Exit Onimeku?")) },
-        text = { androidx.compose.material3.Text(I18n.t("exit_body", "Press Exit to close the app.")) },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmExit = false; hostActivity?.finish() }) { androidx.compose.material3.Text(I18n.t("exit", "Exit"), color = RedText) } },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmExit = false }) { androidx.compose.material3.Text(I18n.t("cancel", "Cancel")) } },
-    )
+    // Hero Beranda dijeda selama dialog terbuka (tidak berganti poster di balik scrim).
+    LaunchedEffect(confirmExit) { vm.overlayOpen = confirmExit }
+    if (confirmExit) ExitDialog(onCancel = { confirmExit = false }, onExit = { confirmExit = false; hostActivity?.finish() })
     // Hormati "Hapus animasi" / skala animasi 0 di Android.
     val ctxMotion = androidx.compose.ui.platform.LocalContext.current
     val reduceMotion = remember {
@@ -211,7 +212,13 @@ fun App(vm: AppVM) {
 
     val enterA by animateFloatAsState(if (vm.welcomeOpen) 0f else 1f, tween(520), label = "homeEnter")
     Surface(Modifier.fillMaxSize(), color = Bg, contentColor = Color.White) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().pointerInput(Unit) {
+            // Catat titik sentuhan (tanpa menelan) agar pemutar bisa tumbuh dari poster/tombol yang diketuk.
+            awaitEachGesture {
+                val d = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                if (vm.route !is Route.Player && size.width > 0) PlayerOrigin.set(d.position.x / size.width, d.position.y / size.height)
+            }
+        }) {
             if (vm.welcomeOpen) WelcomeScreen(vm) else Box(Modifier.fillMaxSize().graphicsLayer { alpha = enterA; val z = 1.05f - 0.05f * enterA; scaleX = z; scaleY = z }) {
                 Box(Modifier.fillMaxSize().graphicsLayer {
                     val p = backP
@@ -228,14 +235,29 @@ fun App(vm: AppVM) {
                         val ease = androidx.compose.animation.core.FastOutSlowInEasing
                         val ct = when {
                             reduceMotion -> EnterTransition.None togetherWith ExitTransition.None
+                            // TAB -> TAB: konten masuk menggeser searah perpindahan (kanan = dari kanan, kiri = dari kiri).
+                            dir == 0 && vm.tabDir != 0 && vm.tabIndex(i) >= 0 && vm.tabIndex(t) >= 0 -> {
+                                val sgn = vm.tabDir
+                                (slideInHorizontally(tween(320, easing = ease)) { (it * 0.22f).toInt() * sgn } + fadeIn(tween(260))) togetherWith
+                                    (slideOutHorizontally(tween(320, easing = ease)) { -(it * 0.22f).toInt() * sgn } + fadeOut(tween(180)))
+                            }
                             dir == 0 -> fadeIn(tween(220)) togetherWith fadeOut(tween(140))
-                            // MASUK: Player naik dari bawah; Detail dibawa elemen bersama (poster terbang); lainnya geser dari kanan.
-                            dir > 0 && t is Route.Player -> (slideInVertically(tween(340, easing = ease)) { it / 6 } + fadeIn(tween(280))) togetherWith fadeOut(tween(200))
+                            // MASUK pemutar: tumbuh dari titik sentuhan terakhir (poster/tombol yang diketuk) + pudar.
+                            dir > 0 && t is Route.Player -> {
+                                val o = PlayerOrigin.origin
+                                (scaleIn(tween(380, easing = ease), initialScale = 0.78f, transformOrigin = o) + fadeIn(tween(300))) togetherWith
+                                    (scaleOut(tween(380, easing = ease), targetScale = 1.04f, transformOrigin = o) + fadeOut(tween(220)))
+                            }
                             dir > 0 && t is Route.Detail -> fadeIn(tween(300)) togetherWith fadeOut(tween(200))
                             dir > 0 -> (slideInHorizontally(tween(320, easing = ease)) { it / 4 } + fadeIn(tween(280))) togetherWith
                                 (slideOutHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeOut(tween(220)))
                             // KEMBALI: kebalikannya.
-                            i is Route.Player -> fadeIn(tween(240)) togetherWith (slideOutVertically(tween(300, easing = ease)) { it / 6 } + fadeOut(tween(240)))
+                            // KEMBALI dari pemutar: menyusut ke titik asal.
+                            i is Route.Player -> {
+                                val o = PlayerOrigin.origin
+                                (fadeIn(tween(260)) + scaleIn(tween(320, easing = ease), initialScale = 1.04f, transformOrigin = o)) togetherWith
+                                    (scaleOut(tween(320, easing = ease), targetScale = 0.78f, transformOrigin = o) + fadeOut(tween(260)))
+                            }
                             i is Route.Detail -> fadeIn(tween(240)) togetherWith fadeOut(tween(220))
                             else -> (slideInHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeIn(tween(280))) togetherWith
                                 (slideOutHorizontally(tween(320, easing = ease)) { it / 4 } + fadeOut(tween(220)))
@@ -268,7 +290,14 @@ fun App(vm: AppVM) {
                 }
                 }
                 }
-                if (vm.route !is Route.Player && vm.route !is Route.Auth) TabBar(vm, Modifier.align(Alignment.BottomCenter))
+                // Tab bar meluncur/memudar keluar saat pemutar/Auth masuk (bukan hilang seketika, yang membuat "lubang" di layar
+                // selama pemutar masih tumbuh dari poster) dan kembali halus saat keluar.
+                AnimatedVisibility(
+                    visible = vm.route !is Route.Player && vm.route !is Route.Auth,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = fadeIn(tween(240)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it },
+                    exit = fadeOut(tween(160)) + slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { it },
+                ) { TabBar(vm, Modifier) }
             }
             vm.quick?.let { QuickMenuSheet(vm, it) }
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.

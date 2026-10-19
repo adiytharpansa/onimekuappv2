@@ -1,9 +1,24 @@
+# v15.2 — Ikon huruf O (20 Okt 2026)
+- Ikon aplikasi hanya huruf "O" putih (Inter Display Bold, dikonversi ke outline) di atas latar datar #14161F (`@color/ic_bg`). Dipilih menggantikan varian bergradasi.
+- `drawable/ic_launcher_foreground.xml` (O selebar 44dp, di dalam zona aman 66dp; juga dipakai sebagai ikon monokrom) dan `play-store-icon-512.png` diganti. Latar tetap `@color/ic_bg`.
+
+# v15.1 — Penyempurnaan transisi (19 Okt 2026)
+**Belum dikompilasi.** Jalankan `gradle :app:assembleDebug` dulu.
+- ExitDialog terpasang, hero dijeda saat `AppVM.overlayOpen`.
+- Pemutar tumbuh dari titik sentuhan (`PlayerOrigin`) dan menyusut kembali; rotasi portrait/landscape dianimasikan (`fullA` di `PlayerScreen`).
+- Transisi tab sadar arah (`AppVM.tabDir/tabIndex`, `MainActivity`).
+- `motionItem()/motionGridItem()` (Motion.kt): animasi item di Daftarku, Continue Watching, New Episode, grid hasil/All Anime; mati bila reduce-motion.
+- `import androidx.compose.animation.core.animateFloat` ditambahkan ke `Screens.kt`.
+
 # v14.1 — Hero carousel dirapikan (19 Okt 2026)
 **Belum dikompilasi** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu.
 - Slide otomatis presisi: efek auto-slide dikunci ke `settledPage` (dulu `currentPage` membatalkan animasi di tengah jalan sehingga hero berhenti setengah-geser).
 - Pager tak terbatas (modulo): slide terakhir -> pertama bergerak maju, tidak lagi menggulung mundur melewati semua halaman.
 - Transisi mulus: tween 850 ms kurva halus, halaman tetangga dimuat lebih dulu (`beyondViewportPageCount = 1`), Ken Burns + overscan digabung jadi satu graphicsLayer (tidak bergetar), teks tertinggal 30% di belakang gambar sambil memudar.
 - Tarik-segar: rating, judul, deskripsi, Play, "+" dan titik indikator kini ikut turun bersama "Surprise me" (tidak lagi ditahan di posisi lama sehingga tidak ada celah kosong).
+- Dialog keluar: `ui/ExitDialog.kt` menggantikan AlertDialog bawaan. Batal netral, Keluar merah solid, warna/border senada tema, fade + skala halus. Teks isi baru: "Progres tontonanmu sudah tersimpan." Auto-slide hero dijeda selama dialog tampil (`AppVM.overlayOpen`).
+- Search dirapikan (`SearchScreen`): judul tanpa panah kembali di tab utama (panah tetap muncul bila dibuka dari layar lain); baris chip filter bergulir sampai tepi layar dengan ujung memudar; chip aktif berisi merah (`Chip`, berlaku di seluruh app); baris "N filter aktif · Reset" menggantikan chip Clear; keadaan awal berupa ajakan singkat berikon pencarian (bukan `EmptyBox` berikon inbox); "Trending now" jadi daftar bernomor dengan thumbnail, judul 2 baris, genre, dan skor. Kunci i18n baru: `filters_active`, `reset`.
+- My List kosong (`MyListScreen`): ikon bookmark, ajakan di tengah tanpa kartu berbingkai, teks "Ketuk + ...", aksi "Jelajahi anime" + chip "Kejutkan aku", dan baris rekomendasi "Mulai dari sini" (Top Hits) dengan tombol + / centang di tiap poster. Kunci i18n baru: `start_here`; `mylist_empty_t/b` diperbarui.
 
 # v14 — Personalisasi, aksi cepat, tablet (19 Okt 2026)
 **Belum dikompilasi dan belum dijalankan** (tanpa Android SDK). Jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` dulu.

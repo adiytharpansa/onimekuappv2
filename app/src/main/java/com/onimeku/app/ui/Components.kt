@@ -1,5 +1,6 @@
 package com.onimeku.app.ui
 
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import android.app.Activity
 import android.content.Context
@@ -92,10 +93,10 @@ fun Tag(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier, small
 }
 
 @Composable
-fun Chip(text: String, on: Boolean = false, minW: Dp = 0.dp, icon: ImageVector? = null, onClick: () -> Unit) {
-    val fg = if (on) RedText else Color.White
+fun Chip(text: String, on: Boolean = false, minW: Dp = 0.dp, icon: ImageVector? = null, height: Dp = 34.dp, onClick: () -> Unit) {
+    val fg = Color.White
     Row(
-        Modifier.height(34.dp).widthIn(min = minW).clip(CircleShape).background(Bg2)
+        Modifier.height(height).widthIn(min = minW).clip(CircleShape).background(if (on) Red else Bg2)
             .border(1.dp, if (on) Red else Line, CircleShape).clickable(onClick = onClick).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
@@ -167,10 +168,55 @@ fun RealImage(a: Anime, modifier: Modifier = Modifier) {
     }
 }
 
+/** Judul tanpa sufiks tahun di akhir: "False Memory (2026)" -> "False Memory" (tahun dipindah ke baris meta). */
+fun cleanTitle(t: String): String = t.replace(Regex("\\s*\\((19|20)\\d{2}\\)\\s*$"), "").trim().ifBlank { t }
+
+/** Baris meta kartu: genre; bila kosong, cadangan "tahun · N eps" supaya kartu tidak bolong. Tahun dari judul ikut dipindah ke sini. */
+fun cardMeta(a: Anime): String {
+    val g = a.genres.take(2).joinToString(", ")
+    val y = a.year.takeIf { it > 0 }?.toString()
+    val eps = a.eps.takeIf { it > 0 }?.let { "$it ${if (it == 1) "ep" else "eps"}" }
+    val hadYear = Regex("\\((19|20)\\d{2}\\)\\s*$").containsMatchIn(a.title)
+    return when {
+        g.isBlank() -> listOfNotNull(y, eps).joinToString(" · ")
+        hadYear && y != null -> "$y · $g"
+        else -> g
+    }
+}
+
+/** Lencana skor di poster: kapsul kaca gelap kecil + bintang emas (seragam dengan skor di hero, tidak menutupi seni poster). */
+@Composable
+fun ScoreBadge(score: String, modifier: Modifier = Modifier, small: Boolean = false) {
+    val sh = RoundedCornerShape(8.dp)
+    Row(
+        modifier.clip(sh).background(Color(0xB30A0B10)).border(0.5.dp, Color(0x33FFFFFF), sh)
+            .padding(horizontal = if (small) 6.dp else 8.dp, vertical = if (small) 3.dp else 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(Icons.Filled.Star, null, Modifier.size(if (small) 11.dp else 13.dp), tint = Gold)
+        Text(score.replace("★", "").trim(), fontSize = if (small) 11.sp else 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
+
+/** Pengganti skor untuk judul yang belum punya skor tetapi sedang tayang: titik hijau + "Airing". */
+@Composable
+fun LiveBadge(modifier: Modifier = Modifier, small: Boolean = false) {
+    val sh = RoundedCornerShape(8.dp)
+    Row(
+        modifier.clip(sh).background(Color(0xB30A0B10)).border(0.5.dp, Color(0x33FFFFFF), sh)
+            .padding(horizontal = if (small) 6.dp else 8.dp, vertical = if (small) 3.dp else 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF3DDC97)))
+        Text(statusText("Airing"), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, softWrap = false)
+    }
+}
+
 /** Teks status yang mengikuti bahasa aktif (nilai mentah "Airing"/"Completed" tetap dipakai untuk filter). */
 fun statusText(status: String): String = I18n.t("st_" + status.lowercase(), status)
 
-val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.4f).coerceIn(142f, 230f).dp
+// Kartu rail: sekitar 2,6 kartu terlihat sekaligus (petunjuk bahwa rail bisa digeser), tidak terlalu besar dibanding grid.
+val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.37f).coerceIn(124f, 220f).dp
 
 @Composable
 fun Poster(
@@ -182,8 +228,11 @@ fun Poster(
     val quick = LocalQuickMenu.current
     val longCb: (() -> Unit)? = if (!ep && quick != null) ({ quick(a) }) else null
     Box(
-        sized.liftPressLong(longCb) { if (sharedKey != null) SharedArt.key = sharedKey; onClick() }.aspectRatio(if (ep) 232f / 150f else 232f / 311f)
+        // Urutan penting: sharedArt di LUAR efek tekan (scale/tilt), jadi poster yang terbang membawa efek itu dan
+        // tidak "melompat" dari 0,94x ke 1x saat transisi dimulai. Kunci diset juga saat null agar tidak ada sisa klik lama.
+        sized.aspectRatio(if (ep) 232f / 150f else 232f / 311f)
             .sharedArt(sharedKey)
+            .liftPressLong(longCb) { SharedArt.key = sharedKey; onClick() }
             .clip(RoundedCornerShape(if (compact) 12.dp else 18.dp)).artBackground(a),
     ) {
         val img = if (ep) {
@@ -207,7 +256,9 @@ fun Poster(
             )
         }
         if (badges) {
-            a.rating?.let { Tag(it, Color.White, Bg, Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 12.dp), small = compact) }
+            val rt = a.rating
+            if (rt != null) ScoreBadge(rt, Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 10.dp), small = compact)
+            else if (a.status == "Airing") LiveBadge(Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 10.dp), small = compact)
             if (a.hd || newBadge) Column(
                 Modifier.align(Alignment.TopEnd).padding(if (compact) 6.dp else 10.dp),
                 horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -253,8 +304,11 @@ fun Poster(
 fun PosterCard(a: Anime, w: Dp, rank: Int? = null, sharedKey: String? = null, index: Int = 0, onClick: () -> Unit) {
     Column(Modifier.width(w).let { m -> if (sharedKey != null) m.staggerIn(sharedKey, index) else m }) {
         Poster(a, w, badges = true, rank = rank, sharedKey = sharedKey, onClick = onClick)
-        Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
+        Text(cleanTitle(a.title), Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        // Baris meta selalu memesan tinggi: struktur kartu rail = kartu grid (judul 2 baris + meta 1 baris).
+        Text(cardMeta(a).ifBlank { " " }, Modifier.padding(top = 2.dp), fontSize = 11.5.sp, color = NavOff,
+            minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -263,10 +317,10 @@ fun PosterCard(a: Anime, w: Dp, rank: Int? = null, sharedKey: String? = null, in
 fun Tile(a: Anime, vm: AppVM, index: Int = 0) {
     Column(Modifier.staggerIn("grid:${a.id}", index)) {
         Poster(a, null, badges = true, compact = true, sharedKey = "grid:${a.id}") { vm.go(Route.Detail(a.id)) }
-        Text(a.title, Modifier.padding(top = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
+        Text(cleanTitle(a.title), Modifier.padding(top = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        // Baris genre selalu memesan tinggi (spasi bila genre kosong) supaya kartu di satu baris grid sama tinggi.
-        Text(a.genres.take(2).joinToString(", ").ifBlank { " " }, fontSize = 11.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp),
+        // Baris meta selalu memesan tinggi (genre, atau cadangan tahun · eps) supaya kartu di satu baris grid sama tinggi.
+        Text(cardMeta(a).ifBlank { " " }, fontSize = 11.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp),
             minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -294,7 +348,7 @@ fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
-        itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(Modifier.animateItem()) { Tile(a, vm, i % 9) } }
+        itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(motionGridItem()) { Tile(a, vm, i % 9) } }
     }
 }
 

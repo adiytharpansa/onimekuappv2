@@ -1,5 +1,7 @@
 package com.onimeku.app.ui
 
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.media.AudioManager
@@ -56,6 +58,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -377,6 +380,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         ExoPlayer.Builder(ctx, renderers)
             .setMediaSourceFactory(sourceFactory)
             .setLoadControl(loadControl)
+            // Fokus audio: jeda saat ada panggilan/aplikasi lain, lanjut otomatis setelahnya; jeda saat headset/Bluetooth dicabut.
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE).build(),
+                true,
+            )
+            .setHandleAudioBecomingNoisy(true)
             .build().apply {
             // Telemetri pemutar: catat transisi keadaan, galat
             // pemutar, dan galat muat per-URL ke CrashLog (diunggah otomatis).
@@ -481,7 +492,21 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var audioOnly by remember { mutableStateOf(false) }
     val audioOnlyNow by rememberUpdatedState(audioOnly)
     var fullByRot by remember { mutableStateOf(false) }      // fullscreen karena HP diputar (bukan tombol)
+    // Tawaran melanjutkan: episode yang pernah ditonton >=30 dtk mulai dari posisi tersimpan, dengan opsi "Mulai dari awal" 7 dtk.
+    val resumeStart = remember(r) { vm.p.prog["${r.id}:${r.ep}"] ?: 0 }
+    var resumeChip by remember(r) { mutableStateOf(resumeStart >= 30) }
+    LaunchedEffect(r) { if (resumeChip) { delay(7000); resumeChip = false } }
+    var epPanel by remember { mutableStateOf(false) }        // daftar episode di mode layar penuh
+    var barKind by remember { mutableIntStateOf(0) }         // bilah vertikal: 1 = kecerahan, 2 = volume
+    var barLevel by remember { mutableFloatStateOf(0f) }
     val orient = LocalConfiguration.current.orientation
+    // Portrait <-> landscape/fullscreen dianimasikan (tinggi area video tumbuh/menyusut) agar tidak "melompat".
+    val reduceMotionP = LocalReduceMotion.current
+    val fullA by androidx.compose.animation.core.animateFloatAsState(
+        if (full) 1f else 0f,
+        androidx.compose.animation.core.tween(if (reduceMotionP) 0 else 380, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "playerFull",
+    )
     var dtSide by remember { mutableIntStateOf(0) }          // ketuk dua kali: -1 kiri, 1 kanan
     var dtSecs by remember { mutableIntStateOf(0) }
     var dtTick by remember { mutableIntStateOf(0) }
@@ -701,7 +726,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
     LaunchedEffect(player) { if (speed != 1f) player.setPlaybackSpeed(speed) }
-    LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null } }
+    LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null; barKind = 0 } }
 
     // Fullscreen: kunci landscape + sembunyikan bilah sistem; dipulihkan saat keluar/pergi dari pemutar.
     LaunchedEffect(r) {
@@ -737,6 +762,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
     BackHandler(enabled = full) { full = false; fullByRot = false }
+    BackHandler(enabled = epPanel) { epPanel = false }
     BackHandler(enabled = sheet != null) { if (sheet == "main") sheet = null else sheet = "main" }
     // Kontrol hilang sendiri 3,5 dtk setelah ketukan terakhir saat video berjalan.
     LaunchedEffect(showUi, uiTick, wantPlay, buffering) { if (showUi && wantPlay && !buffering) { delay(3500); showUi = false } }
@@ -804,11 +830,19 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val thumbSrc = remember { MutableInteractionSource() }
 
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(if (full) Color.Black else Bg)) {
+    Column(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.lerp(Bg, Color.Black, fullA))) {
       // Area video: penuh lebar, menempel di bawah status bar (tanpa bingkai), hitam pekat.
-      Box(if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
+      Box(Modifier.fillMaxWidth().background(Color.Black).let { if (fullA < 1f) it.statusBarsPadding() else it }) {
         Box(
-            (if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f)).background(Color.Black)
+            Modifier.fillMaxWidth().layout { m, c ->
+                // Tinggi: 16:9 saat portrait -> seluruh sisa layar saat fullscreen, diinterpolasi oleh fullA.
+                val w = c.maxWidth
+                val hVideo = (w * 9f / 16f)
+                val hFull = if (c.hasBoundedHeight) c.maxHeight.toFloat() else hVideo
+                val h = (hVideo + (hFull - hVideo) * fullA).toInt().coerceAtLeast(0)
+                val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
+                layout(w, h) { p.place(0, 0) }
+            }.background(Color.Black)
                 .onGloballyPositioned { c ->
                     val bnd = c.boundsInWindow()
                     val nr = android.graphics.Rect(bnd.left.toInt(), bnd.top.toInt(), bnd.right.toInt(), bnd.bottom.toInt())
@@ -817,7 +851,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 .pointerInput(player) {
                     detectTapGestures(
                         onTap = { o ->
-                            if (dtSide != 0 && !locked) doubleSeek(if (o.x < size.width / 2f) -1 else 1)
+                            if (epPanel) epPanel = false
+                            else if (dtSide != 0 && !locked) doubleSeek(if (o.x < size.width / 2f) -1 else 1)
                             else { showUi = !showUi; uiTick++ }
                         },
                         onDoubleTap = { o -> doubleSeek(if (o.x < size.width / 2f) -1 else 1) },
@@ -852,13 +887,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         if (left) {
                             br = (br + d).coerceIn(0.2f, 1f)
                             act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = br } }
-                            hud = "${I18n.t("brightness", "Brightness")} ${(br * 100).roundToInt()}%"
+                            barKind = 1; barLevel = br
                         } else {
                             val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                             val cur = audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max.toFloat()
                             val v = (cur + d).coerceIn(0f, 1f)
                             audio.setStreamVolume(AudioManager.STREAM_MUSIC, (v * max).roundToInt(), 0)
-                            hud = "${I18n.t("volume", "Volume")} ${(v * 100).roundToInt()}%"
+                            barKind = 2; barLevel = v
                         }
                         hudTick++
                     }
@@ -967,6 +1002,34 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Icon(Icons.Filled.FastForward, null, Modifier.size(16.dp), tint = Color.White)
                 }
             }
+            if (barKind != 0) {
+                val bl = barLevel.coerceIn(0f, 1f)
+                Column(Modifier.align(if (barKind == 1) Alignment.CenterStart else Alignment.CenterEnd).then(cutPad).padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(18.dp)).background(Color(0x99000000)).padding(vertical = 12.dp, horizontal = 11.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        when { barKind == 1 -> Icons.Filled.BrightnessMedium; bl <= 0f -> Icons.AutoMirrored.Filled.VolumeOff; else -> Icons.AutoMirrored.Filled.VolumeUp },
+                        null, Modifier.size(20.dp), tint = Color.White,
+                    )
+                    Box(Modifier.width(6.dp).height(120.dp).clip(CircleShape).background(Color(0x40FFFFFF)), contentAlignment = Alignment.BottomCenter) {
+                        Box(Modifier.fillMaxWidth().fillMaxHeight(bl.coerceAtLeast(0.03f)).clip(CircleShape).background(Color.White))
+                    }
+                    Text("${(bl * 100).roundToInt()}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = resumeChip && !failed && rendered,
+                modifier = Modifier.align(Alignment.TopCenter).then(cutPad).padding(top = 62.dp),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 },
+            ) {
+                Row(Modifier.clip(CircleShape).background(Color(0xCC0A0B10)).border(1.dp, Line, CircleShape).padding(start = 14.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("${I18n.t("resuming_from", "Resuming from")} ${fmt(resumeStart)}", fontSize = 12.5.sp, color = Color.White)
+                    Text(I18n.t("from_start", "Start over"), Modifier.clip(CircleShape).clickable { player.seekTo(0L); resumeChip = false }
+                        .padding(horizontal = 12.dp, vertical = 9.dp), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = RedText)
+                }
+            }
             val uiVisible = !locked && (showUi || !wantPlay || failed || buffering)
             val uiA by animateFloatAsState(if (uiVisible) 1f else 0f, tween(200), label = "controlsAlpha")
             if (uiA > 0.01f) Box(Modifier.matchParentSize().graphicsLayer { alpha = uiA }) {
@@ -980,6 +1043,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     if (!full) Spacer(Modifier.weight(1f)) else Column(Modifier.weight(1f).padding(start = 4.dp)) {
                         Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Text("Episode ${r.ep}", fontSize = 12.sp, color = Color(0xFFE6E8F0))
+                    }
+                    if (full) Box(Modifier.size(42.dp).clip(CircleShape).clickable { epPanel = !epPanel; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.VideoLibrary, I18n.t("episodes", "Episodes"), tint = Color.White)
                     }
                     if (subTracks.isNotEmpty()) Box(Modifier.size(42.dp).clip(CircleShape).clickable {
                         // Tombol CC: hidupkan/matikan subtitle sekali ketuk (seperti YouTube).
@@ -1004,11 +1070,21 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(30.dp), tint = RedText)
                         Text(I18n.t("cant_play", "Can’t play this video"), Modifier.padding(top = 6.dp), fontWeight = FontWeight.SemiBold)
-                        if (errMsg != null) {
-                            Text(errMsg!!, Modifier.padding(top = 2.dp, start = 32.dp, end = 32.dp), fontSize = 10.sp, color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        }
+                        Text(friendlyPlayError(errMsg), Modifier.padding(top = 4.dp, start = 28.dp, end = 28.dp), fontSize = 12.sp, color = InkSoft,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 16.sp)
                         Spacer(Modifier.height(10.dp))
-                        Chip(I18n.t("retry", "Retry"), icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Chip(I18n.t("retry", "Retry"), icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
+                            val lowerQ = lowerQuality(vm.s.settings.quality)
+                            if (lowerQ != null) Chip(I18n.t("lower_quality", "Lower quality")) {
+                                vm.setSettings { it.copy(quality = lowerQ) }; applyQuality(lowerQ)
+                                failed = false; player.prepare(); player.playWhenReady = true
+                                vm.toast("${I18n.t("quality", "Quality")}: $lowerQ")
+                            }
+                        }
+                        Text(I18n.t("report_problem", "Report a problem"),
+                            Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable { reportPlayError(ctx, a.title, r.ep, errMsg) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                            fontSize = 12.sp, fontWeight = FontWeight.Medium, color = RedText)
                     }
                 } else {
                     var rotB by remember { mutableStateOf(0f) }
@@ -1060,10 +1136,38 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     )
                 }
             }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = epPanel && full,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                enter = androidx.compose.animation.slideInHorizontally { it } + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.slideOutHorizontally { it } + androidx.compose.animation.fadeOut(),
+            ) {
+                val fls = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(curIdx - 2, 0))
+                Column(Modifier.fillMaxHeight().width(290.dp).background(Color(0xF20A0B10)).then(cutPad).padding(top = 10.dp)) {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(I18n.t("episodes", "Episodes"), Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Filled.Close, "Close", Modifier.size(26.dp).clip(CircleShape).clickable { epPanel = false }.padding(2.dp), tint = Color.White)
+                    }
+                    LazyColumn(state = fls, contentPadding = PaddingValues(bottom = 16.dp)) {
+                        items(epList, key = { "fp$it" }) { n ->
+                            val isCur = n == r.ep
+                            val seenEp = "${r.id}:$n" in vm.p.seen
+                            Row(Modifier.fillMaxWidth().clickable { epPanel = false; if (!isCur) vm.replaceTop(Route.Player(r.id, n)) }
+                                .background(if (isCur) Color(0x33E5484D) else Color.Transparent).padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Episode $n", Modifier.weight(1f), fontSize = 14.sp, fontWeight = if (isCur) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (isCur) RedText else Color.White)
+                                if (isCur) Icon(Icons.Filled.GraphicEq, null, Modifier.size(18.dp), tint = RedText)
+                                else if (seenEp) Icon(Icons.Filled.CheckCircle, null, Modifier.size(16.dp), tint = Color(0xFF3DDC97))
+                            }
+                        }
+                    }
+                }
+            }
         }
       }
 
-      if (!full) {
+      if (!full || fullA < 0.999f) {
         // ===== Panel di bawah video: info, navigasi episode, kontrol, daftar episode =====
         val epStart = 2 // item "info" + "ephead" mendahului daftar episode
         LazyColumn(
@@ -1271,6 +1375,32 @@ private suspend fun diagStreamProbe(r: Route.Player, pb: com.onimeku.app.data.Pl
         com.onimeku.app.data.CrashLog.note("diag", "GALAT ${e.javaClass.simpleName}: ${e.message}")
     }
     com.onimeku.app.data.ApiClient.uploadDiag("selftest")
+}
+
+/** Pesan galat putar yang bisa dipahami pengguna (bukan kode mentah ExoPlayer). */
+private fun friendlyPlayError(code: String?): String {
+    val c = code.orEmpty()
+    return when {
+        c.contains("NETWORK") || c.contains("TIMEOUT") -> I18n.t("err_net", "Connection problem. Check your internet and try again.")
+        c.contains("DECOD") || c.contains("UNSUPPORTED") || c.contains("PARSING") -> I18n.t("err_dec", "This device couldn’t play this video format. Try a lower quality.")
+        c.contains("HTTP") || c.contains("IO_") -> I18n.t("err_srv", "The video server is having trouble. Try again in a moment.")
+        else -> I18n.t("err_gen", "Something went wrong while loading the video. Try again or lower the quality.")
+    }
+}
+
+private fun lowerQuality(q: String): String? = when (q) {
+    "Auto", "1080p" -> "720p"
+    "720p" -> "480p"
+    "480p" -> "360p"
+    else -> null
+}
+
+private fun reportPlayError(ctx: Context, title: String, ep: Int, code: String?) {
+    val body = "Onimeku — masalah putar\nJudul: $title\nEpisode: $ep\nKode: ${code ?: "-"}\nPerangkat: ${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE})"
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, body)
+    }
+    runCatching { ctx.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 private fun isMediaUrl(u: String): Boolean =

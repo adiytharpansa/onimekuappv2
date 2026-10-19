@@ -96,8 +96,8 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boo
     val shape = RoundedCornerShape(20.dp)
     val key = "soon:${a.id}"
     Box(
-        Modifier.width(w).liftPress { SharedArt.key = key; onClick() }.aspectRatio(16f / 10f)
-            .sharedArt(key).clip(shape).artBackground(a).border(1.dp, Line, shape),
+        Modifier.width(w).aspectRatio(16f / 10f)
+            .sharedArt(key).liftPress { SharedArt.key = key; onClick() }.clip(shape).artBackground(a).border(1.dp, Line, shape),
     ) {
         val req = rememberImg(com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a))
         if (req == null) Box(Modifier.fillMaxSize().shimmer())
@@ -218,7 +218,12 @@ private fun HomeContent(vm: AppVM) {
     }
     // Home hanya menampilkan 24 judul pertama (8 baris); sisanya lewat "Browse all" (daftar penuh + filter genre).
     val gridCols = (LocalConfiguration.current.screenWidthDp / 140).coerceIn(3, 8)
-    val allRows = remember(Catalog.all, gridCols) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.take(maxOf(24, gridCols * 8)).chunked(gridCols) }
+    // Genre terpilih menyaring grid di tempat (null = Semua).
+    val homeGenre = vm.homeGenre
+    val allRows = remember(Catalog.all, gridCols, homeGenre) {
+        (homeGenre?.let { Catalog.byGenre(it) } ?: Catalog.alphabetical)
+            .mapNotNull { Catalog.byId[it] }.take(maxOf(24, gridCols * 8)).chunked(gridCols)
+    }
     var pullPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val ptrThresholdPx = with(density) { 90.dp.toPx() }
@@ -279,7 +284,7 @@ private fun HomeContent(vm: AppVM) {
                     Rail {
                         items(contItems, key = { it.a.id }) { c ->
                             Poster(
-                                c.a, contW, ep = true,
+                                c.a, contW, modifier = motionItem(), ep = true,
                                 meta = c.a.title to ("Episode ${c.ep}" + when {
                                     c.pos > 0 && c.dur > c.pos -> " · ${fmt(c.dur - c.pos)} ${I18n.t("time_left", "left")}"
                                     c.pos > 0 -> " · ${fmt(c.pos)}"
@@ -328,7 +333,7 @@ private fun HomeContent(vm: AppVM) {
                         items(fresh, key = { it.first }) { (id, ep, whenTxt) ->
                             Catalog.byId[id]?.let { a ->
                                 // Judul anime di bawah kartu (dulu kartu hanya bertuliskan "Episode N" tanpa nama anime).
-                                Column(Modifier.width(railW)) {
+                                Column(motionItem().width(railW)) {
                                     // debug.33: ukuran poster potret SAMA dengan rail lain (dulu kartu lanskap 232:150).
                                     Poster(a, railW, badges = true, meta = "Episode $ep" to whenTxt, newBadge = whenTxt == "Today" || whenTxt == "Yesterday") { vm.go(Route.Detail(id)) }
                                     Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
@@ -349,26 +354,30 @@ private fun HomeContent(vm: AppVM) {
         item(key = "all-head", contentType = "all-head") {
             Column {
                 Spacer(Modifier.height(SectionGap))
-                SectionHead(I18n.t("sec_all", "All Anime")) { vm.go(Route.SeeAll("all")) }
-                // Pintasan genre: ketuk untuk membuka daftar tersaring.
-                LazyRow(
-                    Modifier.padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                ) {
-                    items(Catalog.chips, key = { it }) { g -> Chip(g) { vm.go(Route.SeeAll("genre:$g")) } }
+                SectionHead(I18n.t("sec_all", "All Anime")) { vm.go(Route.SeeAll(homeGenre?.let { "genre:$it" } ?: "all")) }
+                // Filter genre di tempat: "Semua" aktif secara bawaan; ketuk genre lagi untuk melepas. Tepi kanan memudar = bisa digeser.
+                Box(Modifier.padding(bottom = 14.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 16.dp)) {
+                        item(key = "__all") { Chip(I18n.t("all_genres", "All"), on = homeGenre == null, height = 32.dp) { vm.homeGenre = null } }
+                        items(Catalog.chips, key = { it }) { g ->
+                            Chip(g, on = homeGenre == g, height = 32.dp) { vm.homeGenre = if (homeGenre == g) null else g }
+                        }
+                    }
+                    Box(Modifier.align(Alignment.TopEnd).width(36.dp).height(32.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Bg))))
                 }
             }
         }
-        items(allRows.size, key = { "all-row:$it" }, contentType = { "all-row" }) { r ->
+        items(allRows.size, key = { "all-row:${homeGenre ?: "-"}:$it" }, contentType = { "all-row" }) { r ->
             val row = allRows[r]
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Jarak antarkolom = jarak antarbaris (12dp) agar grid rapi.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEachIndexed { c, a -> Box(Modifier.weight(1f)) { Tile(a, vm, (r * gridCols + c) % 9) } }
                 repeat(gridCols - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         item(key = "all-more", contentType = "all-more") {
             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp), contentAlignment = Alignment.Center) {
-                Btn(I18n.t("browse_all", "Browse all"), BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
+                Btn(I18n.t("browse_all", "Browse all"), BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.go(Route.SeeAll(homeGenre?.let { "genre:$it" } ?: "all")) }
             }
         }
     }
@@ -436,7 +445,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
     LaunchedEffect(pager.settledPage, n) {
         if (n > 1) {
             delay(5500)
-            while (pager.isScrollInProgress || held) delay(100)
+            while (pager.isScrollInProgress || held || vm.overlayOpen) delay(100)
             pager.animateScrollToPage(
                 pager.settledPage + 1,
                 animationSpec = tween(if (reduceMotion) 0 else 850, easing = androidx.compose.animation.core.CubicBezierEasing(0.33f, 0f, 0.15f, 1f)),
@@ -593,25 +602,19 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
 fun CalendarScreen(vm: AppVM) {
     val ensure = LocalEnsureNotif.current
     val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
-    // Kalender memakai JADWAL ASLI dari API (/api/schedule) bila sudah
-    // termuat di vm.schedule — hanya judul yang episode berikutnya
-    // benar-benar terjadwal pada tanggal terpilih. Turunan katalog di
-    // bawah hanya cadangan selama jadwal belum termuat (mulai dingin
-    // tanpa cache / API tak terjangkau).
+    // Kalender SELALU berisi (perintah user 19 Okt 2026): API tidak
+    // menyediakan jadwal tayang per hari, jadi isi halaman diturunkan
+    // dari katalog realtime — judul yang diperbarui pada tanggal
+    // terpilih, lalu daftar Sedang Tayang terbaru yang selalu tampil
+    // di bawahnya agar halaman tidak pernah kosong.
     val selDate = days[vm.calDay]
-    // Tanggal pembaruan per judul dihitung SEKALI per perubahan katalog,
-    // bukan di-parse ulang dari teks untuk ~900 judul setiap ganti hari
-    // (itu yang membuat pindah hari terasa berat di perangkat kelas bawah).
-    val dateById = remember(Catalog.all) {
-        Catalog.all.associate { a ->
-            a.id to runCatching {
-                java.time.OffsetDateTime.parse(a.updatedAt)
-                    .atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate()
-            }.getOrNull()
-        }
-    }
     val dayList = remember(selDate, Catalog.all) {
-        Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { a -> dateById[a.id] == selDate }
+        Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { a ->
+            runCatching {
+                java.time.OffsetDateTime.parse(a.updatedAt)
+                    .atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() == selDate
+            }.getOrDefault(false)
+        }
     }
     val airingList = remember(Catalog.all) { Catalog.airingFresh.mapNotNull { Catalog.byId[it] }.take(40) }
     // Jadwal ASLI dari API bila sudah termuat: hanya judul dengan episode
@@ -1021,7 +1024,9 @@ fun DetailScreen(vm: AppVM, id: String) {
             item(key = "hero") {
                 // ===== HERO: gambar penuh lebar, parallax, judul menempel di bawahnya =====
                 Box(Modifier.fillMaxWidth().height(heroH).clipToBounds().artBackground(a)) {
-                    RealImage(a, Modifier.fillMaxSize().sharedArt(SharedArt.key?.takeIf { it.endsWith(":${a.id}") }).graphicsLayer {
+                    // Dihitung SEKALI per Detail: kunci stabil selama transisi masuk & kembali, tidak berubah oleh klik lain.
+                    val heroKey = remember(a.id) { SharedArt.key?.takeIf { it.endsWith(":${a.id}") } }
+                    RealImage(a, Modifier.fillMaxSize().sharedArt(heroKey).graphicsLayer {
                         val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
                         // Geser maksimum 7% < overhang skala 1,15 (7,5%): tepi atas gambar tidak pernah membuka celah saat digulir.
                         translationY = minOf(off * 0.45f, size.height * 0.07f)

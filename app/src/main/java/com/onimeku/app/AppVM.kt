@@ -56,9 +56,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     /** Posisi scroll Home disimpan di sini agar tidak kembali ke atas setelah membuka Detail lalu Back. */
     val homeScroll = LazyListState()
+    /** Genre terpilih di grid "All Anime" Beranda (null = Semua). Disimpan di VM agar bertahan saat pindah layar. */
+    var homeGenre by mutableStateOf<String?>(null)
 
     /** Jarak gulir Home dalam piksel (0 di puncak; besar bila item pertama sudah lewat). Dibaca di lambda graphicsLayer/derivedStateOf, bukan di komposisi. */
     fun homeScrollPx(): Int = if (homeScroll.firstVisibleItemIndex == 0) homeScroll.firstVisibleItemScrollOffset else Int.MAX_VALUE / 2
+
+    /** True saat dialog modal (mis. konfirmasi keluar) tampil; auto-slide hero dijeda. */
+    var overlayOpen by mutableStateOf(false)
 
     /** Status koneksi internet (untuk spanduk offline dan muat-ulang otomatis). */
     var online by mutableStateOf(true); private set
@@ -227,24 +232,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            // Jadwal tayang: tampilkan cache disk DULU (Kalender langsung
-            // berisi saat dibuka), lalu segarkan dari API di latar dan
-            // simpan hasilnya untuk pembukaan berikutnya.
-            val schedFile = java.io.File(app.filesDir, "schedule_cache.json")
-            val cachedSched = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                ApiClient.loadCachedSchedule(schedFile)
-            }
-            if (cachedSched.isNotEmpty() && schedule.isEmpty()) {
-                schedule = cachedSched.associateBy { it.id }
-            }
             try {
-                val freshSched = ApiClient.fetchSchedule()
-                if (freshSched.isNotEmpty()) {
-                    schedule = freshSched.associateBy { it.id }
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        ApiClient.saveCachedSchedule(schedFile, freshSched)
-                    }
-                }
+                schedule = ApiClient.fetchSchedule().associateBy { it.id }
             } catch (e: Exception) {
                 // Jadwal asli gagal dimuat: Calendar memakai cadangan lama.
             }
@@ -295,12 +284,28 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     // ---------- navigation ----------
     /** Arah transisi terakhir: 1 = masuk (push), -1 = kembali (pop), 0 = sejajar (tab / ganti episode). Dibaca oleh AnimatedContent. */
     var navDir = 0
-    fun go(r: Route) { navDir = 1; stack = stack + r; afterNav() }
-    fun back(animated: Boolean = true) { navDir = if (animated) -1 else 0; stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
-    fun setTab(r: Route) { navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
-    fun replaceTop(r: Route) { navDir = 0; stack = stack.dropLast(1) + r; afterNav() }
+    /** Arah perpindahan tab: -1 ke kiri, 1 ke kanan, 0 bukan perpindahan tab (dibaca transisi rute di MainActivity). */
+    var tabDir = 0
+    /** Urutan tab di bilah bawah (Downloads tidak ada di bilah; disisipkan agar tetap berurutan). -1 = bukan halaman akar tab. */
+    fun tabIndex(r: Route): Int = when (r) {
+        Route.Home -> 0; Route.Calendar -> 1; Route.MyList -> 2; Route.Downloads -> 3; Route.Search -> 4; Route.ProfileTab -> 5; else -> -1
+    }
+    private var lastGoAt = 0L
+    fun go(r: Route) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val top = stack.lastOrNull()
+        // Anti ketuk ganda: rute yang sama persis, atau layar sejenis dalam 450 ms, diabaikan. Tanpa ini dua ketukan cepat
+        // menumpuk dua Detail/Player (transisi terpotong, tombol kembali harus ditekan dua kali, dua pemutar hidup).
+        if (r == top || (top != null && top::class == r::class && now - lastGoAt < 450L)) return
+        lastGoAt = now
+        com.onimeku.app.ui.SharedArt.expireStale()
+        navDir = 1; tabDir = 0; stack = stack + r; afterNav()
+    }
+    fun back(animated: Boolean = true) { navDir = if (animated) -1 else 0; tabDir = 0; stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
+    fun setTab(r: Route) { val from = tabIndex(tab); val to = tabIndex(r); tabDir = if (from >= 0 && to >= 0) Integer.signum(to - from) else 0; navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
+    fun replaceTop(r: Route) { navDir = 0; tabDir = 0; stack = stack.dropLast(1) + r; afterNav() }
     private fun afterNav() { quick = null; if (stack.lastOrNull() !is Route.Player) playerFull = false }
-    fun openSettings() { stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
+    fun openSettings() { tabDir = 0; stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
 
     fun toast(m: String) {
         toastMsg = m

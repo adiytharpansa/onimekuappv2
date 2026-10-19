@@ -84,7 +84,21 @@ object Catalog {
      * "#Compass2.0: Animation Project" memakai poster yang sama -> satu kartu saja.
      */
     internal fun dupKey(a: Anime): String =
-        a.poster?.takeIf { it.isNotBlank() } ?: a.title.lowercase().filter { it.isLetterOrDigit() }
+        a.poster?.takeIf { it.isNotBlank() }?.let { posterFileKey(it) } ?: titleKey(a)
+
+    /**
+     * Identitas gambar poster: nama berkas tanpa folder/ukuran/query, sehingga gambar yang sama dari folder atau CDN
+     * berbeda (mis. /medium/ vs /large/) tetap terhitung satu. Nama terlalu pendek/generik ("poster.jpg") TIDAK dipakai
+     * sendirian (bisa menggabungkan judul berbeda), jadi dipakai URL utuh tanpa query.
+     */
+    internal fun posterFileKey(url: String): String {
+        val clean = url.lowercase().substringBefore('?').substringBefore('#')
+        val file = clean.substringAfterLast('/').substringBeforeLast('.')
+        return if (file.length >= 10) file else clean
+    }
+
+    /** Judul ternormalisasi (huruf+angka saja; tahun tetap ikut sehingga remake beda tahun tidak ikut tergabung). */
+    internal fun titleKey(a: Anime): String = a.title.lowercase().filter { it.isLetterOrDigit() }
 
     /** Kunci franchise: judul tanpa "Season N", "Part N", sub-judul setelah ":" dan angka akhir. */
     internal fun franchiseKey(title: String): String =
@@ -100,9 +114,12 @@ object Catalog {
         .thenByDescending { it.ep }
         .thenByDescending { it.updatedAt ?: "" }
 
-    internal fun dedupe(list: List<Anime>): List<Anime> {
-        val best = list.groupBy { dupKey(it) }.mapValues { (_, g) -> g.sortedWith(bestFirst).first().id }
-        return list.filter { best[dupKey(it)] == it.id }
+    /** Dua tahap: (1) gambar poster yang sama, (2) judul yang sama walau URL poster berbeda ("#X Project" vs "#X: Project"). */
+    internal fun dedupe(list: List<Anime>): List<Anime> = pickBest(pickBest(list) { dupKey(it) }) { titleKey(it) }
+
+    private fun pickBest(list: List<Anime>, key: (Anime) -> String): List<Anime> {
+        val best = list.groupBy(key).mapValues { (_, g) -> g.sortedWith(bestFirst).first().id }
+        return list.filter { best[key(it)] == it.id }
     }
 
     private class Derived(val full: List<Anime>) {
