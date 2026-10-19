@@ -49,7 +49,7 @@ object SubLang {
 
     /**
      * Pilih indeks trek. pref: "auto" | "id" | "en" | "off". Auto mengikuti bahasa aplikasi
-     * (id -> Indonesia dulu, selain itu English dulu); bila bahasa pilihan tidak ada, jatuh ke
+     * (English dulu, lalu Indonesia); bila bahasa pilihan tidak ada, jatuh ke
      * bahasa kedua (Indonesia <-> English), lalu trek pertama. -1 = mati.
      */
     fun pick(tracks: List<ApiSubtitle>, pref: String, appLang: String): Int {
@@ -57,7 +57,7 @@ object SubLang {
         val order = when (pref) {
             "id" -> listOf("id", "en")
             "en" -> listOf("en", "id")
-            else -> if (appLang == "id") listOf("id", "en") else listOf("en", "id")
+            else -> listOf("en", "id")
         }
         for (c in order) { val i = tracks.indexOfFirst { code(it) == c }; if (i >= 0) return i }
         return 0
@@ -78,20 +78,20 @@ private fun SubOpt(label: String, sub: String?, selected: Boolean, onClick: () -
     }
 }
 
-/** Menu subtitle: Auto, Off, dan semua trek tersedia (Indonesia / English didahulukan). */
+/** Menu subtitle: Auto, Off, dan semua trek tersedia (English lalu Indonesia). */
 @Composable
 fun SubtitleDialog(
     tracks: List<ApiSubtitle>, current: Int, pref: String, appLang: String,
     onTrack: (Int) -> Unit, onOff: () -> Unit, onAuto: () -> Unit, onDismiss: () -> Unit,
 ) {
-    val order = tracks.indices.sortedBy { i -> when (SubLang.code(tracks[i])) { "id" -> 0; "en" -> 1; else -> 2 } }
+    val order = tracks.indices.sortedBy { i -> when (SubLang.code(tracks[i])) { "en" -> 0; "id" -> 1; else -> 2 } }
     Dialog(onDismissRequest = onDismiss) {
         val shape = RoundedCornerShape(22.dp)
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(shape).background(Bg2).border(1.dp, Line, shape).padding(vertical = 12.dp)) {
             Text(I18n.t("subtitles", "Subtitles"), Modifier.padding(horizontal = 22.dp, vertical = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 val autoSub = if (pref == "auto" && current >= 0) tracks.getOrNull(current)?.let { SubLang.display(it, current) } else null
-                SubOpt("Auto", (I18n.t("sub_auto_d", "Indonesia / English, automatically")) + (autoSub?.let { " · $it" } ?: ""), pref == "auto") { onAuto() }
+                SubOpt("Auto", (I18n.t("sub_auto_d", "English / Indonesia, automatically")) + (autoSub?.let { " · $it" } ?: ""), pref == "auto") { onAuto() }
                 order.forEach { i ->
                     SubOpt(SubLang.display(tracks[i], i), null, pref != "auto" && current == i) { onTrack(i) }
                 }

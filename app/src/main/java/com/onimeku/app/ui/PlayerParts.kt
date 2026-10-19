@@ -219,7 +219,7 @@ internal fun PlayerSettingsSheet(
                         }
                         "subs" -> {
                             SheetHeader(I18n.t("subtitles", "Subtitles")) { onPage("main") }
-                            val order = subTracks.indices.sortedBy { i -> when (SubLang.code(subTracks[i])) { "id" -> 0; "en" -> 1; else -> 2 } }
+                            val order = subTracks.indices.sortedBy { i -> when (SubLang.code(subTracks[i])) { "en" -> 0; "id" -> 1; else -> 2 } }
                             SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
                             val autoSub = if (subPref == "auto" && subCurrent >= 0) subTracks.getOrNull(subCurrent)?.let { " · " + SubLang.display(it, subCurrent) } else null
                             SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
