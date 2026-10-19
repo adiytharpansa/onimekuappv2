@@ -1,3 +1,9 @@
+## v1.0.0-debug.52 (belum dirilis): Titik indikator di atas tombol "+"
+- Titik indikator carousel dipindah ke atas tombol "+" (rata tengah dengannya, jarak HeroDotsGap 11dp); ruang sinopsis-ke-tombol dilebarkan ke HeroActionsTop 28dp agar titik tidak menempel teks. Menggantikan penempatan di bawah Play (debug.51).
+
+## v1.0.0-debug.51 (belum dirilis): Titik indikator hero
+- Titik indikator carousel dipindah tepat di bawah tombol Play (jarak 14dp) dan rata tengah dengan lebar Play, bukan lagi di tengah seluruh layar; HeroBottomPad 44dp; token HeroActionW/HeroActionGap/HeroDotsBottom di Theme.kt.
+
 ## v1.0.0-debug.50 (belum dirilis): Perapian Kalender, Daftarku, Unduhan, Cari, gestur Pemutar
 - Pemutar: gestur geser vertikal (kecerahan/volume) kini punya zona aman: diabaikan di tepi kiri/kanan 28dp dan 12% atas/bawah, sehingga tidak bentrok dengan gestur kembali sistem, bilah kontrol, atau seek bar.
 - Kalender: nama hari mengikuti bahasa aplikasi (sebelumnya Locale.ENGLISH tetap); daftar "Airing" tidak lagi menampilkan pil gelap kosong di thumbnail (ItemRow hanya menggambar label bila ada isi).

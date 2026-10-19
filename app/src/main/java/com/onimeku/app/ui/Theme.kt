@@ -30,7 +30,11 @@ val HeroSynopsis = Color(0xFFB9BDCB)
 val GlassFill = Color(0x59080910)
 val GlassStroke = Color(0x66FFFFFF)
 val HeroPad = 20.dp
-val HeroBottomPad = 48.dp   // ruang untuk titik indikator di bawah tombol
+val HeroBottomPad = 44.dp   // jarak tombol Play ke tepi bawah hero
+val HeroActionW = 56.dp     // lebar/tinggi tombol "+" (Daftarku) di hero
+val HeroActionGap = 12.dp   // jarak antara Play dan "+"
+val HeroDotsGap = 11.dp     // titik indikator: jarak dari sisi atas tombol "+" ke dasar titik
+val HeroActionsTop = 28.dp  // ruang antara sinopsis dan baris tombol (menampung titik di atas "+")
 const val HeroOverscan = 1.2f   // gambar diperbesar 20% sebagai ruang parallax
 const val HeroParallax = 0.1f   // geser gambar = 10% lebar halaman (<= (HeroOverscan-1)/2)
 

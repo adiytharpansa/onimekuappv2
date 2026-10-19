@@ -318,9 +318,12 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
         // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
         Box(Modifier.fillMaxWidth().height(90.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x40000000), Color.Transparent))) })
         if (items.size > 1) {
-            Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
-                items.indices.forEach { i ->
-                    HeroDot(selected = pager.currentPage == i, page = pager.currentPage)
+            // Titik indikator: tepat di atas tombol "+", rata tengah dengannya (kotak selebar tombol; baris titik boleh lebih lebar, dipusatkan).
+            Box(Modifier.align(Alignment.BottomEnd).padding(end = HeroPad, bottom = HeroBottomPad + HeroActionW + HeroDotsGap).width(HeroActionW)) {
+                Row(Modifier.wrapContentWidth(Alignment.CenterHorizontally, unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items.indices.forEach { i ->
+                        HeroDot(selected = pager.currentPage == i, page = pager.currentPage)
+                    }
                 }
             }
         }
@@ -377,10 +380,10 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             Text(meta, Modifier.padding(top = 6.dp), fontSize = 13.sp, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (a.synopsis.isNotBlank()) Text(a.synopsis, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 19.sp,
                 color = HeroSynopsis, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(top = HeroActionsTop), horizontalArrangement = Arrangement.spacedBy(HeroActionGap), verticalAlignment = Alignment.CenterVertically) {
                 PlayButton(I18n.t("play", "Play"), null, Modifier.weight(1f)) { vm.go(Route.Player(a.id, firstEp)) }
                 Box(
-                    Modifier.size(56.dp).pressable { vm.toggleML(a.id) }.clip(RoundedCornerShape(18.dp))
+                    Modifier.size(HeroActionW).pressable { vm.toggleML(a.id) }.clip(RoundedCornerShape(18.dp))
                         .background(if (on) Color.White else GlassFill)
                         .border(1.dp, if (on) Color.White else GlassStroke, RoundedCornerShape(18.dp)).sparkBurst(on),
                     contentAlignment = Alignment.Center,
