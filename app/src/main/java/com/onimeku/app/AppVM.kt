@@ -337,9 +337,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         updP { it.copy(remind = if (on) it.remind - id else it.remind + id) }
         if (on) Reminders.cancel(app, s.pi, id) else Reminders.schedule(app, s.pi, id)
         if (on) toast("Reminder removed") else {
-            toast("We will remind you")
             val c = Catalog.byId[id] ?: return
-            ensure { g -> if (g) Notifier.show(app, "Reminder set", "${c.title} airs at ${c.time}") }
+            val soon = c.apiStatus == "NOT_YET_RELEASED"
+            toast(if (soon) "We will notify you when it is out" else "We will remind you")
+            ensure { g -> if (g) Notifier.show(app, "Reminder set", if (soon) "We’ll notify you when ${c.title} is released" else "${c.title} airs at ${c.time}") }
         }
     }
 

@@ -60,6 +60,11 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         // Katalog tidak dimuat di proses worker; ambil detail judul ini dari API.
         val c = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }
             ?: return Result.success()
+        // Belum tayang: jangan kirim "Episode N is out now"; cek lagi minggu depan sampai benar-benar rilis.
+        if (c.apiStatus == "NOT_YET_RELEASED") {
+            Reminders.schedule(applicationContext, pi, id, c)
+            return Result.success()
+        }
         Notifier.show(applicationContext, "New episode: ${c.title}", "Episode ${c.ep} is out now")
         // Katalog kosong di proses worker: kirim detail yang baru diambil agar
         // jadwal minggu depan benar-benar dibuat (sebelumnya diam-diam batal).

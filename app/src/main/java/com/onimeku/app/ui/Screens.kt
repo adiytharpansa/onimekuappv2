@@ -84,7 +84,7 @@ private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: Strin
  * di kanan atas, judul + genre di bawah di atas gradasi. Ketuk = buka Detail.
  */
 @Composable
-private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boolean, onRemind: () -> Unit, onClick: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
     val key = "soon:${a.id}"
     Box(
@@ -112,7 +112,17 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, onClick: ()
                 .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 9.dp, vertical = 4.dp),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
         )
-        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) {
+        // Lonceng pengingat: satu-satunya tempat lonceng di Beranda, hanya untuk judul yang belum tayang.
+        Box(
+            Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).size(40.dp).clip(CircleShape)
+                .background(if (remind) Red else GlassFill).border(1.dp, if (remind) Red else Color(0x40FFFFFF), CircleShape)
+                .clickable(onClick = onRemind),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(if (remind) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone,
+                if (remind) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), Modifier.size(20.dp), tint = Color.White)
+        }
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 14.dp, end = 64.dp, bottom = 12.dp)) {
             Text(a.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp, letterSpacing = (-0.2).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = a.genres.take(3).joinToString("  ·  ")
             if (meta.isNotBlank()) Text(meta, Modifier.padding(top = 3.dp), fontSize = 12.sp, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -262,9 +272,12 @@ private fun HomeContent(vm: AppVM) {
                     Spacer(Modifier.height(SectionGap))
                     SectionHead(I18n.t("sec_coming", "Coming Soon")) { vm.go(Route.SeeAll("soon")) }
                     val cw = (LocalConfiguration.current.screenWidthDp * 0.74f).coerceIn(250f, 340f).dp
+                    val ensure = LocalEnsureNotif.current
                     Rail {
                         items(soon, key = { it }) { id ->
-                            Catalog.byId[id]?.let { a -> ComingSoonCard(a, cw) { vm.go(Route.Detail(id)) } }
+                            Catalog.byId[id]?.let { a ->
+                                ComingSoonCard(a, cw, remind = id in vm.p.remind, onRemind = { vm.toggleRemind(id, ensure) }) { vm.go(Route.Detail(id)) }
+                            }
                         }
                     }
                 }
@@ -508,37 +521,47 @@ fun CalendarScreen(vm: AppVM) {
         if (realList != null) {
             if (realList.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
             else realList.forEach { (a, s, dt) ->
-                val on = a.id in vm.p.remind
                 ItemRow(
                     a, thumbLabel = dt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), title = a.title,
                     sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                     onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
+                ) { if (showBell(a, vm)) RemindBell(a, vm) }
             }
         } else {
             if (dayList.isNotEmpty()) {
                 SectionHead(I18n.t("sec_new_eps", "New Episode Releases"))
                 dayList.forEach { a ->
-                    val on = a.id in vm.p.remind
                     ItemRow(
                         a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                         onOpen = { vm.go(Route.Detail(a.id)) },
-                    ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
+                    ) { if (showBell(a, vm)) RemindBell(a, vm) }
                 }
                 Spacer(Modifier.height(12.dp))
             }
             SectionHead(I18n.t("sec_airing", "Airing") + " · " + I18n.t("sec_latest", "Latest"))
             if (airingList.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
             else airingList.forEach { a ->
-                val on = a.id in vm.p.remind
                 ItemRow(
                     a, thumbLabel = "", title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                     onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
+                ) { if (showBell(a, vm)) RemindBell(a, vm) }
             }
         }
         } }
     }
+}
+
+/** Lonceng pengingat hanya untuk judul yang BELUM tayang; judul yang sudah rilis tidak punya lonceng (kecuali pengingat lamanya masih aktif, agar bisa dimatikan). */
+private fun showBell(a: Anime, vm: AppVM) = a.apiStatus == "NOT_YET_RELEASED" || a.id in vm.p.remind
+
+@Composable
+private fun RemindBell(a: Anime, vm: AppVM) {
+    val ensure = LocalEnsureNotif.current
+    val on = a.id in vm.p.remind
+    IconChip(
+        if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone,
+        if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on,
+    ) { vm.toggleRemind(a.id, ensure) }
 }
 
 @Composable

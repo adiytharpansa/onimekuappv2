@@ -1,3 +1,8 @@
+## v1.0.0-debug.54 (belum dirilis): Lonceng pengingat hanya untuk Coming Soon
+- Kartu Coming Soon (Beranda) kini punya tombol lonceng pengingat (kanan bawah, merah saat aktif). Itu satu-satunya lonceng di Beranda.
+- Kalender: lonceng dihapus dari judul yang sudah rilis/sedang tayang; hanya muncul untuk judul belum tayang (NOT_YET_RELEASED), atau judul yang pengingat lamanya masih aktif agar bisa dimatikan (showBell/RemindBell).
+- Pengingat judul belum tayang: toast/notifikasi "kami kabari saat rilis" (bukan "airs at ..."), dan ReminderWorker tidak lagi mengirim "Episode N is out now" sebelum rilis — cek ulang diam-diam tiap minggu.
+
 ## v1.0.0-debug.53 (belum dirilis): Coming Soon di Beranda
 - Beranda: bagian baru "Coming Soon" tepat di atas "New Episode Releases" — kartu lanskap 16:10 (sampul lebar), lencana merah COMING SOON + tahun rilis, judul dan genre di atas gradasi; "See all" membuka grid lengkap (SeeAll "soon"). Sumber: judul berstatus NOT_YET_RELEASED dari API (Catalog.comingSoon, tahun terdekat dulu); bagian disembunyikan bila tidak ada.
 - Status NOT_YET_RELEASED kini tampil "Upcoming"/"Segera hadir" (sebelumnya salah ditampilkan "Airing"); ditambahkan ke filter Status di Cari.
