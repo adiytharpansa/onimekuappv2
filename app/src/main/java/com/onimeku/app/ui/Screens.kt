@@ -718,7 +718,58 @@ fun MyListScreen(vm: AppVM) {
     val l = vm.p.myList.mapNotNull { Catalog.byId[it] }
     AnimeGrid(l, vm) {
         RootTitle(I18n.t("tab_mylist", "My List"))
-        if (l.isEmpty()) EmptyBox(I18n.t("mylist_empty_t", "Your list is empty"), I18n.t("mylist_empty_b", "Tap My List on any anime to save it here.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
+        if (l.isEmpty()) {
+            // Ajakan di tengah (tanpa kartu berbingkai) + rekomendasi supaya layar tidak kosong.
+            Column(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.BookmarkBorder, null, Modifier.size(28.dp), tint = RedText)
+                }
+                Text(I18n.t("mylist_empty_t", "Your list is empty"), Modifier.padding(top = 12.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(I18n.t("mylist_empty_b", "Tap + on any anime to save it here."), Modifier.padding(top = 6.dp, start = 16.dp, end = 16.dp), fontSize = 13.sp, color = InkSoft, textAlign = TextAlign.Center)
+                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play, height = 42.dp) { vm.setTab(Route.Home) }
+                    Chip(I18n.t("surprise", "Surprise me"), icon = Icons.Outlined.Casino) { vm.surprise() }
+                }
+            }
+            val recs = Catalog.top.take(10).mapNotNull { Catalog.byId[it] }
+            if (recs.isNotEmpty()) {
+                Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.padding(end = 8.dp).width(3.dp).height(16.dp).clip(CircleShape).background(Red))
+                    Text(I18n.t("start_here", "Start here"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+                val bleed = with(LocalDensity.current) { 16.dp.roundToPx() }
+                Row(
+                    Modifier.fillMaxWidth().layout { m, c ->
+                        val p = m.measure(c.copy(maxWidth = c.maxWidth + bleed))
+                        layout(c.maxWidth, p.height) { p.place(0, 0) }
+                    }.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    recs.forEach { t ->
+                        val on = t.id in vm.p.myList
+                        Column(Modifier.width(104.dp)) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)).artBackground(t).clickable { vm.go(Route.Detail(t.id)) }) {
+                                RealImage(t, Modifier.fillMaxSize())
+                                t.rating?.replace("★", "")?.trim()?.takeIf { it.isNotBlank() }?.let {
+                                    Row(Modifier.padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Icon(Icons.Filled.Star, null, Modifier.size(11.dp), tint = Gold)
+                                        Text(it, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Gold)
+                                    }
+                                }
+                                Box(
+                                    Modifier.align(Alignment.BottomEnd).padding(6.dp).size(30.dp).clip(CircleShape)
+                                        .background(if (on) Red else Color(0xCC14161F)).border(1.dp, if (on) Red else Color(0x66FFFFFF), CircleShape)
+                                        .clickable { vm.toggleML(t.id) },
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(if (on) Icons.Filled.Check else Icons.Filled.Add, if (on) "Added" else "My List", Modifier.size(16.dp), tint = Color.White) }
+                            }
+                            Text(t.title, Modifier.padding(top = 6.dp), fontSize = 12.sp, lineHeight = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
         else Text("${l.size} ${I18n.t("n_saved", "saved")}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
     }
 }
