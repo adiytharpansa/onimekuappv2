@@ -22,8 +22,17 @@ import androidx.compose.ui.window.Dialog
 import com.onimeku.app.I18n
 import com.onimeku.app.data.ApiSubtitle
 
+/** Satu baris di menu subtitle; lihat [SubLang.menu]. */
+sealed interface SubMenuEntry {
+    object Auto : SubMenuEntry
+    data class Track(val index: Int) : SubMenuEntry
+    object IndonesianPending : SubMenuEntry
+    object Off : SubMenuEntry
+}
+
 /** Logika pemilihan subtitle otomatis: Indonesia / English, mengikuti preferensi & bahasa aplikasi. */
 object SubLang {
+    const val INDONESIAN_LABEL = "Indonesian"
     /** "id", "en", atau null (bahasa lain) dari kode bahasa + label trek. */
     fun code(lang: String, label: String = ""): String? {
         val s = "$lang $label".lowercase()
@@ -38,13 +47,32 @@ object SubLang {
 
     /** Nama ramah untuk ditampilkan. */
     fun display(t: ApiSubtitle, i: Int): String = when (code(t)) {
-        "id" -> "Indonesia"
+        "id" -> INDONESIAN_LABEL
         "en" -> "English"
         else -> t.label.ifBlank { t.lang.uppercase() }.ifBlank { "Sub ${i + 1}" }
     }
 
+    /**
+     * Susunan baku menu subtitle (satu sumber untuk semua menu): Auto, English, Indonesian, bahasa lain, Off.
+     * Pilihan Indonesian selalu ada; bila trek belum tersedia (terjemahan belum jadi) tampil sebagai [SubMenuEntry.IndonesianPending].
+     * Urutan antar trek yang bahasanya sama mengikuti urutan aslinya (stabil).
+     */
+    fun menu(tracks: List<ApiSubtitle>): List<SubMenuEntry> {
+        val idx = tracks.indices
+        val en = idx.filter { code(tracks[it]) == "en" }
+        val id = idx.filter { code(tracks[it]) == "id" }
+        val other = idx.filter { code(tracks[it]) == null }
+        return buildList {
+            add(SubMenuEntry.Auto)
+            en.forEach { add(SubMenuEntry.Track(it)) }
+            if (id.isEmpty()) add(SubMenuEntry.IndonesianPending) else id.forEach { add(SubMenuEntry.Track(it)) }
+            other.forEach { add(SubMenuEntry.Track(it)) }
+            add(SubMenuEntry.Off)
+        }
+    }
+
     fun prefName(pref: String): String = when (pref) {
-        "id" -> "Indonesia"; "en" -> "English"; "off" -> I18n.t("ctl_off", "Off"); else -> "Auto"
+        "id" -> INDONESIAN_LABEL; "en" -> "English"; "off" -> I18n.t("ctl_off", "Off"); else -> "Auto"
     }
 
     /**
@@ -78,24 +106,26 @@ private fun SubOpt(label: String, sub: String?, selected: Boolean, onClick: () -
     }
 }
 
-/** Menu subtitle: Auto, Off, dan semua trek tersedia (English lalu Indonesia). */
+/** Menu subtitle: Auto, English, Indonesian, bahasa lain, Off (urutan dari [SubLang.menu]). */
 @Composable
 fun SubtitleDialog(
     tracks: List<ApiSubtitle>, current: Int, pref: String, appLang: String,
-    onTrack: (Int) -> Unit, onOff: () -> Unit, onAuto: () -> Unit, onDismiss: () -> Unit,
+    onTrack: (Int) -> Unit, onOff: () -> Unit, onAuto: () -> Unit, onIdPending: () -> Unit, onDismiss: () -> Unit,
 ) {
-    val order = tracks.indices.sortedBy { i -> when (SubLang.code(tracks[i])) { "en" -> 0; "id" -> 1; else -> 2 } }
     Dialog(onDismissRequest = onDismiss) {
         val shape = RoundedCornerShape(22.dp)
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(shape).background(Bg2).border(1.dp, Line, shape).padding(vertical = 12.dp)) {
             Text(I18n.t("subtitles", "Subtitles"), Modifier.padding(horizontal = 22.dp, vertical = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 val autoSub = if (pref == "auto" && current >= 0) tracks.getOrNull(current)?.let { SubLang.display(it, current) } else null
-                SubOpt("Auto", (I18n.t("sub_auto_d", "English / Indonesia, automatically")) + (autoSub?.let { " · $it" } ?: ""), pref == "auto") { onAuto() }
-                order.forEach { i ->
-                    SubOpt(SubLang.display(tracks[i], i), null, pref != "auto" && current == i) { onTrack(i) }
+                SubLang.menu(tracks).forEach { e ->
+                    when (e) {
+                        SubMenuEntry.Auto -> SubOpt("Auto", I18n.t("sub_auto_d", "English / Indonesian, automatically") + (autoSub?.let { " · $it" } ?: ""), pref == "auto") { onAuto() }
+                        is SubMenuEntry.Track -> SubOpt(SubLang.display(tracks[e.index], e.index), null, pref != "auto" && current == e.index) { onTrack(e.index) }
+                        SubMenuEntry.IndonesianPending -> SubOpt(SubLang.INDONESIAN_LABEL, null, false) { onIdPending() }
+                        SubMenuEntry.Off -> SubOpt(I18n.t("ctl_off", "Off"), null, current < 0) { onOff() }
+                    }
                 }
-                SubOpt(I18n.t("ctl_off", "Off"), null, current < 0) { onOff() }
             }
         }
     }

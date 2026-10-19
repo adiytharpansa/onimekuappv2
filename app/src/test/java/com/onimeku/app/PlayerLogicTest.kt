@@ -3,6 +3,7 @@ package com.onimeku.app
 import com.onimeku.app.data.ApiSubtitle
 import com.onimeku.app.data.Playback
 import com.onimeku.app.ui.SubLang
+import com.onimeku.app.ui.SubMenuEntry
 import com.onimeku.app.ui.fmt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -29,6 +30,27 @@ class PlayerLogicTest {
         // bahasa pilihan tak ada -> bahasa kedua, lalu trek pertama
         assertEquals(0, SubLang.pick(listOf(sub("en")), "id", "id"))
         assertEquals(0, SubLang.pick(listOf(sub("ja", "Japanese")), "auto", "en"))
+    }
+
+    @Test fun subtitleMenuOrderIsAutoEnglishIndonesianOthersOff() {
+        val tracks = listOf(sub("ar", "Arabic"), sub("fr", "French"), sub("en", "English"))
+        // Indonesian belum ada -> tetap tampil tepat di bawah English; Off paling bawah
+        assertEquals(
+            listOf(SubMenuEntry.Auto, SubMenuEntry.Track(2), SubMenuEntry.IndonesianPending, SubMenuEntry.Track(0), SubMenuEntry.Track(1), SubMenuEntry.Off),
+            SubLang.menu(tracks),
+        )
+    }
+
+    @Test fun subtitleMenuUsesRealIndonesianTrackWhenPresent() {
+        val tracks = listOf(sub("id", "Indonesia (terjemahan)"), sub("en", "English"))
+        assertEquals(
+            listOf(SubMenuEntry.Auto, SubMenuEntry.Track(1), SubMenuEntry.Track(0), SubMenuEntry.Off),
+            SubLang.menu(tracks),
+        )
+    }
+
+    @Test fun subtitleMenuWithNoTracksStillOffersIndonesianAndOff() {
+        assertEquals(listOf(SubMenuEntry.Auto, SubMenuEntry.IndonesianPending, SubMenuEntry.Off), SubLang.menu(emptyList()))
     }
 
     @Test fun playbackOutroDefaultsToNull() {

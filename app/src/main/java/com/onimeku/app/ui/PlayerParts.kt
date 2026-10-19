@@ -171,7 +171,7 @@ internal fun PlayerSettingsSheet(
     page: String?, full: Boolean,
     quality: String, autoRes: Int, qualityOpts: List<String>, onQuality: (String) -> Unit,
     subTracks: List<com.onimeku.app.data.ApiSubtitle>, subCurrent: Int, subPref: String, subLabel: String,
-    onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
+    onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit, onSubIdPending: () -> Unit,
     subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
     speed: Float, onSpeed: (Float) -> Unit,
     audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit,
@@ -219,12 +219,17 @@ internal fun PlayerSettingsSheet(
                         }
                         "subs" -> {
                             SheetHeader(I18n.t("subtitles", "Subtitles")) { onPage("main") }
-                            val order = subTracks.indices.sortedBy { i -> when (SubLang.code(subTracks[i])) { "en" -> 0; "id" -> 1; else -> 2 } }
-                            SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
                             val autoSub = if (subPref == "auto" && subCurrent >= 0) subTracks.getOrNull(subCurrent)?.let { " · " + SubLang.display(it, subCurrent) } else null
-                            SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
-                            order.forEach { i -> SheetOption(SubLang.display(subTracks[i], i), subPref != "auto" && subCurrent == i) { onSubTrack(i) } }
-                            if (SubTranslate.busy) Text(I18n.t("sub_translating", "Translating subtitles\u2026"), Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 12.5.sp, color = NavOff)
+                            SubLang.menu(subTracks).forEach { e ->
+                                when (e) {
+                                    SubMenuEntry.Auto -> SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
+                                    is SubMenuEntry.Track -> SheetOption(SubLang.display(subTracks[e.index], e.index), subPref != "auto" && subCurrent == e.index) { onSubTrack(e.index) }
+                                    SubMenuEntry.IndonesianPending -> SheetOption(
+                                        SubLang.INDONESIAN_LABEL + if (SubTranslate.busy) " · " + I18n.t("sub_translating_short", "translating\u2026") + (if (SubTranslate.progress > 0) " ${SubTranslate.progress}%" else "") else "", false,
+                                    ) { onSubIdPending() }
+                                    SubMenuEntry.Off -> SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
+                                }
+                            }
                             Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
                             SheetRowItem(Icons.Filled.FormatSize, "Subtitle style", sizeNames.firstOrNull { it.first == subSize }?.second ?: "Normal") { onPage("substyle") }
                         }

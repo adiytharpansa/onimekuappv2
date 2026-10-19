@@ -302,7 +302,9 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     }
 
     key(useDirect, mainRetry) {
-        PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline, onFatalError = {
+        PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline,
+            onSubsTranslated = { list -> pb = pb?.copy(subtitles = list) },
+            onFatalError = {
             if (com.onimeku.app.BuildConfig.DEBUG) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("fatal") }
             // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
             // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
@@ -337,7 +339,7 @@ private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onFatalError: () -> Unit = {}) {
+private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onSubsTranslated: (List<com.onimeku.app.data.ApiSubtitle>) -> Unit = {}, onFatalError: () -> Unit = {}) {
     val player = remember(r, streamUrl) {
         // Transport OkHttp BERSAMA (Net): pool koneksi + cookie dipakai ulang
         // antar-episode; UA peramban + Referer dari API (CDN menolak klien
@@ -1296,6 +1298,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onSubAuto = {
             sheet = null; vm.setSettings { it.copy(subLang = "auto") }
             val n = SubLang.pick(subTracks, "auto", vm.s.settings.lang); applySub(n); vm.toast("Subtitles: Auto · ${subName(n)}")
+        },
+        onSubIdPending = {
+            // Pengguna menekan Indonesian padahal trek belum ada: terjemahkan SEKARANG (abaikan pengaturan otomatis/Wi-Fi),
+            // simpan preferensi, dan begitu selesai pemutar otomatis pindah ke Indonesian (lihat LaunchedEffect(subCount)).
+            sheet = null; vm.setSettings { it.copy(subLang = "id") }
+            vm.toast(I18n.t("sub_id_preparing", "Translating to Indonesian\u2026"))
+            scope.launch {
+                val opts = SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl)
+                val res = SubTranslate.fillIndonesian(ctx, r.id, r.ep, playback.subtitles, opts)
+                if (res.any { SubLang.code(it) == "id" }) onSubsTranslated(res)
+                else vm.toast(I18n.t("sub_id_unavailable", "Couldn't translate subtitles. Check your connection and try again."))
+            }
         },
         subSize = vm.s.settings.subSize, subBg = vm.s.settings.subBg,
         onSubSize = { v -> vm.setSettings { it.copy(subSize = v) } },
