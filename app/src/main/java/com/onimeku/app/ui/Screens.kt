@@ -1260,9 +1260,35 @@ fun SearchScreen(vm: AppVM) {
     val any = gs.isNotEmpty() || yr.isNotEmpty() || st.isNotEmpty()
 
     @Composable fun group(label: String, content: @Composable RowScope.() -> Unit) {
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(label, Modifier.width(52.dp), fontSize = 12.sp, color = NavOff)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, Modifier.width(56.dp), fontSize = 12.sp, color = NavOff)
+            // Baris chip melewati padding kanan halaman (sampai tepi layar) dan memudar di ujung, bukan terpotong kasar.
+            val bleed = with(LocalDensity.current) { 16.dp.roundToPx() }
+            Row(
+                Modifier.weight(1f)
+                    .layout { m, c ->
+                        val p = m.measure(c.copy(maxWidth = c.maxWidth + bleed))
+                        layout(c.maxWidth, p.height) { p.place(0, 0) }
+                    }
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val w = 28.dp.toPx()
+                        drawRect(
+                            Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - w, endX = size.width),
+                            topLeft = Offset(size.width - w, 0f), size = androidx.compose.ui.geometry.Size(w, size.height),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                        )
+                    }
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), content = content,
+            )
+        }
+    }
+    @Composable fun heading(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, top: androidx.compose.ui.unit.Dp = 20.dp) {
+        Row(Modifier.padding(top = top, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = RedText)
+            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 
@@ -1277,7 +1303,9 @@ fun SearchScreen(vm: AppVM) {
 
     // Hasil memakai grid lazy: mengetik di katalog besar tidak lagi menggambar ratusan kartu sekaligus.
     AnimeGrid(results, vm) {
-        SubHead(I18n.t("search", "Search"), vm)
+        // Search adalah tab utama: tanpa panah kembali kecuali dibuka dari layar lain (tumpukan > 1).
+        if (vm.stack.size > 1) SubHead(I18n.t("search", "Search"), vm)
+        else Text(I18n.t("search", "Search"), Modifier.padding(bottom = 12.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
         Row(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, if (q.isNotEmpty()) Red.copy(alpha = 0.7f) else Line, RoundedCornerShape(18.dp)).padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.Search, null, Modifier.size(22.dp), tint = if (q.isNotEmpty()) RedText else NavOff)
@@ -1296,7 +1324,15 @@ fun SearchScreen(vm: AppVM) {
         group("Status") { Catalog.statuses.forEach { v -> Chip(v, st == v) { st = if (st == v) "" else v } } }
         group(I18n.t("f_year", "Year")) {
             Catalog.years.forEach { v -> Chip(v, yr == v) { yr = if (yr == v) "" else v } }
-            if (any) Chip(I18n.t("clear", "Clear")) { gs = emptyList(); yr = ""; st = "" }
+        }
+        if (any) {
+            val nf = gs.size + (if (yr.isNotEmpty()) 1 else 0) + (if (st.isNotEmpty()) 1 else 0)
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("$nf ${I18n.t("filters_active", "filters active")}", fontSize = 12.sp, color = NavOff)
+                Spacer(Modifier.weight(1f))
+                Text(I18n.t("reset", "Reset"), Modifier.clip(RoundedCornerShape(8.dp)).clickable { gs = emptyList(); yr = ""; st = "" }.padding(horizontal = 8.dp, vertical = 4.dp),
+                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = RedText)
+            }
         }
         Spacer(Modifier.height(8.dp))
         if (q.trim().lowercase() != query) {
@@ -1304,19 +1340,43 @@ fun SearchScreen(vm: AppVM) {
         }
 
         if (query.isEmpty() && !any) {
-            if (vm.s.hist.isEmpty()) EmptyBox(I18n.t("find_next_t", "Find your next anime"), I18n.t("find_next_b", "Search a title or genre, or pick filters above."))
-            else {
-                Text(I18n.t("recent_searches", "Recent searches"), Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)
-                FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (vm.s.hist.isEmpty()) {
+                // Ajakan singkat (bukan kartu berbingkai bertanda "kosong"): ikon pencarian + dua baris teks.
+                Column(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Outlined.Search, null, Modifier.size(30.dp), tint = RedText)
+                    Text(I18n.t("find_next_t", "Find your next anime"), Modifier.padding(top = 8.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(I18n.t("find_next_b", "Search a title or genre, or pick filters above."), Modifier.padding(top = 4.dp), fontSize = 13.sp, color = InkSoft, textAlign = TextAlign.Center)
+                }
+            } else {
+                heading(I18n.t("recent_searches", "Recent searches"), Icons.Outlined.History, top = 14.dp)
+                FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     vm.s.hist.forEach { h -> Chip(h) { q = h } }
                     Chip(I18n.t("clear_hist", "Clear history")) { vm.clearHist() }
                 }
             }
             val trend = Catalog.top.take(8).mapNotNull { Catalog.byId[it] }
             if (trend.isNotEmpty()) {
-                Text(I18n.t("trending_now", "Trending now"), Modifier.padding(top = 20.dp), color = NavOff, fontSize = 13.sp)
-                FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    trend.forEach { t -> Chip(if (t.title.length > 24) t.title.take(23) + "…" else t.title) { vm.go(Route.Detail(t.id)) } }
+                heading(I18n.t("trending_now", "Trending now"), Icons.Outlined.LocalFireDepartment)
+                trend.forEachIndexed { i, t ->
+                    if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+                    Row(
+                        Modifier.fillMaxWidth().clickable { vm.go(Route.Detail(t.id)) }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text("${i + 1}", Modifier.width(18.dp), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = RedText, textAlign = TextAlign.Center)
+                        Box(Modifier.size(width = 44.dp, height = 62.dp).clip(RoundedCornerShape(8.dp)).artBackground(t)) { RealImage(t, Modifier.fillMaxSize()) }
+                        Column(Modifier.weight(1f)) {
+                            Text(t.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
+                            val gl = t.genres.take(2).joinToString(", ")
+                            if (gl.isNotBlank()) Text(gl, Modifier.padding(top = 2.dp), fontSize = 12.sp, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        t.rating?.replace("★", "")?.trim()?.takeIf { it.isNotBlank() }?.let {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Icon(Icons.Filled.Star, null, Modifier.size(13.dp), tint = Gold)
+                                Text(it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Gold)
+                            }
+                        }
+                    }
                 }
             }
         } else if (results.isEmpty()) {
