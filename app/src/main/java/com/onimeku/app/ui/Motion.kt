@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -211,7 +212,7 @@ fun androidx.compose.foundation.lazy.LazyItemScope.motionItem(): Modifier {
     if (LocalReduceMotion.current) return Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
     return Modifier.animateItem(
         fadeInSpec = tween(260), fadeOutSpec = tween(180),
-        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold),
+        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold),
     )
 }
 
@@ -221,7 +222,7 @@ fun androidx.compose.foundation.lazy.grid.LazyGridItemScope.motionGridItem(): Mo
     if (LocalReduceMotion.current) return Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)
     return Modifier.animateItem(
         fadeInSpec = tween(260), fadeOutSpec = tween(180),
-        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold),
+        placementSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold),
     )
 }
 
