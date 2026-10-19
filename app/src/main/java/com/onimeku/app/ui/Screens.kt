@@ -1,5 +1,7 @@
 package com.onimeku.app.ui
 
+import androidx.compose.ui.layout.layout
+import kotlin.math.roundToInt
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.animateContentSize
@@ -247,8 +249,12 @@ private fun HomeContent(vm: AppVM) {
     // membesar halus (efek stretch) dan indikator putar merah melayang di atas
     // poster, di bawah status bar. Saat menyegarkan, indikator tetap tampil
     // sampai muat selesai.
+    // Selama menyegarkan konten tetap tertahan turun (holdPx) bersama indikator, lalu naik halus saat selesai.
+    val holdPx = with(density) { 72.dp.toPx() }
     val stretch by androidx.compose.animation.core.animateFloatAsState(
-        pullPx, androidx.compose.animation.core.tween(if (pullPx == 0f) 280 else 0), label = "ptrStretch",
+        if (vm.refreshing) maxOf(pullPx, holdPx) else pullPx,
+        androidx.compose.animation.core.tween(if (pullPx == 0f) 340 else 0, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "ptrStretch",
     )
     Box(Modifier.fillMaxSize()) {
     LazyColumn(
@@ -428,7 +434,13 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
     }
     // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
     Box(
-        Modifier.fillMaxWidth().height(heroH).clipToBounds().background(Bg).pointerInput(Unit) {
+        // Tinggi hero = tinggi dasar + jarak tarik-segar. Dihitung di fase layout (tanpa recompose tiap frame):
+        // seluruh konten di bawah hero (Surprise me, rail, dst.) ikut turun persis dari bawah tombol Play.
+        Modifier.fillMaxWidth().layout { m, c ->
+            val h = heroH.roundToPx() + pull().roundToInt().coerceAtLeast(0)
+            val pl = m.measure(c.copy(minHeight = h, maxHeight = h))
+            layout(pl.width, h) { pl.place(0, 0) }
+        }.clipToBounds().background(Bg).pointerInput(Unit) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 held = true
@@ -447,7 +459,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
         Box(Modifier.fillMaxWidth().height(120.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x8C000000), Color(0x33000000), Color.Transparent))) })
         if (items.size > 1) {
             // Titik indikator: tepat di atas tombol "+", rata tengah dengannya (kotak selebar tombol; baris titik boleh lebih lebar, dipusatkan).
-            Box(Modifier.align(Alignment.BottomEnd).padding(end = HeroPad, bottom = HeroBottomPad + HeroActionW + HeroDotsGap).width(HeroActionW)) {
+            Box(Modifier.align(Alignment.BottomEnd).graphicsLayer { translationY = -pull() }.padding(end = HeroPad, bottom = HeroBottomPad + HeroActionW + HeroDotsGap).width(HeroActionW)) {
                 Row(Modifier.wrapContentWidth(Alignment.CenterHorizontally, unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items.indices.forEach { i ->
                         HeroDot(selected = pager.currentPage == i, page = pager.currentPage)
@@ -466,7 +478,9 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
     // Warna dominan poster menyepuh gradasi, tombol Play, dan label HD (merah tema bila belum terhitung / poster abu-abu).
     val tint = rememberPosterColor(a.poster)
     val accent by androidx.compose.animation.animateColorAsState(tint ?: Red, tween(500), label = "heroAccent")
-    Box(Modifier.fillMaxSize().artBackground(a).clickable { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
+    // clipToBounds PER HALAMAN: gambar diperbesar (overscan + Ken Burns) dan digeser (parallax); tanpa klip ia bocor
+    // melewati tepi halaman dan menimpa halaman tetangga saat slide, tampak sebagai strip/sambungan yang tidak rapi.
+    Box(Modifier.fillMaxSize().clipToBounds().artBackground(a).clickable { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
         // Layar lebar: pakai banner (lanskap) bila ada, poster potret akan terpotong parah.
         val req = rememberImg(if (wide) (com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)) else com.onimeku.app.data.PosterHealer.posterFor(a))
         if (req == null) Box(Modifier.fillMaxSize().shimmer())
@@ -475,9 +489,9 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             // Parallax: gambar bergeser 35% dari jarak scroll.
             modifier = Modifier.fillMaxSize().sharedArt("hero:${a.id}").graphicsLayer {
                 // Gambar sedikit diperbesar (HeroOverscan) sebagai ruang parallax, jadi tepinya tidak
-                // pernah membuka celah gelap saat digeser. Stretch tarik-segar juga hanya di sini.
-                val stretch = 1f + (pull() / size.height).coerceIn(0f, 0.3f) * 0.6f
-                val z = HeroOverscan * stretch
+                // pernah membuka celah gelap saat digeser. Saat tarik-segar hero memanjang (layout),
+                // gambar otomatis mengisi tinggi baru lewat ContentScale.Crop.
+                val z = HeroOverscan
                 scaleX = z; scaleY = z
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
                 translationY = vm.homeScrollPx().coerceAtMost(4000) * 0.35f
@@ -501,8 +515,11 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             LocalDensity provides androidx.compose.ui.unit.Density(dens.density, fontScale = dens.fontScale.coerceAtMost(1.15f)),
         ) {
         Column(Modifier.align(Alignment.BottomStart).graphicsLayer {
-            // Halaman sudah digeser pager; di sini cukup memudar (tanpa translationX tambahan yang membuat teks bertumpuk).
-            alpha = (1f - kotlin.math.abs(pageOffset()) * 1.6f).coerceIn(0f, 1f)
+            // Teks & tombol menyatu dengan halaman saat slide (hanya sedikit memudar, bukan hilang sendiri).
+            alpha = (1f - kotlin.math.abs(pageOffset()) * 0.5f).coerceIn(0f, 1f)
+            // Hero memanjang ke bawah saat ditarik; teks/tombol ditahan di posisi asal sehingga ruang baru
+            // terbuka tepat di bawah tombol Play dan konten di bawahnya turun dari titik itu.
+            translationY = -pull()
         }.widthIn(max = 600.dp).padding(start = HeroPad, end = HeroPad, bottom = HeroBottomPad)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 a.rating?.let { ScorePill(it) }
