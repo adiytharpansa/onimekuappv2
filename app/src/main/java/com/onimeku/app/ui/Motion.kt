@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
 import androidx.compose.animation.core.animateDpAsState
@@ -537,11 +538,9 @@ fun Modifier.pressableLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier
 
 
 /** Tanpa efek ripple/sorotan saat ditekan (dipakai global lewat LocalIndication). */
-@Suppress("DEPRECATION")
-object NoIndication : androidx.compose.foundation.Indication {
-    @Composable
-    override fun rememberUpdatedInstance(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.foundation.IndicationInstance =
-        object : androidx.compose.foundation.IndicationInstance {
-            override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.drawIndication() { drawContent() }
-        }
+object NoIndication : androidx.compose.foundation.IndicationNodeFactory {
+    override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.node.DelegatableNode =
+        object : androidx.compose.ui.Modifier.Node() {}
+    override fun hashCode(): Int = -1
+    override fun equals(other: Any?): Boolean = other === this
 }
