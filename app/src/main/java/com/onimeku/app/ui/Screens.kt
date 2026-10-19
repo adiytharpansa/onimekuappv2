@@ -196,6 +196,11 @@ private fun HomeContent(vm: AppVM) {
     }
     val fresh = Catalog.new
     val soon = Catalog.comingSoon.take(12)
+    // Beranda yang dibiarkan terbuka tetap segar: muat ulang katalog tiap 30 menit (judul yang baru rilis
+    // keluar dari Coming Soon dan naik ke New Episode Releases). Saat aplikasi dibuka kembali, ON_RESUME sudah menyegarkan (>5 mnt).
+    LaunchedEffect(Unit) {
+        while (true) { delay(30 * 60_000L); vm.refreshIfStale(30 * 60_000L) }
+    }
     val allRows = remember(Catalog.all) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.chunked(3) }
     var pullPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current

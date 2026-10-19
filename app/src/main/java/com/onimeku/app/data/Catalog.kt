@@ -92,8 +92,12 @@ object Catalog {
             compareByDescending<Anime> { it.year }.thenByDescending { it.updatedAt ?: "" },
         ).map { it.id }
         val donghua: List<String> = src.filter { it.country == "CN" }.sortedWith(byScore).map { it.id }
-        /** Belum tayang (NOT_YET_RELEASED): tahun terdekat dulu, lalu yang paling baru diperbarui. */
-        val comingSoon: List<String> = src.filter { it.apiStatus == "NOT_YET_RELEASED" }
+        /**
+         * Belum tayang (NOT_YET_RELEASED): tahun terdekat dulu, lalu yang paling baru diperbarui.
+         * Judul yang sudah punya episode (ep > 0 / available terisi) otomatis keluar walau status API belum
+         * sempat berubah; ia pindah ke "New Episode Releases" (urut updatedAt) dan slotnya diisi judul berikutnya.
+         */
+        val comingSoon: List<String> = src.filter { it.apiStatus == "NOT_YET_RELEASED" && it.ep <= 0 && it.available.isEmpty() }
             .sortedWith(compareBy<Anime> { if (it.year > 0) it.year else Int.MAX_VALUE }.thenByDescending { it.updatedAt ?: "" })
             .map { it.id }
         val alphabetical: List<String> = src.sortedBy { it.title.lowercase() }.map { it.id }

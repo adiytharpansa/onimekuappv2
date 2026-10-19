@@ -1,3 +1,7 @@
+## v1.0.0-debug.55 (belum dirilis): Coming Soon otomatis bersih saat rilis
+- Coming Soon hanya berisi judul NOT_YET_RELEASED yang belum punya episode; begitu API menandai rilis atau episode muncul (ep > 0 / available), judul itu hilang dari Coming Soon dan naik ke New Episode Releases (label "Today"), slotnya diisi judul belum tayang berikutnya.
+- Beranda yang dibiarkan terbuka memuat ulang katalog tiap 30 menit (selain refresh ON_RESUME >5 menit), sehingga perubahan tercermin jauh di bawah batas sehari.
+
 ## v1.0.0-debug.54 (belum dirilis): Lonceng pengingat hanya untuk Coming Soon
 - Kartu Coming Soon (Beranda) kini punya tombol lonceng pengingat (kanan bawah, merah saat aktif). Itu satu-satunya lonceng di Beranda.
 - Kalender: lonceng dihapus dari judul yang sudah rilis/sedang tayang; hanya muncul untuk judul belum tayang (NOT_YET_RELEASED), atau judul yang pengingat lamanya masih aktif agar bisa dimatikan (showBell/RemindBell).
