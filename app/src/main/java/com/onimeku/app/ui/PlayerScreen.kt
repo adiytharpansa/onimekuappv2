@@ -239,12 +239,19 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                     }
                 } ?: emptyList()
                 ready = ready.copy(subtitles = loaded)
+                ready = ready.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, ready.subtitles))
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
             pb = ready
             // Uji mandiri jalur stream: GET polos meniru langkah
             // pemutar (master -> varian -> segmen 1) lalu unggah log.
             if (com.onimeku.app.BuildConfig.DEBUG) launch { diagStreamProbe(r, ready) }
+            // Lengkapi pilihan subtitle Indonesia + English: trek yang kurang diterjemahkan di perangkat,
+            // lalu ditambahkan ke pemutar yang sedang berjalan (lihat LaunchedEffect(subCount) di PlayerReady).
+            if (ready.subtitles.isNotEmpty()) {
+                val withTr = SubTranslate.fill(ctx, r.id, r.ep, ready.subtitles)
+                if (withTr.size != ready.subtitles.size) pb = ready.copy(subtitles = withTr)
+            }
         }
     }
     if (pbFailed) {
@@ -315,6 +322,17 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     }
 
 }
+
+private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.SubtitleConfiguration> =
+    playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
+        val mime = when {
+            s.url.contains(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
+            s.url.contains(".ass") || s.url.contains(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
+            else -> androidx.media3.common.MimeTypes.TEXT_VTT
+        }
+        MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
+            .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase()).build()
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -408,15 +426,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             quality.removeSuffix("p").toIntOrNull()?.let { h ->
                 trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, h).build()
             }
-            val subs = playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
-                val mime = when {
-                    s.url.contains(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
-                    s.url.contains(".ass") || s.url.contains(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
-                    else -> androidx.media3.common.MimeTypes.TEXT_VTT
-                }
-                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
-                    .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase()).build()
-            }
+            val subs = subConfigs(playback)
             val itemBuilder = MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
                 .setMediaMetadata(
                     androidx.media3.common.MediaMetadata.Builder()
@@ -480,6 +490,24 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val subTracks = remember(playback) { playback.subtitles.filter { it.url.isNotBlank() } }
     var subIdx by remember(r) { mutableIntStateOf(-1) }       // -1 = mati, selain itu indeks di subTracks
     var subReady by remember(r) { mutableStateOf(false) }
+    // Trek terjemahan (Indonesia/English) selesai dibuat saat video sudah berjalan: pasang ke item yang sama,
+    // lanjut dari posisi terakhir, lalu pilih ulang subtitle sesuai preferensi.
+    val subCount = playback.subtitles.count { it.url.isNotBlank() }
+    var builtSubs by remember(player) { mutableIntStateOf(subCount) }
+    LaunchedEffect(subCount) {
+        if (subCount != builtSubs) {
+            builtSubs = subCount
+            val cur = player.currentMediaItem
+            if (cur != null) {
+                val pos = player.currentPosition
+                val play = player.playWhenReady
+                player.setMediaItem(cur.buildUpon().setSubtitleConfigurations(subConfigs(playback)).build(), pos)
+                player.prepare()
+                player.playWhenReady = play
+                subReady = false
+            }
+        }
+    }
     // Menu pengaturan ala YouTube (roda gigi): null = tertutup, "main" | "quality" | "subs" | "speed" | "audio".
     var sheet by remember { mutableStateOf<String?>(null) }
     var buffered by remember(r) { mutableFloatStateOf(0f) }
