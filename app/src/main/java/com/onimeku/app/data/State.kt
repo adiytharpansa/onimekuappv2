@@ -24,6 +24,8 @@ data class Profile(
     val watch: List<Watch> = emptyList(),
     val base: String? = null,
     val remind: List<String> = emptyList(),
+    // Detik menonton per hari ("yyyy-MM-dd" -> detik), untuk statistik Profil. Lokal saja, tidak disinkronkan.
+    val days: Map<String, Int> = emptyMap(),
 )
 
 @Serializable
@@ -46,6 +48,8 @@ data class Settings(
     val gestureHintSeen: Boolean = false,
     // Picture-in-picture otomatis saat menekan Home/gestur home ketika video diputar (seperti YouTube).
     val autoPip: Boolean = true,
+    // Unduh otomatis episode berikutnya saat Wi-Fi (jaringan tak terukur) ketika episode berjalan >60%.
+    val autoDlNext: Boolean = false,
 )
 
 @Serializable

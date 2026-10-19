@@ -43,6 +43,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     // PlayerReady yang dibongkar tiap pindah episode sehingga fullscreen
     // selalu lepas. Direset otomatis saat rute teratas bukan pemutar.
     var playerFull by mutableStateOf(false)
+    /** Id anime yang menu aksi cepatnya (tekan-lama kartu) sedang terbuka; null = tertutup. */
+    var quick by mutableStateOf<String?>(null)
     // Posisi (ms) saat jalur putar gagal & pindah ke jalur cadangan: pemutar baru melanjutkan dari sini, bukan dari progres 10 dtk terakhir.
     var resumeMs: Pair<String, Long>? = null
     // Kecepatan putar dipertahankan antar episode (diatur dari roda gigi pemutar).
@@ -281,7 +283,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun back(animated: Boolean = true) { navDir = if (animated) -1 else 0; stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
     fun setTab(r: Route) { navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
     fun replaceTop(r: Route) { navDir = 0; stack = stack.dropLast(1) + r; afterNav() }
-    private fun afterNav() { if (stack.lastOrNull() !is Route.Player) playerFull = false }
+    private fun afterNav() { quick = null; if (stack.lastOrNull() !is Route.Player) playerFull = false }
     fun openSettings() { stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
 
     fun toast(m: String) {
@@ -375,12 +377,12 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     /** Isi unduhan (ambil data putar + antrekan). Dipisah dari download()
      *  agar downloadAll bisa menjalankannya BERURUTAN. */
-    private suspend fun startDownload(id: String, ep: Int) {
+    private suspend fun startDownload(id: String, ep: Int, silent: Boolean = false) {
         val k = "$id:$ep"
         val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
         val url = pb?.streamUrl
         if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
-            toast("This title can't be downloaded")
+            if (!silent) toast("This title can't be downloaded")
             return
         }
         if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
@@ -388,9 +390,9 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         Downloads.enqueue(app, id, ep, url, pb.referer) {
             downloading.remove(k)
             upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
-            toast("Download failed to start: Episode $ep")
+            if (!silent) toast("Download failed to start: Episode $ep")
         }
-        toast("Download started: Episode $ep")
+        toast(if (silent) "Saving Episode $ep for offline" else "Download started: Episode $ep")
     }
 
     fun downloadAll(id: String) {
@@ -445,8 +447,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Penghitung detik menonton: selisih posisi antar panggilan saveProg pada episode yang sama (maks 30 dtk per panggilan, seek jauh tidak dihitung).
+    private var statKey = ""
+    private var statT = 0
+
     fun saveProg(id: String, ep: Int, t: Int, dur: Int) {
         val k = "$id:$ep"
+        val delta = if (k == statKey && t > statT) (t - statT).coerceAtMost(30) else 0
+        statKey = k; statT = t
         updP { pr ->
             var base = pr.base; var prog = pr.prog; var seen = pr.seen; var last = pr.last; var watch = pr.watch
             if (t >= 5) base = id
@@ -455,8 +463,73 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             // Catatan tontonan (untuk Continue Watching): hanya putar yang
             // benar-benar berjalan (>=5 dtk), terbaru di depan, maks 24 judul.
             if (t >= 5) watch = (listOf(Watch(id, ep, System.currentTimeMillis(), dur)) + watch.filter { it.id != id }).take(24)
-            pr.copy(base = base, prog = prog, seen = seen, last = last, watch = watch)
+            pr.copy(base = base, prog = prog, seen = seen, last = last, watch = watch, days = Stats.addSeconds(pr.days, delta))
         }
+        if (s.settings.autoDlNext && dur > 0 && t >= dur * 0.6) maybeAutoDownloadNext(id, ep)
+    }
+
+    // ---------- unduh otomatis episode berikutnya (Wi-Fi) ----------
+    private val autoQueued = HashSet<String>()
+
+    private fun maybeAutoDownloadNext(id: String, ep: Int) {
+        val a = Catalog.byId[id] ?: return
+        val aired = if (a.ep > 0) a.ep else a.eps
+        val nums = if (a.available.isNotEmpty()) a.available else (1..aired).toList()
+        val next = nums.firstOrNull { it > ep } ?: return
+        val k = "$id:$next"
+        if (hasDl(id, next) || downloading.containsKey(k) || !autoQueued.add(k)) return
+        val cm = app.getSystemService(ConnectivityManager::class.java)
+        val unmetered = try {
+            cm != null && !cm.isActiveNetworkMetered &&
+                cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        } catch (e: Exception) { false }
+        if (!unmetered) { autoQueued.remove(k); return } // coba lagi saat tersambung Wi-Fi
+        val free = try { android.os.StatFs(app.filesDir.path).availableBytes } catch (e: Exception) { Long.MAX_VALUE }
+        if (free < 1024L * 1024 * 1024) return
+        viewModelScope.launch { startDownload(id, next, silent = true) }
+    }
+
+    // ---------- Surprise me ----------
+    /** Pilih acak judul berskor bagus yang belum pernah ditonton lalu buka Detail-nya. */
+    fun surprise() {
+        val watched = HashSet<String>().apply {
+            p.watch.forEach { add(it.id) }
+            (p.prog.keys + p.seen).forEach { add(it.substringBeforeLast(':')) }
+        }
+        fun pool(min: Double) = Catalog.unique.filter {
+            (it.score ?: 0.0) >= min && it.id !in watched && (it.ep > 0 || it.available.isNotEmpty())
+        }
+        val pick = pool(7.5).ifEmpty { pool(7.0) }.randomOrNull()
+        if (pick == null) { toast(I18n.t("surprise_none", "Nothing new to suggest right now")); return }
+        go(Route.Detail(pick.id))
+    }
+
+    // ---------- tandai ditonton ----------
+    /** Tandai episode 1..[upTo] judul ini sudah ditonton (untuk pengguna yang pindah dari aplikasi lain). */
+    fun markSeenUpTo(id: String, upTo: Int) {
+        val a = Catalog.byId[id] ?: return
+        val all = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
+        val nums = all.filter { it <= upTo }
+        if (nums.isEmpty()) return
+        val keys = nums.map { "$id:$it" }
+        val next = all.firstOrNull { it > upTo } ?: upTo
+        updP { pr ->
+            pr.copy(
+                seen = pr.seen + keys.filter { it !in pr.seen },
+                prog = pr.prog - keys.toSet(),
+                base = pr.base ?: id,
+                last = Last(id, next),
+                watch = (listOf(Watch(id, upTo, System.currentTimeMillis(), 0)) + pr.watch.filter { it.id != id }).take(24),
+            )
+        }
+        toast("Episodes ${nums.first()}–${nums.last()} marked as watched")
+    }
+
+    /** Batalkan tanda ditonton satu episode. */
+    fun unmarkSeen(id: String, ep: Int) {
+        val k = "$id:$ep"
+        updP { pr -> pr.copy(seen = pr.seen - k, prog = pr.prog - k) }
+        toast("Episode $ep marked as unwatched")
     }
 
     fun addHist(v: String) {

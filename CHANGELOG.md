@@ -1,3 +1,28 @@
+# v14 — Personalisasi, aksi cepat, tablet (19 Okt 2026)
+**Belum dikompilasi dan belum dijalankan** (tanpa Android SDK). Jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` dulu.
+
+## Terasa lebih personal
+- Hero Home: warna dominan poster (`ui/PosterColor.kt`, sampel 48x48 lewat Coil) menyepuh gradasi bawah, tombol Play, dan label HD. Poster nyaris abu-abu jatuh ke merah tema.
+- Profil: kartu "Your stats" (menonton bulan ini, episode tuntas, genre teratas, runtun harian). Data baru `Profile.days` (detik per hari, lokal) diisi di `AppVM.saveProg`; logika di `data/Stats.kt` + `StatsTest`. Riwayat sebelum v14 tidak punya jam menonton.
+
+## Lebih cepat dipakai
+- Tekan lama poster (rail, grid, hasil cari) membuka bottom sheet: Daftarku, Ingatkan saya, Unduh episode pertama, Bagikan, Buka detail (`ui/QuickMenu.kt`, `LocalQuickMenu`, `AppVM.quick`). Kartu Continue Watching tidak punya menu.
+- "Surprise me": chip di bawah hero Home, `AppVM.surprise()` memilih acak judul skor >= 7,5 (cadangan >= 7,0) yang belum pernah ditonton dan sudah punya episode.
+- Search: ikon mik (RecognizerIntent), chip "Trending now" (Top Hits) saat kolom kosong. Riwayat pencarian dan chip genre sudah ada sebelumnya.
+- Detail: tekan lama episode -> "Mark up to Ep N" / "Mark unwatched" (`markSeenUpTo`, `unmarkSeen`). Centang dan progres mini per episode sudah ada sebelumnya di `EpisodeCard`.
+
+## Retensi
+- Pintasan ikon aplikasi: `res/xml/shortcuts.xml` (Continue, Search) -> `onimeku://continue`, `onimeku://search`, ditangani `MainActivity.handleLink`. **Widget layar utama belum dibuat** (butuh Glance/RemoteViews).
+- Settings > "Auto-download next episode" (`Settings.autoDlNext`): saat episode berjalan > 60% dan jaringan tak terukur, episode berikutnya diunduh senyap (butuh ruang bebas >= 1 GB).
+
+## Tablet / landscape
+- `Gutter` kini composable: di layar > 760 dp konten Detail/episode dipusatkan selebar ±720 dp. Hero Home: tinggi aman di landscape, memakai banner + scrim kiri + teks maks 600 dp di layar >= 700 dp. Grid "All Anime" menyesuaikan jumlah kolom (3-8).
+- Belum ada layout dua panel (Detail berdampingan dengan daftar episode).
+
+## Belum dikerjakan
+- Ide 1 (pilih genre favorit saat pertama buka + baris "Genre favoritmu").
+- Countdown tayang dan strip "Tayang hari ini" (butuh jadwal API), trailer (butuh URL trailer).
+
 # v13 — Lanjutan perapian Home (19 Okt 2026)
 - Kartu "New Episode Releases": lencana NEW/BARU untuk episode rilis hari ini atau kemarin (ditumpuk di atas HD).
 - Hero carousel berhenti berputar selama jari menyentuh hero, lanjut setelah dilepas.

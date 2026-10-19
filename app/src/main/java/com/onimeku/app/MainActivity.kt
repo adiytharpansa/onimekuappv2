@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.onimeku.app.ui.*
+import com.onimeku.app.data.Last
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.util.Rational
@@ -95,10 +96,21 @@ class MainActivity : ComponentActivity() {
     /** onimeku://anime/<id> -> halaman Detail (bila judul ada di katalog). */
     private fun handleLink(i: android.content.Intent?) {
         val d = i?.data ?: return
-        if (d.scheme != "onimeku" || d.host != "anime") return
-        val id = d.pathSegments.firstOrNull() ?: return
-        vm.closeWelcome()
-        vm.go(Route.Detail(id))
+        if (d.scheme != "onimeku") return
+        when (d.host) {
+            "anime" -> {
+                val id = d.pathSegments.firstOrNull() ?: return
+                vm.closeWelcome()
+                vm.go(Route.Detail(id))
+            }
+            // Pintasan ikon aplikasi: "Lanjut menonton" langsung ke episode terakhir; "Cari" membuka Search.
+            "continue" -> {
+                vm.closeWelcome()
+                val l = vm.p.last ?: vm.p.watch.firstOrNull()?.let { Last(it.id, it.ep) }
+                if (l != null) vm.go(Route.Player(l.id, l.ep)) else vm.toast(I18n.t("nothing_to_continue", "Nothing to continue yet"))
+            }
+            "search" -> { vm.closeWelcome(); vm.setTab(Route.Search) }
+        }
     }
 
     override fun onUserLeaveHint() {
@@ -122,7 +134,7 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             OnimekuTheme {
-                CompositionLocalProvider(LocalEnsureNotif provides { cb -> ensureNotif(cb) }) {
+                CompositionLocalProvider(LocalEnsureNotif provides { cb -> ensureNotif(cb) }, LocalQuickMenu provides { a -> vm.quick = a.id }) {
                     val appVm: AppVM = viewModel()
                     App(appVm)
                 }
@@ -255,6 +267,7 @@ fun App(vm: AppVM) {
                 }
                 if (vm.route !is Route.Player && vm.route !is Route.Auth) TabBar(vm, Modifier.align(Alignment.BottomCenter))
             }
+            vm.quick?.let { QuickMenuSheet(vm, it) }
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.
             var lastToast by remember { mutableStateOf("") }
             LaunchedEffect(vm.toastMsg) { vm.toastMsg?.let { lastToast = it } }

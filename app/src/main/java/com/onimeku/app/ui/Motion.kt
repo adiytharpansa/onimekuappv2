@@ -24,6 +24,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -444,4 +445,47 @@ fun AnimatedProgressBar(value: Float, modifier: Modifier = Modifier, color: Colo
     val a = remember { androidx.compose.animation.core.Animatable(if (reduce) value else 0f) }
     LaunchedEffect(value) { a.animateTo(value.coerceIn(0f, 1f), tween(if (reduce) 0 else 900, delayMillis = if (reduce) 0 else 250, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
     Box(modifier.background(track).drawBehind { drawRect(color, size = androidx.compose.ui.geometry.Size(size.width * a.value, size.height)) })
+}
+
+
+/** Seperti [liftPress] tetapi dengan tekan-lama ([onLong] null = perilaku biasa). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun Modifier.liftPressLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier {
+    if (onLong == null) return liftPress(onClick)
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val reduce = LocalReduceMotion.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val sc by animateFloatAsState(if (pressed && !reduce) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLS")
+    val tilt by animateFloatAsState(if (pressed && !reduce) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLT")
+    return this
+        .graphicsLayer { scaleX = sc; scaleY = sc; rotationX = tilt; cameraDistance = 14f * density }
+        .combinedClickable(
+            interactionSource = src, indication = null,
+            onLongClick = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onLong() },
+            onClick = onClick,
+        )
+}
+
+/** Seperti [pressable] tetapi dengan tekan-lama ([onLong] null = perilaku biasa). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun Modifier.pressableLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier {
+    if (onLong == null) return pressable(onClick)
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val reduceP = LocalReduceMotion.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val sc by animateFloatAsState(
+        targetValue = if (pressed && !reduceP) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "pressL",
+    )
+    return this
+        .graphicsLayer { scaleX = sc; scaleY = sc }
+        .combinedClickable(
+            interactionSource = src, indication = null,
+            onLongClick = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onLong() },
+            onClick = onClick,
+        )
 }

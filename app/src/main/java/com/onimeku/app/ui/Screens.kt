@@ -213,7 +213,8 @@ private fun HomeContent(vm: AppVM) {
         while (true) { delay(30 * 60_000L); vm.refreshIfStale(30 * 60_000L) }
     }
     // Home hanya menampilkan 24 judul pertama (8 baris); sisanya lewat "Browse all" (daftar penuh + filter genre).
-    val allRows = remember(Catalog.all) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.take(24).chunked(3) }
+    val gridCols = (LocalConfiguration.current.screenWidthDp / 140).coerceIn(3, 8)
+    val allRows = remember(Catalog.all, gridCols) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.take(maxOf(24, gridCols * 8)).chunked(gridCols) }
     var pullPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val ptrThresholdPx = with(density) { 90.dp.toPx() }
@@ -255,6 +256,11 @@ private fun HomeContent(vm: AppVM) {
         state = vm.homeScroll, contentPadding = PaddingValues(bottom = bottomContentPadding()),
     ) {
         item(key = "hero", contentType = "hero") { Hero(vm, heroH) { stretch } }
+        item(key = "surprise", contentType = "surprise") {
+            Row(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip(I18n.t("surprise", "Surprise me"), icon = Icons.Outlined.Casino) { vm.surprise() }
+            }
+        }
 
         if (contItems.isNotEmpty()) {
             item(key = "continue", contentType = "rail") {
@@ -348,8 +354,8 @@ private fun HomeContent(vm: AppVM) {
         items(allRows.size, key = { "all-row:$it" }, contentType = { "all-row" }) { r ->
             val row = allRows[r]
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEachIndexed { c, a -> Box(Modifier.weight(1f)) { Tile(a, vm, (r * 3 + c) % 9) } }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                row.forEachIndexed { c, a -> Box(Modifier.weight(1f)) { Tile(a, vm, (r * gridCols + c) % 9) } }
+                repeat(gridCols - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         item(key = "all-more", contentType = "all-more") {
@@ -388,7 +394,12 @@ private fun HomeContent(vm: AppVM) {
 
 /** Tinggi hero mengikuti layar (±64%), bukan angka tetap. */
 @Composable
-private fun heroHeight() = (LocalConfiguration.current.screenHeightDp * 0.64f).coerceIn(420f, 640f).dp
+private fun heroHeight(): androidx.compose.ui.unit.Dp {
+    val c = LocalConfiguration.current
+    val h = c.screenHeightDp.toFloat()
+    // Landscape (lebar > tinggi): hero tidak boleh lebih tinggi dari layar.
+    return if (c.screenWidthDp > c.screenHeightDp) (h * 0.85f).coerceIn(240f, 560f).dp else (h * 0.64f).coerceIn(420f, 640f).dp
+}
 
 /** Carousel hero: 5 judul teratas, geser manual atau otomatis tiap 5,5 dtk, indikator animasi, parallax saat digulir. */
 @Composable
@@ -451,8 +462,13 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
 private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> Float) {
     val on = a.id in vm.p.myList
     val firstEp = a.available.firstOrNull() ?: 1
+    val wide = LocalConfiguration.current.screenWidthDp >= 700
+    // Warna dominan poster menyepuh gradasi, tombol Play, dan label HD (merah tema bila belum terhitung / poster abu-abu).
+    val tint = rememberPosterColor(a.poster)
+    val accent by androidx.compose.animation.animateColorAsState(tint ?: Red, tween(500), label = "heroAccent")
     Box(Modifier.fillMaxSize().artBackground(a).clickable { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
-        val req = rememberImg(com.onimeku.app.data.PosterHealer.posterFor(a))
+        // Layar lebar: pakai banner (lanskap) bila ada, poster potret akan terpotong parah.
+        val req = rememberImg(if (wide) (com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)) else com.onimeku.app.data.PosterHealer.posterFor(a))
         if (req == null) Box(Modifier.fillMaxSize().shimmer())
         else coil.compose.AsyncImage(
             model = req, contentDescription = a.title,
@@ -470,9 +486,15 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             alignment = Alignment.TopCenter,
         )
+        // Sepuhan warna poster di bagian bawah gambar (di bawah peleburan ke latar).
+        Box(Modifier.fillMaxSize().drawBehind {
+            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.3f to Color.Transparent, 0.65f to accent.copy(alpha = 0.42f), 1f to accent.copy(alpha = 0.2f)))
+        })
         Box(Modifier.fillMaxSize().drawBehind {
             drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.26f to Color.Transparent, 0.45f to Color(0x4D14161F), 0.72f to Color(0xD914161F), 0.88f to Color(0xF214161F), 1f to Bg))
         })
+        // Layar lebar: info di kiri, gambar terlihat di kanan.
+        if (wide) Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.horizontalGradient(0f to Color(0xCC14161F), 0.6f to Color.Transparent)) })
         val dens = LocalDensity.current
         // Batasi font scale sistem di hero agar kolom teks tidak melebihi tinggi hero.
         androidx.compose.runtime.CompositionLocalProvider(
@@ -481,10 +503,10 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
         Column(Modifier.align(Alignment.BottomStart).graphicsLayer {
             // Halaman sudah digeser pager; di sini cukup memudar (tanpa translationX tambahan yang membuat teks bertumpuk).
             alpha = (1f - kotlin.math.abs(pageOffset()) * 1.6f).coerceIn(0f, 1f)
-        }.padding(start = HeroPad, end = HeroPad, bottom = HeroBottomPad)) {
+        }.widthIn(max = 600.dp).padding(start = HeroPad, end = HeroPad, bottom = HeroBottomPad)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 a.rating?.let { ScorePill(it) }
-                if (a.hd) Tag("HD", Red, Color.White)
+                if (a.hd) Tag("HD", accent, Color.White)
                 StatusPill(a.status)
             }
             Text(a.title, Modifier.padding(top = 12.dp), fontSize = 32.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp, letterSpacing = (-0.6).sp,
@@ -501,7 +523,7 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             Text(a.synopsis, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 19.sp,
                 color = HeroSynopsis, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = HeroActionsTop), horizontalArrangement = Arrangement.spacedBy(HeroActionGap), verticalAlignment = Alignment.CenterVertically) {
-                PlayButton(I18n.t("play", "Play"), null, Modifier.weight(1f)) { vm.go(Route.Player(a.id, firstEp)) }
+                PlayButton(I18n.t("play", "Play"), null, Modifier.weight(1f), accent = accent) { vm.go(Route.Player(a.id, firstEp)) }
                 Box(
                     Modifier.size(HeroActionW).pressable { vm.toggleML(a.id) }.clip(RoundedCornerShape(18.dp))
                         .background(if (on) Color.White else GlassFill)
@@ -693,7 +715,12 @@ private fun DownloadRing(pct: Int, onClick: () -> Unit) {
 }
 
 // ---- Komponen khusus halaman Detail (redesain debug.33) ----
-val Gutter = 20.dp
+/** Margin samping konten: 20 dp di ponsel; di layar lebar konten dipusatkan dengan lebar ±720 dp. */
+val Gutter: androidx.compose.ui.unit.Dp
+    @Composable get() {
+        val w = LocalConfiguration.current.screenWidthDp
+        return if (w > 760) ((w - 720) / 2).dp else 20.dp
+    }
 private val GoodGreen = Color(0xFF3DDC97)
 
 /** Tombol bulat kaca (blur-look) yang melayang di atas gambar hero. */
@@ -732,10 +759,10 @@ private fun StatusPill(status: String) {
 
 /** Tombol utama: gradasi crimson, tinggi 56dp, bayangan lembut. */
 @Composable
-private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifier, accent: Color? = null, onClick: () -> Unit) {
     Row(
         modifier.fillMaxWidth().height(56.dp).pressable(onClick).clip(RoundedCornerShape(18.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFFC8142F), Red)))
+            .background(Brush.horizontalGradient(if (accent != null) listOf(androidx.compose.ui.graphics.lerp(accent, Color.White, 0.12f), accent) else listOf(Color(0xFFC8142F), Red)))
             .sweepShine()
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -783,12 +810,12 @@ fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
 @Composable
 fun EpisodeCard(
     a: Anime, n: Int, seen: Boolean, progSec: Int?, current: Boolean,
-    onOpen: () -> Unit, nextUp: Boolean = false, durSec: Int = 1440, compact: Boolean = false, trailing: @Composable () -> Unit,
+    onOpen: () -> Unit, nextUp: Boolean = false, durSec: Int = 1440, compact: Boolean = false, onLong: (() -> Unit)? = null, trailing: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
     val frac = when { seen -> 1f; progSec != null -> (progSec / durSec.coerceAtLeast(1).toFloat()).coerceIn(0.03f, 0.97f); else -> 0f }
     Row(
-        Modifier.padding(horizontal = Gutter).padding(bottom = 10.dp).fillMaxWidth().pressable(onOpen).clip(shape)
+        Modifier.padding(horizontal = Gutter).padding(bottom = 10.dp).fillMaxWidth().pressableLong(onLong, onOpen).clip(shape)
             .background(if (current) Color(0x1FA6122D) else Bg2)
             .border(1.dp, if (current) Red.copy(alpha = 0.6f) else Line, shape).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -837,6 +864,7 @@ fun DetailScreen(vm: AppVM, id: String) {
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var expanded by rememberSaveable(id) { mutableStateOf(false) }
     var newestFirst by rememberSaveable(id) { mutableStateOf(false) }
+    var markEp by remember(id) { mutableStateOf<Int?>(null) }
     val baseEps = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val epNums = if (newestFirst) baseEps.reversed() else baseEps
     val sim = Catalog.similar(id)
@@ -858,7 +886,9 @@ fun DetailScreen(vm: AppVM, id: String) {
     }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
-    val heroH = (LocalConfiguration.current.screenHeightDp * 0.5f).coerceIn(320f, 470f).dp
+    val cfgD = LocalConfiguration.current
+    val heroH = if (cfgD.screenWidthDp > cfgD.screenHeightDp) (cfgD.screenHeightDp * 0.7f).coerceIn(220f, 420f).dp
+        else (cfgD.screenHeightDp * 0.5f).coerceIn(320f, 470f).dp
     val heroPx = with(density) { heroH.toPx() }
     // 0 = hero terlihat penuh, 1 = hero sudah tergulung -> bilah atas jadi solid + judul muncul.
     val barA by remember(heroPx) {
@@ -983,6 +1013,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                 EpisodeCard(
                     a, n, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = resume?.ep == n,
                     onOpen = { vm.go(Route.Player(id, n)) },
+                    onLong = { markEp = n },
                 ) {
                     when {
                         pct != null -> DownloadRing(pct) { vm.download(id, n) }
@@ -991,6 +1022,9 @@ fun DetailScreen(vm: AppVM, id: String) {
                     }
                 }
                 }
+            }
+            if (epNums.size > 1) item(key = "ep_hint") {
+                Text(I18n.t("ep_hint", "Tip: press and hold an episode to mark it as watched."), Modifier.padding(horizontal = Gutter).padding(bottom = 4.dp), fontSize = 12.sp, color = NavOff)
             }
             if (sim.isNotEmpty()) {
                 item(key = "similar") {
@@ -1058,6 +1092,21 @@ fun DetailScreen(vm: AppVM, id: String) {
                     }
                 }
             }
+        }
+        markEp?.let { n ->
+            val seenNow = "$id:$n" in vm.p.seen
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { markEp = null },
+                title = { Text("Episode $n") },
+                text = { Text(I18n.t("mark_body", "Mark episodes as watched up to this one? Useful if you watched them in another app.")) },
+                confirmButton = {
+                    Row {
+                        if (seenNow) androidx.compose.material3.TextButton(onClick = { vm.unmarkSeen(id, n); markEp = null }) { Text(I18n.t("mark_unwatched", "Mark unwatched")) }
+                        androidx.compose.material3.TextButton(onClick = { vm.markSeenUpTo(id, n); markEp = null }) { Text("${I18n.t("mark_upto", "Mark up to Ep")} $n", color = RedText) }
+                    }
+                },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { markEp = null }) { Text(I18n.t("cancel", "Cancel")) } },
+            )
         }
         // ===== Bilah atas melayang: kaca di atas hero, jadi solid + judul saat digulir =====
         Box(Modifier.fillMaxWidth().height(statusTop + 58.dp).background(Bg.copy(alpha = barA * 0.97f)).padding(top = statusTop)) {
@@ -1143,6 +1192,20 @@ fun SearchScreen(vm: AppVM) {
     var st by remember { mutableStateOf("") }
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { fr.requestFocus() }
+    val voice = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        val txt = r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (r.resultCode == android.app.Activity.RESULT_OK && !txt.isNullOrBlank()) { q = txt; vm.addHist(txt) }
+    }
+    fun startVoice() {
+        try {
+            voice.launch(
+                android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, if (I18n.lang == "id") "id-ID" else Locale.getDefault().toLanguageTag())
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, I18n.t("voice_prompt", "Say an anime title or genre")),
+            )
+        } catch (e: Exception) { vm.toast(I18n.t("voice_na", "Voice search isn't available on this device")) }
+    }
     val any = gs.isNotEmpty() || yr.isNotEmpty() || st.isNotEmpty()
 
     @Composable fun group(label: String, content: @Composable RowScope.() -> Unit) {
@@ -1174,6 +1237,8 @@ fun SearchScreen(vm: AppVM) {
                 decorationBox = { inner -> if (q.isEmpty()) Text(I18n.t("search_hint2", "Search anime or genre"), color = NavOff); inner() })
             if (q.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Close, "Clear", Modifier.size(18.dp), tint = InkSoft)
+            } else Box(Modifier.size(40.dp).clip(CircleShape).clickable { startVoice() }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Mic, I18n.t("voice_search", "Voice search"), Modifier.size(22.dp), tint = InkSoft)
             }
         }
         group("Genre") { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }
@@ -1194,6 +1259,13 @@ fun SearchScreen(vm: AppVM) {
                 FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     vm.s.hist.forEach { h -> Chip(h) { q = h } }
                     Chip(I18n.t("clear_hist", "Clear history")) { vm.clearHist() }
+                }
+            }
+            val trend = Catalog.top.take(8).mapNotNull { Catalog.byId[it] }
+            if (trend.isNotEmpty()) {
+                Text(I18n.t("trending_now", "Trending now"), Modifier.padding(top = 20.dp), color = NavOff, fontSize = 13.sp)
+                FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    trend.forEach { t -> Chip(if (t.title.length > 24) t.title.take(23) + "…" else t.title) { vm.go(Route.Detail(t.id)) } }
                 }
             }
         } else if (results.isEmpty()) {

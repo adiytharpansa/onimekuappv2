@@ -179,8 +179,10 @@ fun Poster(
     progress: Float? = null, compact: Boolean = false, sharedKey: String? = null, playIcon: Boolean = false, newBadge: Boolean = false, onClick: () -> Unit,
 ) {
     val sized = if (w != null) modifier.width(w) else modifier.fillMaxWidth()
+    val quick = LocalQuickMenu.current
+    val longCb: (() -> Unit)? = if (!ep && quick != null) ({ quick(a) }) else null
     Box(
-        sized.liftPress { if (sharedKey != null) SharedArt.key = sharedKey; onClick() }.aspectRatio(if (ep) 232f / 150f else 232f / 311f)
+        sized.liftPressLong(longCb) { if (sharedKey != null) SharedArt.key = sharedKey; onClick() }.aspectRatio(if (ep) 232f / 150f else 232f / 311f)
             .sharedArt(sharedKey)
             .clip(RoundedCornerShape(if (compact) 12.dp else 18.dp)).artBackground(a),
     ) {

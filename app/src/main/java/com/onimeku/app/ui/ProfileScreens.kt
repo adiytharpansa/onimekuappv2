@@ -36,6 +36,7 @@ import com.onimeku.app.AppVM
 import com.onimeku.app.I18n
 import com.onimeku.app.Notifier
 import com.onimeku.app.Route
+import com.onimeku.app.data.Catalog
 
 private val avatarColors = listOf(Color(0xFFA6122D), Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B))
 
@@ -58,6 +59,21 @@ fun ProfileScreen(vm: AppVM) {
             Column(Modifier.weight(1f)) {
                 Text(if (acc != null) "Signed in" else "Guest", fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
                 Text(acc?.email ?: "Not signed in", Modifier.padding(top = 2.dp), fontSize = 14.sp, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+        }
+        val st = remember(vm.p.days, vm.p.seen, Catalog.all) { com.onimeku.app.data.Stats.compute(vm.p) }
+        Text(I18n.t("stats_title", "Your stats"), fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+        CardBox(Modifier.padding(bottom = 26.dp).fadeSlideIn(60)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val time = if (st.monthSec < 3600) "${st.monthSec / 60} ${I18n.t("unit_min", "min")}" else "${st.monthSec / 3600}.${(st.monthSec % 3600) / 360} ${I18n.t("unit_h", "h")}"
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatCell(time, I18n.t("stat_month", "Watched this month"), Modifier.weight(1f))
+                    StatCell("${st.episodes}", I18n.t("stat_eps", "Episodes finished"), Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatCell(st.topGenre ?: "–", I18n.t("stat_genre", "Top genre"), Modifier.weight(1f))
+                    StatCell("${st.streak} ${if (st.streak == 1) I18n.t("unit_day", "day") else I18n.t("unit_days", "days")}", I18n.t("stat_streak", "Daily streak"), Modifier.weight(1f))
+                }
             }
         }
         Text("Profiles", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
@@ -196,6 +212,8 @@ fun SubScreen(vm: AppVM, key: String) {
                 CardBox {
                     SwitchRow(I18n.t("wifi_only_t", "Stream over Wi-Fi only"), I18n.t("wifi_only_d", "Avoid using mobile data."), set.wifi) { v -> vm.setSettings { it.copy(wifi = v) } }
                     HLine()
+                    SwitchRow(I18n.t("auto_dl_t", "Auto-download next episode"), I18n.t("auto_dl_d", "While you watch on Wi-Fi, save the next episode for offline."), set.autoDlNext) { v -> vm.setSettings { it.copy(autoDlNext = v) } }
+                    HLine()
                     SwitchRow(I18n.t("alerts_t", "New episode alerts"), I18n.t("alerts_d", "Get notified when your list updates."), set.alerts) { v ->
                         vm.setSettings { it.copy(alerts = v) }
                         if (v) ensure { g -> if (g) Notifier.show(ctx, "Alerts on", "You will get new episode and reminder alerts") }
@@ -282,5 +300,15 @@ fun SubScreen(vm: AppVM, key: String) {
             }
             "terms", "privacy", "licenses" -> LegalContent(key)
         }
+    }
+}
+
+@Composable
+private fun StatCell(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(label, Modifier.padding(top = 2.dp), fontSize = 12.sp, color = NavOff, maxLines = 2)
     }
 }
