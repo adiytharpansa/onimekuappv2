@@ -466,6 +466,16 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             pr.copy(base = base, prog = prog, seen = seen, last = last, watch = watch, days = Stats.addSeconds(pr.days, delta))
         }
         if (s.settings.autoDlNext && dur > 0 && t >= dur * 0.6) maybeAutoDownloadNext(id, ep)
+        refreshWidget(force = dur > 0 && t >= dur * 0.9)
+    }
+
+    private var widgetAt = 0L
+    /** Segarkan widget Continue Watching; dibatasi sekali per 60 dtk kecuali [force] (episode baru tuntas). */
+    private fun refreshWidget(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - widgetAt < 60_000L) return
+        widgetAt = now
+        com.onimeku.app.widget.ContinueWidget.requestUpdate(app)
     }
 
     // ---------- unduh otomatis episode berikutnya (Wi-Fi) ----------
@@ -522,6 +532,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                 watch = (listOf(Watch(id, upTo, System.currentTimeMillis(), 0)) + pr.watch.filter { it.id != id }).take(24),
             )
         }
+        refreshWidget(force = true)
         toast("Episodes ${nums.first()}–${nums.last()} marked as watched")
     }
 
@@ -548,7 +559,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     // ---------- profiles ----------
-    fun switchProfile(i: Int) { upd { it.copy(pi = i) }; toast("Switched to ${s.profiles[i].name}"); setTab(Route.ProfileTab) }
+    fun switchProfile(i: Int) { upd { it.copy(pi = i) }; refreshWidget(force = true); toast("Switched to ${s.profiles[i].name}"); setTab(Route.ProfileTab) }
     fun addProfile(name: String) = upd { it.copy(profiles = it.profiles + Profile(name)) }
     fun delProfile(i: Int) {
         upd { st ->

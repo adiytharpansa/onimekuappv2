@@ -12,8 +12,10 @@
 - Detail: tekan lama episode -> "Mark up to Ep N" / "Mark unwatched" (`markSeenUpTo`, `unmarkSeen`). Centang dan progres mini per episode sudah ada sebelumnya di `EpisodeCard`.
 
 ## Retensi
-- Pintasan ikon aplikasi: `res/xml/shortcuts.xml` (Continue, Search) -> `onimeku://continue`, `onimeku://search`, ditangani `MainActivity.handleLink`. **Widget layar utama belum dibuat** (butuh Glance/RemoteViews).
+- Pintasan ikon aplikasi: `res/xml/shortcuts.xml` (Continue, Search) -> `onimeku://continue`, `onimeku://search`, ditangani `MainActivity.handleLink`. 
 - Settings > "Auto-download next episode" (`Settings.autoDlNext`): saat episode berjalan > 60% dan jaringan tak terukur, episode berikutnya diunduh senyap (butuh ruang bebas >= 1 GB).
+
+- Widget layar utama "Continue Watching" (`widget/ContinueWidget.kt`, RemoteViews tanpa dependensi baru, 4x2, bisa diubah ukurannya): poster, judul, episode, sisa waktu, bar progres. Membaca state + `catalog_cache_disk` sendiri; ketuk = `onimeku://continue?id=&ep=` langsung ke pemutar. Diperbarui tiap 30 mnt dan dari `AppVM.refreshWidget` (maks 1x/60 dtk, langsung saat episode tuntas, tandai ditonton, ganti profil). Kosong = "Nothing to continue yet" (ketuk membuka Search). Belum diuji di launcher mana pun.
 
 ## Tablet / landscape
 - `Gutter` kini composable: di layar > 760 dp konten Detail/episode dipusatkan selebar ±720 dp. Hero Home: tinggi aman di landscape, memakai banner + scrim kiri + teks maks 600 dp di layar >= 700 dp. Grid "All Anime" menyesuaikan jumlah kolom (3-8).

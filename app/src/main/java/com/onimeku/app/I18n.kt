@@ -18,6 +18,8 @@ object I18n {
         // Navigasi & umum
         "tab_home" to "Beranda",
         "surprise" to "Kejutkan aku",
+        "widget_open" to "Ketuk untuk membuka Onimeku",
+        "widget_episode" to "Episode",
         "surprise_none" to "Belum ada saran baru saat ini",
         "stats_title" to "Statistikmu",
         "stat_month" to "Menonton bulan ini",

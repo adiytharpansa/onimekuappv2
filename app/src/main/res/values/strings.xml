@@ -2,6 +2,8 @@
     <string name="app_name">Onimeku</string>
     <string name="dl_channel_name">Downloads</string>
     <string name="dl_channel_desc">Episode download progress</string>
+    <string name="widget_label">CONTINUE WATCHING</string>
+    <string name="widget_description">Pick up your last episode right from the home screen</string>
     <string name="shortcut_continue">Continue</string>
     <string name="shortcut_continue_long">Continue watching</string>
     <string name="shortcut_search">Search</string>

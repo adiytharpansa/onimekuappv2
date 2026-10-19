@@ -106,7 +106,10 @@ class MainActivity : ComponentActivity() {
             // Pintasan ikon aplikasi: "Lanjut menonton" langsung ke episode terakhir; "Cari" membuka Search.
             "continue" -> {
                 vm.closeWelcome()
-                val l = vm.p.last ?: vm.p.watch.firstOrNull()?.let { Last(it.id, it.ep) }
+                val wid = d.getQueryParameter("id")
+                val wep = d.getQueryParameter("ep")?.toIntOrNull()
+                val l = if (!wid.isNullOrBlank() && wep != null) Last(wid, wep)
+                    else vm.p.last ?: vm.p.watch.firstOrNull()?.let { Last(it.id, it.ep) }
                 if (l != null) vm.go(Route.Player(l.id, l.ep)) else vm.toast(I18n.t("nothing_to_continue", "Nothing to continue yet"))
             }
             "search" -> { vm.closeWelcome(); vm.setTab(Route.Search) }
