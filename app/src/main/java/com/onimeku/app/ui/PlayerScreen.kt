@@ -58,6 +58,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -115,10 +117,11 @@ private fun onWifi(ctx: Context): Boolean {
 }
 
 @Composable
-private fun VideoSurface(player: Player, modifier: Modifier, subScale: Float = 1f, subBg: Boolean = false) {
+private fun VideoSurface(player: Player, modifier: Modifier, subScale: Float = 1f, subBg: Boolean = false, resizeMode: Int = 0) {
     AndroidView(
         factory = { c -> PlayerView(c).also { it.player = player; it.useController = false } },
         update = { pv ->
+            pv.resizeMode = resizeMode // 0 = FIT, 4 = ZOOM (penuh, memotong tepi); literal agar tak butuh opt-in API tak stabil
             pv.subtitleView?.let { sv ->
                 sv.setApplyEmbeddedStyles(false)
                 sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subScale)
@@ -236,9 +239,9 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
             pb = ready
-            // Uji mandiri jalur stream (debug.38): GET polos meniru langkah
+            // Uji mandiri jalur stream: GET polos meniru langkah
             // pemutar (master -> varian -> segmen 1) lalu unggah log.
-            launch { diagStreamProbe(r, ready) }
+            if (com.onimeku.app.BuildConfig.DEBUG) launch { diagStreamProbe(r, ready) }
         }
     }
     if (pbFailed) {
@@ -247,7 +250,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     }
     val playback = pb
     if (playback == null) {
-        // Latar PEKAT sejak bingkai pertama (debug.30): tanpa ini halaman
+        // Latar PEKAT sejak bingkai pertama: tanpa ini halaman
         // Detail di bawahnya tembus selama transisi rute — "halaman
         // ganda" pada rekaman user. Semua keadaan layar-penuh pemutar
         // (memuat/galat/rantai habis/Wi-Fi) kini mengecat Bg sendiri.
@@ -289,7 +292,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 
     key(useDirect, mainRetry) {
         PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline, onFatalError = {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("fatal") }
+            if (com.onimeku.app.BuildConfig.DEBUG) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("fatal") }
             // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
             // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
             // langsung/embed yang memang lebih rapuh di HP.
@@ -375,7 +378,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             .setMediaSourceFactory(sourceFactory)
             .setLoadControl(loadControl)
             .build().apply {
-            // Telemetri pemutar (debug.38): catat transisi keadaan, galat
+            // Telemetri pemutar: catat transisi keadaan, galat
             // pemutar, dan galat muat per-URL ke CrashLog (diunggah otomatis).
             addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
                 override fun onPlaybackStateChanged(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, state: Int) {
@@ -410,8 +413,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         .setArtworkUri(a.poster?.let { android.net.Uri.parse(it) }).build()
                 )
                 .setSubtitleConfigurations(subs)
-            // AKAR KEGAGALAN PUTAR DI HP (debug.39; terbukti telemetri
-            // .38 di emulator): URL proksi ber-path "/api/proxy" —
+            // AKAR KEGAGALAN PUTAR DI HP: URL proksi ber-path "/api/proxy" —
             // ekstensi .m3u8 hanya ada di dalam parameter terenkode —
             // sehingga ExoPlayer gagal mengenali item sebagai HLS dan
             // memperlakukannya sebagai media progresif:
@@ -428,14 +430,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             // playFactory): item streaming tidak menyentuh cache bersama.
             if (offline) itemBuilder.setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
             setMediaItem(itemBuilder.build())
-            seekTo((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L)
+            val resumeFb = vm.resumeMs?.takeIf { it.first == "${r.id}:${r.ep}" && it.second > 0 }?.second
+            vm.resumeMs = null
+            seekTo(resumeFb ?: ((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L))
             playWhenReady = true
             prepare()
         }
     }
 
     var pos by remember(r) { mutableFloatStateOf((vm.p.prog["${r.id}:${r.ep}"] ?: 0).toFloat()) }
-    var dur by remember(r) { mutableIntStateOf(1440) }
+    var dur by remember(r) { mutableIntStateOf(0) } // 0 = belum diketahui (tampil --:--)
     var wantPlay by remember(r) { mutableStateOf(true) }
     var buffering by remember(r) { mutableStateOf(true) }
     var failed by remember(r) { mutableStateOf(false) }
@@ -457,7 +461,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val bg by rememberUpdatedState(vm.s.settings.bgPlay)
 
     // ---- Fullscreen, kontrol otomatis sembunyi, subtitle, kualitas ----
-    // Fullscreen diwarisi dari AppVM (debug.31): pindah episode membongkar
+    // Fullscreen diwarisi dari AppVM: pindah episode membongkar
     // PlayerReady, tetapi keadaan penuhnya tidak ikut hilang.
     var full by remember { mutableStateOf(vm.playerFull) }
     var showUi by remember(r) { mutableStateOf(true) }
@@ -470,6 +474,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var buffered by remember(r) { mutableFloatStateOf(0f) }
     var playingH by remember(r) { mutableIntStateOf(0) }
     var boost by remember { mutableStateOf(false) }          // tahan layar = 2x
+    var autoCancel by remember(r) { mutableStateOf(false) }  // batalkan autoplay episode berikutnya
+    val autoCancelNow by rememberUpdatedState(autoCancel)
+    val sleepNow by rememberUpdatedState(sleepMin)           // -1 = jeda di akhir episode
+    var fillMode by remember { mutableStateOf(false) }       // false = pas layar, true = penuh (zoom)
+    var audioOnly by remember { mutableStateOf(false) }
+    val audioOnlyNow by rememberUpdatedState(audioOnly)
+    var fullByRot by remember { mutableStateOf(false) }      // fullscreen karena HP diputar (bukan tombol)
+    val orient = LocalConfiguration.current.orientation
     var dtSide by remember { mutableIntStateOf(0) }          // ketuk dua kali: -1 kiri, 1 kanan
     var dtSecs by remember { mutableIntStateOf(0) }
     var dtTick by remember { mutableIntStateOf(0) }
@@ -527,6 +539,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         var wasReady = false
         var hinted = false
         var lastSeekAt = 0L
+        var netRetry = 0
+        var disposed = false
         val l = object : Player.Listener {
             override fun onPositionDiscontinuity(o: Player.PositionInfo, n: Player.PositionInfo, reason: Int) {
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) lastSeekAt = System.currentTimeMillis()
@@ -539,13 +553,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (state == Player.STATE_BUFFERING && wasReady && now - lastSeekAt > 3_000) {
                     stalls.addLast(now)
                     while (stalls.isNotEmpty() && now - stalls.first() > 90_000) stalls.removeFirst()
-                    if (stalls.size >= 3 && !hinted) { hinted = true; vm.toast("Slow connection. Try a lower quality.") }
+                    if (stalls.size >= 3 && !hinted) { hinted = true; vm.toast(I18n.t("slow_conn", "Slow connection. Try a lower quality.")) }
                 }
-                if (state == Player.STATE_READY) failed = false
+                if (state == Player.STATE_READY) { failed = false; netRetry = 0 }
                 if (state == Player.STATE_ENDED) {
                     vm.saveProg(r.id, r.ep, durNow, durNow)
                     val nxt = a.available.firstOrNull { it > r.ep } ?: if (r.ep < a.eps) r.ep + 1 else null
-                    if (vm.s.settings.autoplay && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
+                    if (sleepNow == -1) { player.pause(); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")) }
+                    else if (vm.s.settings.autoplay && !autoCancelNow && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
                 }
             }
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
@@ -576,6 +591,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
+                // Galat jaringan sesaat saat sudah memutar: coba lanjutkan di tempat (maks 3x) sebelum menjatuhkan ke jalur cadangan.
+                val transient = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+                if (transient && wasReady && netRetry < 3) {
+                    netRetry++; buffering = true
+                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} galat jaringan sesaat, coba lagi #$netRetry")
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (!disposed) player.prepare() }, 1500L * netRetry)
+                    return
+                }
+                vm.resumeMs = "${r.id}:${r.ep}" to player.currentPosition
                 failed = true; buffering = false
                 errMsg = error.errorCodeName
                 com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} leg=${if (streamUrl.contains("/api/proxy")) "proxy" else "direct"} ${error.errorCodeName}: ${error.cause ?: error.message}")
@@ -587,6 +612,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         player.addListener(l)
         vm.playing = true
         onDispose {
+            disposed = true
             player.removeListener(l)
             vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
             player.release()
@@ -612,7 +638,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     LaunchedEffect(sleepMin) {
         if (sleepMin > 0) {
             delay(sleepMin * 60_000L)
-            player.pause(); vm.toast("Sleep timer: paused"); sleepMin = 0
+            player.pause(); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")); sleepMin = 0
         }
     }
 
@@ -653,7 +679,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, off).build()
             }
             if (e == Lifecycle.Event.ON_STOP && !vm.inPip) { if (bg) videoOff(true) else player.pause() }
-            if (e == Lifecycle.Event.ON_START) videoOff(false)
+            if (e == Lifecycle.Event.ON_START) videoOff(audioOnlyNow)
         }
         owner.lifecycle.addObserver(o)
         onDispose { owner.lifecycle.removeObserver(o) }
@@ -673,9 +699,24 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null } }
 
     // Fullscreen: kunci landscape + sembunyikan bilah sistem; dipulihkan saat keluar/pergi dari pemutar.
+    LaunchedEffect(r) {
+        if (!vm.s.settings.gestureHintSeen) { delay(25_000); vm.setSettings { it.copy(gestureHintSeen = true) } }
+    }
+    // Putar HP ke landscape = fullscreen otomatis; kembali ke portrait = keluar (hanya bila fullscreen berasal dari rotasi).
+    LaunchedEffect(orient) {
+        if (orient == Configuration.ORIENTATION_LANDSCAPE && !full) { fullByRot = true; full = true }
+        else if (orient == Configuration.ORIENTATION_PORTRAIT && full && fullByRot) { full = false; fullByRot = false }
+    }
+    val prevFull = remember { java.util.concurrent.atomic.AtomicBoolean(full) }
     LaunchedEffect(full) {
         vm.playerFull = full
-        act?.requestedOrientation = if (full) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        val leaving = !full && prevFull.getAndSet(full)
+        act?.requestedOrientation = when {
+            full && !fullByRot -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            leaving && orient == Configuration.ORIENTATION_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (leaving) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }, 700)
         act?.window?.let { w ->
             val c = WindowCompat.getInsetsController(w, w.decorView)
             if (full) {
@@ -690,7 +731,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             act?.window?.let { w -> WindowCompat.getInsetsController(w, w.decorView).show(WindowInsetsCompat.Type.systemBars()) }
         }
     }
-    BackHandler(enabled = full) { full = false }
+    BackHandler(enabled = full) { full = false; fullByRot = false }
     BackHandler(enabled = sheet != null) { if (sheet == "main") sheet = null else sheet = "main" }
     // Kontrol hilang sendiri 3,5 dtk setelah ketukan terakhir saat video berjalan.
     LaunchedEffect(showUi, uiTick, wantPlay, buffering) { if (showUi && wantPlay && !buffering) { delay(3500); showUi = false } }
@@ -734,12 +775,21 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
 
     val subScale = subScaleOf(vm.s.settings.subSize)
+    val marks = remember(playback) {
+        buildList<Pair<Float, Float>> {
+            val i1 = playback.introEnd; val i0 = playback.introStart ?: 0
+            if (i1 != null && i1 > i0) add(i0.toFloat() to i1.toFloat())
+            val o0 = playback.outroStart; val o1 = playback.outroEnd ?: 0
+            if (o0 != null && o1 > o0) add(o0.toFloat() to o1.toFloat())
+        }
+    }
     val subBgOn = vm.s.settings.subBg
     if (vm.inPip) {
         Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn) }
         return
     }
 
+    val epDur = vm.p.watch.firstOrNull { it.id == r.id }?.dur?.takeIf { it > 0 } ?: 1440
     val epList = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val curIdx = epList.indexOf(r.ep)
     val epListState = rememberLazyListState()
@@ -805,9 +855,50 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         }
                         hudTick++
                     }
+                }
+                // Geser horizontal = seek (satu lebar layar = 90 dtk); lepas jari untuk melompat.
+                .pointerInput(player) {
+                    var startPos = 0L; var acc = 0f; var ok = true; var target = 0L
+                    val edge = 28.dp.toPx()
+                    detectHorizontalDragGestures(
+                        onDragStart = { o ->
+                            ok = !locked && o.x > edge && o.x < size.width - edge && o.y > size.height * 0.12f && o.y < size.height * 0.88f
+                            startPos = player.currentPosition; acc = 0f; target = startPos
+                        },
+                        onDragEnd = { if (ok && acc != 0f) player.seekTo(target) },
+                        onDragCancel = { },
+                    ) { change, dx ->
+                        if (!ok) return@detectHorizontalDragGestures
+                        change.consume()
+                        acc += dx
+                        val d = if (player.duration > 0) player.duration else Long.MAX_VALUE
+                        target = (startPos + (acc / size.width * 90_000f).toLong()).coerceIn(0L, d)
+                        val delta = (target - startPos) / 1000
+                        hud = "${fmt((target / 1000).toInt())}  (${if (delta >= 0) "+" else "−"}${kotlin.math.abs(delta)}s)"; hudTick++
+                    }
+                }
+                // Cubit dua jari: buka = Fill (zoom), tutup = Fit. Tidak mengonsumsi event, jadi gestur lain tetap jalan.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var startDist = 0f
+                        do {
+                            val ev = awaitPointerEvent()
+                            val ps = ev.changes.filter { it.pressed }
+                            if (ps.size >= 2) {
+                                val dd = (ps[0].position - ps[1].position).getDistance()
+                                if (startDist == 0f) startDist = dd
+                                else {
+                                    val z = dd / startDist
+                                    if (z > 1.15f && !fillMode) { fillMode = true; hud = "Fill"; hudTick++ }
+                                    else if (z < 0.87f && fillMode) { fillMode = false; hud = "Fit"; hudTick++ }
+                                }
+                            }
+                        } while (ev.changes.any { it.pressed })
+                    }
                 },
         ) {
-            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn)
+            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, if (fillMode) 4 else 0)
             // Sampul anime menutupi layar hitam sampai bingkai video pertama tampil.
             if (!rendered && !failed) {
                 RealImage(a, Modifier.fillMaxSize())
@@ -818,6 +909,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             if (vm.s.settings.skipIntro && introEnd != null && introEnd > 0 && pos >= (playback.introStart ?: 0) && pos < introEnd) {
                 Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 66.dp).clip(CircleShape)
                     .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(introEnd * 1000L) }
+                    .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+            val outroStart = playback.outroStart
+            if (vm.s.settings.skipIntro && outroStart != null && outroStart > 0 && pos >= outroStart && (playback.outroEnd ?: dur) > pos) {
+                Text(I18n.t("skip_outro", "Skip outro"), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 66.dp).clip(CircleShape)
+                    .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(((playback.outroEnd ?: dur) * 1000L)) }
                     .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
             hud?.let {
@@ -831,9 +928,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column {
                         Text(I18n.t("up_next", "Up next"), fontSize = 11.sp, color = InkSoft)
-                        Text("Episode $nextEp · ${remain}s", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(if (vm.s.settings.autoplay && !autoCancel) "Episode $nextEp · ${remain}s" else "Episode $nextEp", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Chip(I18n.t("play_now", "Play now")) { vm.replaceTop(Route.Player(r.id, nextEp)) }
+                    if (vm.s.settings.autoplay && !autoCancel) Chip(I18n.t("cancel", "Cancel")) { autoCancel = true }
                 }
             }
             // Layar penuh landscape: kontrol dijauhkan dari notch/kamera & sudut membulat (edge-to-edge membuatnya tertutup).
@@ -872,7 +970,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Box(Modifier.size(42.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                     }
-                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                    if (!full) Spacer(Modifier.weight(1f)) else Column(Modifier.weight(1f).padding(start = 4.dp)) {
                         Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Text("Episode ${r.ep}", fontSize = 12.sp, color = Color(0xFFE6E8F0))
                     }
@@ -910,7 +1008,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     var rotF by remember { mutableStateOf(0f) }
                     val rb by animateFloatAsState(rotB, tween(380), label = "rotBack")
                     val rf by animateFloatAsState(rotF, tween(380), label = "rotFwd")
-                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        if (hasPrev) Box(Modifier.size(44.dp).clip(CircleShape).pressable { step(-1); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.SkipPrevious, "Previous episode", Modifier.size(30.dp), tint = Color.White)
+                        } else Spacer(Modifier.size(44.dp))
                         Box(Modifier.size(52.dp).clip(CircleShape).pressable { rotB -= 360f; seekBy(-10_000); uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.Replay10, "Back 10 seconds", Modifier.size(34.dp).graphicsLayer { rotationZ = rb }, tint = Color.White)
                         }
@@ -926,6 +1027,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         Box(Modifier.size(52.dp).clip(CircleShape).pressable { rotF += 360f; seekBy(10_000); uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.Forward10, "Forward 10 seconds", Modifier.size(34.dp).graphicsLayer { rotationZ = rf }, tint = Color.White)
                         }
+                        if (hasNext) Box(Modifier.size(44.dp).clip(CircleShape).pressable { step(1); uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.SkipNext, "Next episode", Modifier.size(30.dp), tint = Color.White)
+                        } else Spacer(Modifier.size(44.dp))
                     }
                 }
 
@@ -933,14 +1037,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = if (full) 28.dp else 14.dp, end = if (full) 28.dp else 14.dp, bottom = if (full) 10.dp else 0.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(fmt(pos.toInt()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text(" / ${fmt(dur)}", fontSize = 12.5.sp, color = Color(0xB3FFFFFF))
+                        Text(" / ${if (dur > 0) fmt(dur) else "--:--"}", fontSize = 12.5.sp, color = Color(0xB3FFFFFF))
                         Spacer(Modifier.weight(1f))
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { full = !full; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { fillMode = !fillMode; hud = if (fillMode) "Fill" else "Fit"; hudTick++; uiTick++ }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.AspectRatio, I18n.t("fit_fill", "Fit / fill"), tint = Color.White)
+                        }
+                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { full = !full; fullByRot = false; uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen", tint = Color.White)
                         }
                     }
                     YtSeekBar(
-                        pos = pos, dur = dur.toFloat(), buffered = buffered, modifier = Modifier.padding(bottom = 4.dp),
+                        pos = pos, dur = dur.toFloat(), buffered = buffered, marks = marks, modifier = Modifier.padding(bottom = 4.dp),
                         onPreview = { dragging = true; pos = it; uiTick++ },
                         onDone = { player.seekTo((it * 1000).toLong()); pos = it; dragging = false; uiTick++ },
                     )
@@ -951,7 +1058,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
 
       if (!full) {
         // ===== Panel di bawah video: info, navigasi episode, kontrol, daftar episode =====
-        val epStart = 1 + (if (nextEp != null) 1 else 0) + 1
+        val epStart = 2 // item "info" + "ephead" mendahului daftar episode
         LazyColumn(
             Modifier.weight(1f).fillMaxWidth(), state = epListState,
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
@@ -972,20 +1079,30 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         if (hasNext) Btn(I18n.t("next_episode", "Next episode"), BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { step(1) }
                     }
 
-                    Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 12.dp, vertical = 10.dp),
+                    Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val onList = r.id in vm.p.myList
+                        ActionTile(Icons.Filled.Add, if (onList) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
+                            Modifier.weight(1f), on = onList, iconOn = Icons.Filled.Check) { vm.toggleML(r.id) }
+                        if (!offline) ActionTile(Icons.Filled.Download, I18n.t("download", "Download"), Modifier.weight(1f)) { vm.download(r.id, r.ep) }
+                        ActionTile(Icons.Filled.Share, I18n.t("share", "Share"), Modifier.weight(1f)) {
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/${r.id}")
+                            }
+                            ctx.startActivity(android.content.Intent.createChooser(send, I18n.t("share", "Share")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
+                    }
+                    if (a.synopsis.isNotBlank()) {
+                        var more by remember(r.id) { mutableStateOf(false) }
+                        Text(a.synopsis, Modifier.padding(top = 14.dp).clickable { more = !more }, fontSize = 13.sp, color = InkSoft, lineHeight = 19.sp,
+                            maxLines = if (more) 24 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                    if (!vm.s.settings.gestureHintSeen) Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(Icons.Filled.TouchApp, null, Modifier.size(16.dp), tint = NavOff)
-                        Text(I18n.t("swipe_hint", "Swipe left: brightness · right: volume · double-tap sides: ±10s · hold: 2× speed"), fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
+                        Text(I18n.t("swipe_hint", "Swipe left: brightness · right: volume · double-tap sides: ±10s · hold: 2× speed · swipe sideways: seek · pinch: fill"), Modifier.weight(1f), fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
+                        Icon(Icons.Filled.Close, "Dismiss", Modifier.size(18.dp).clip(CircleShape).clickable { vm.setSettings { it.copy(gestureHintSeen = true) } }, tint = NavOff)
                     }
-                }
-            }
-            if (nextEp != null) item(key = "upnext") {
-                val k = "${r.id}:$nextEp"
-                Column(Modifier.padding(top = 24.dp)) {
-                    SectionTitle(I18n.t("up_next", "Up next"))
-                    Spacer(Modifier.height(12.dp))
-                    EpisodeCard(a, nextEp, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = false,
-                        onOpen = { vm.replaceTop(Route.Player(r.id, nextEp)) }, nextUp = true) {}
                 }
             }
             item(key = "ephead") {
@@ -1005,7 +1122,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             items(epList, key = { "pe$it" }) { n ->
                 val k = "${r.id}:$n"
-                EpisodeCard(a, n, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = n == r.ep,
+                EpisodeCard(a, n, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = n == r.ep, durSec = epDur, compact = true,
                     onOpen = { if (n != r.ep) vm.replaceTop(Route.Player(r.id, n)) }) {
                     if (n == r.ep) Icon(Icons.Filled.GraphicEq, null, Modifier.padding(end = 6.dp), tint = RedText)
                 }
@@ -1017,7 +1134,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         page = sheet, full = full,
         quality = quality, autoRes = playingH,
         qualityOpts = listOf("Auto") + (if (heights.isNotEmpty()) heights.map { "${it}p" } else listOf("1080p", "720p", "480p")),
-        onQuality = { q -> vm.setSettings { it.copy(quality = q) }; applyQuality(q); sheet = null; vm.toast("Quality: $q") },
+        onQuality = { q -> vm.setSettings { it.copy(quality = q) }; applyQuality(q); sheet = null; vm.toast("${I18n.t("quality", "Quality")}: $q") },
         subTracks = subTracks, subCurrent = subIdx, subPref = vm.s.settings.subLang, subLabel = subName(subIdx),
         onSubTrack = { i ->
             applySub(i); sheet = null
@@ -1034,11 +1151,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onSubBg = { v -> vm.setSettings { it.copy(subBg = v) } },
         speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("Speed ${spdLabel(v)}×") },
         audioLabels = audioLabels, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("Audio: ${audioLabels.getOrElse(n) { "?" }}") },
-        sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(if (m == 0) "Sleep timer: Off" else "Sleep timer: $m min") },
+        sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(when (m) { 0 -> "Sleep timer: Off"; -1 -> "Sleep timer: ${I18n.t("sleep_end", "End of episode")}"; else -> "Sleep timer: $m min" }) },
         onLock = { locked = true; showUi = true; sheet = null },
         onPip = {
             sheet = null
-            try { act?.enterPictureInPictureMode(vm.pipParams ?: pipParams(ctx, false, wantPlay)) } catch (e: Exception) { vm.toast("Picture-in-Picture unavailable") }
+            try { act?.enterPictureInPictureMode(vm.pipParams ?: pipParams(ctx, false, wantPlay)) } catch (e: Exception) { vm.toast(I18n.t("pip_na", "Picture-in-Picture unavailable")) }
+        },
+        audioOnly = audioOnly,
+        onAudioOnly = {
+            audioOnly = !audioOnly; sheet = null
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, audioOnly).build()
+            vm.toast(if (audioOnly) "Audio only: On" else "Audio only: Off")
         },
         onPage = { sheet = it },
     )
@@ -1094,172 +1217,8 @@ private fun PlayerStatus(vm: AppVM, a: com.onimeku.app.data.Anime, r: Route.Play
 
 // ------------------------------------------------------------------ Bilah seek ala YouTube
 /** Bilah seek tipis: lintasan, segmen buffer, progres merah, bulatan penunjuk yang membesar saat digeser. Ketuk = lompat. */
-@Composable
-private fun YtSeekBar(pos: Float, dur: Float, buffered: Float, modifier: Modifier = Modifier, onPreview: (Float) -> Unit, onDone: (Float) -> Unit) {
-    var dragging by remember { mutableStateOf(false) }
-    val trackH by androidx.compose.animation.core.animateDpAsState(if (dragging) 5.dp else 3.dp, tween(120), label = "seekH")
-    val thumbR by androidx.compose.animation.core.animateDpAsState(if (dragging) 9.dp else 6.dp, tween(120), label = "seekThumb")
-    val d = dur.coerceAtLeast(1f)
-    val prev by rememberUpdatedState(onPreview)
-    val fin by rememberUpdatedState(onDone)
-    Box(
-        modifier.fillMaxWidth().height(28.dp)
-            .pointerInput(d) {
-                detectTapGestures { o -> val v = (o.x / size.width).coerceIn(0f, 1f) * d; prev(v); fin(v) }
-            }
-            .pointerInput(d) {
-                var last = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { o -> dragging = true; last = (o.x / size.width).coerceIn(0f, 1f) * d; prev(last) },
-                    onDragEnd = { dragging = false; fin(last) },
-                    onDragCancel = { dragging = false; fin(last) },
-                ) { change, _ -> change.consume(); last = (change.position.x / size.width).coerceIn(0f, 1f) * d; prev(last) }
-            },
-    ) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val h = trackH.toPx(); val cy = size.height / 2f; val r = h / 2f; val w = size.width
-            val pf = (pos / d).coerceIn(0f, 1f)
-            val bf = (buffered / d).coerceIn(pf, 1f)
-            val cr = androidx.compose.ui.geometry.CornerRadius(r, r)
-            drawRoundRect(Color(0x55FFFFFF), androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w, h), cr)
-            drawRoundRect(Color(0x88FFFFFF), androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w * bf, h), cr)
-            drawRoundRect(Red, androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w * pf, h), cr)
-            drawCircle(Red, thumbR.toPx(), androidx.compose.ui.geometry.Offset(w * pf, cy))
-        }
-    }
-}
 
-// ------------------------------------------------------------------ Menu pengaturan ala YouTube
-/** Roda gigi di pemutar -> lembar bawah: Kualitas, Subtitle (+gaya), Kecepatan, Audio, Timer tidur, PiP, Kunci layar. Potret: naik dari bawah; layar penuh: panel kanan bawah. */
-@Composable
-private fun PlayerSettingsSheet(
-    page: String?, full: Boolean,
-    quality: String, autoRes: Int, qualityOpts: List<String>, onQuality: (String) -> Unit,
-    subTracks: List<com.onimeku.app.data.ApiSubtitle>, subCurrent: Int, subPref: String, subLabel: String,
-    onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
-    subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
-    speed: Float, onSpeed: (Float) -> Unit,
-    audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit,
-    sleepMin: Int, onSleep: (Int) -> Unit, onLock: () -> Unit, onPip: () -> Unit,
-    onPage: (String?) -> Unit,
-) {
-    var held by remember { mutableStateOf("main") }
-    LaunchedEffect(page) { if (page != null) held = page }
-    val open = page != null
-    fun qLabel(q: String) = if (q == "Auto" && quality == "Auto" && autoRes > 0) "Auto (${autoRes}p)" else q
-    val sizeNames = listOf("small" to "Small", "normal" to "Normal", "large" to "Large", "xl" to "Extra large")
-    Box(Modifier.fillMaxSize()) {
-        androidx.compose.animation.AnimatedVisibility(
-            open, enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(160)),
-        ) {
-            Box(Modifier.fillMaxSize().background(Color(0x8C000000))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPage(null) })
-        }
-        androidx.compose.animation.AnimatedVisibility(
-            open, Modifier.align(if (full) Alignment.BottomEnd else Alignment.BottomCenter),
-            enter = androidx.compose.animation.slideInVertically(tween(260)) { it } + androidx.compose.animation.fadeIn(tween(160)),
-            exit = androidx.compose.animation.slideOutVertically(tween(200)) { it } + androidx.compose.animation.fadeOut(tween(160)),
-        ) {
-            val shape = if (full) RoundedCornerShape(18.dp) else RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-            Column(
-                (if (full) Modifier.width(340.dp).padding(end = 16.dp, bottom = 12.dp) else Modifier.fillMaxWidth())
-                    .heightIn(max = if (full) 300.dp else 520.dp)
-                    .clip(shape).background(Bg2).border(1.dp, Line, shape)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                    .then(if (full) Modifier else Modifier.navigationBarsPadding()),
-            ) {
-                if (!full) Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp, bottom = 4.dp).size(width = 36.dp, height = 4.dp)
-                    .clip(CircleShape).background(Color(0x55FFFFFF)))
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
-                    when (held) {
-                        "quality" -> {
-                            SheetHeader(I18n.t("quality", "Quality")) { onPage("main") }
-                            qualityOpts.forEach { q -> SheetOption(qLabel(q), q == quality) { onQuality(q) } }
-                        }
-                        "subs" -> {
-                            SheetHeader(I18n.t("subtitles", "Subtitles")) { onPage("main") }
-                            val order = subTracks.indices.sortedBy { i -> when (SubLang.code(subTracks[i])) { "id" -> 0; "en" -> 1; else -> 2 } }
-                            SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
-                            val autoSub = if (subPref == "auto" && subCurrent >= 0) subTracks.getOrNull(subCurrent)?.let { " · " + SubLang.display(it, subCurrent) } else null
-                            SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
-                            order.forEach { i -> SheetOption(SubLang.display(subTracks[i], i), subPref != "auto" && subCurrent == i) { onSubTrack(i) } }
-                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
-                            SheetRowItem(Icons.Filled.FormatSize, "Subtitle style", sizeNames.firstOrNull { it.first == subSize }?.second ?: "Normal") { onPage("substyle") }
-                        }
-                        "substyle" -> {
-                            SheetHeader("Subtitle style") { onPage("subs") }
-                            sizeNames.forEach { (k, label) -> SheetOption(label, subSize == k) { onSubSize(k) } }
-                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
-                            Row(Modifier.fillMaxWidth().clickable { onSubBg(!subBg) }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Black background", Modifier.weight(1f), fontSize = 15.sp, color = Color.White)
-                                Switch(subBg, { onSubBg(it) }, colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
-                                    uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50)))
-                            }
-                        }
-                        "speed" -> {
-                            SheetHeader(I18n.t("speed", "Playback speed")) { onPage("main") }
-                            listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { v ->
-                                SheetOption(if (v == 1f) I18n.t("normal", "Normal") else "${spdLabel(v)}×", v == speed) { onSpeed(v) }
-                            }
-                        }
-                        "audio" -> {
-                            SheetHeader("Audio") { onPage("main") }
-                            audioLabels.forEachIndexed { i, l -> SheetOption(l, i == audioIdx) { onAudio(i) } }
-                        }
-                        "sleep" -> {
-                            SheetHeader(I18n.t("ctl_sleep", "Sleep timer")) { onPage("main") }
-                            listOf(0, 15, 30, 60).forEach { m -> SheetOption(if (m == 0) I18n.t("ctl_off", "Off") else "$m min", sleepMin == m) { onSleep(m) } }
-                        }
-                        else -> {
-                            SheetRowItem(Icons.Filled.Tune, I18n.t("quality", "Quality"), qLabel(quality)) { onPage("quality") }
-                            if (subTracks.isNotEmpty()) SheetRowItem(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), subLabel) { onPage("subs") }
-                            SheetRowItem(Icons.Filled.Speed, I18n.t("speed", "Playback speed"), if (speed == 1f) I18n.t("normal", "Normal") else "${spdLabel(speed)}×") { onPage("speed") }
-                            if (audioLabels.size > 1) SheetRowItem(Icons.Filled.Audiotrack, "Audio", audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
-                            SheetRowItem(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep timer"), if (sleepMin == 0) I18n.t("ctl_off", "Off") else "$sleepMin min") { onPage("sleep") }
-                            SheetRowItem(Icons.Filled.PictureInPictureAlt, "Picture-in-picture", "") { onPip() }
-                            SheetRowItem(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock screen"), "") { onLock() }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SheetRowItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(22.dp), tint = Color.White)
-        Text(label, Modifier.weight(1f).padding(start = 16.dp), fontSize = 15.sp, color = Color.White)
-        if (value.isNotEmpty()) {
-            Text(value, fontSize = 13.5.sp, color = NavOff, maxLines = 1)
-            Icon(Icons.Filled.ChevronRight, null, Modifier.padding(start = 4.dp).size(20.dp), tint = NavOff)
-        }
-    }
-}
-
-@Composable
-private fun SheetHeader(title: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onBack).padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(22.dp), tint = Color.White)
-        Text(title, Modifier.padding(start = 14.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-    }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
-}
-
-@Composable
-private fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { if (selected) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText) }
-        Text(label, Modifier.padding(start = 16.dp), fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) RedText else Color.White)
-    }
-}
-
-private fun spdLabel(f: Float): String = if (f == f.toInt().toFloat()) f.toInt().toString() else f.toString()
-
-/** Uji mandiri jalur stream (debug.38): GET polos OkHttp (klien bersama
+/** Uji mandiri jalur stream: GET polos OkHttp (klien bersama
  * yang sama dengan pemutar) meniru langkah ExoPlayer: master -> varian ->
  * 128KB segmen pertama, mencatat status/waktu tiap langkah ke CrashLog.
  * Membedakan "lapisan OkHttp/jaringan perangkat gagal" dari "pemutar

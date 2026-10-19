@@ -30,7 +30,7 @@ object PosterHealer {
     fun init(ctx: Context) {
         if (prefs == null) {
             prefs = ctx.getSharedPreferences("poster_cache", Context.MODE_PRIVATE)
-            // Sekali saja (debug.31): kosongkan cache lama yang berisi
+            // Sekali saja: kosongkan cache lama yang berisi
             // URL hasil resolusi langsung aplikasi (era debug.26-.30) —
             // mulai sekarang poster hanya berasal dari API.
             if (prefs?.getBoolean("reset_v31", false) != true) {
@@ -54,7 +54,7 @@ object PosterHealer {
     // Sebagian kecil poster Kitsu berupa URL bertanda tangan S3/Backblaze
     // (X-Amz-Expires=900 — mati dalam 15 menit). URL semacam itu TIDAK
     // boleh disimpan permanen: cukup hidup di memori sesi ini, dan entri
-    // cache lama yang terlanjur menyimpannya dianggap basi (debug.28).
+    // cache lama yang terlanjur menyimpannya dianggap basi.
     private fun isPresigned(u: String?): Boolean = u?.contains("X-Amz-") == true
 
     // SEJAK gambar selalu datang lewat /api/img milik API sendiri dan

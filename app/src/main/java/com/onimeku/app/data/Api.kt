@@ -82,6 +82,9 @@ data class Playback(
     // Posisi intro (detik) bila API menyediakannya; tombol Skip intro hanya muncul jika keduanya ada.
     val introStart: Int? = null,
     val introEnd: Int? = null,
+    // Posisi outro (detik) bila API menyediakannya; tombol Skip outro hanya muncul jika outroStart ada.
+    val outroStart: Int? = null,
+    val outroEnd: Int? = null,
 )
 
 @Serializable
@@ -202,7 +205,7 @@ object ApiClient {
     // bertoken kedaluwarsa, jadi hanya dipakai sekali dan dalam TTL pendek.
     private class Prefetched(val at: Long, val pb: Playback)
     private val prefetched = java.util.concurrent.ConcurrentHashMap<String, Prefetched>()
-    // 10 menit (debug.37): URL nexabloom berumur jam-jaman; jendela
+    // 10 menit: URL nexabloom berumur jam-jaman; jendela
     // prefetch panjang membuat ketukan Play lama sesudah Detail dibuka
     // tetap mengenai hasil pemanasan.
     private const val PREFETCH_TTL_MS = 600_000L
@@ -235,7 +238,7 @@ object ApiClient {
     }
 
     private suspend fun fetchPlaybackNet(id: String, ep: Int): Playback? {
-        // Timeout baca 12 dtk (debug.30): endpoint ini normalnya menjawab
+        // Timeout baca 12 dtk: endpoint ini normalnya menjawab
         // <5 dtk; 20 dtk x 2 putaran membuat layar memuat menggantung
         // terlalu lama di jaringan seluler saat hulu goyah.
         val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime?id=${enc(id)}&ep=$ep", readTimeoutSec = 12))
@@ -278,7 +281,7 @@ object ApiClient {
     suspend fun resolvePoster(anilistId: Int): PosterResp? = null
 
     /**
-     * Kirim log diagnostik lokal ke server (debug.38): kegagalan putar di
+     * Kirim log diagnostik lokal ke server: kegagalan putar di
      * HP user tak terlihat dari server (permintaan varian/segmen tak
      * pernah tiba), jadi aplikasi melaporkan lognya sendiri ke
      * /api/app-log (KV app_log_v1) untuk dibaca agen dari server.

@@ -1,7 +1,7 @@
 package com.onimeku.app
 
 /**
- * Lokalisasi antarmuka (debug.31). Bahasa aktif di [lang] ("en"/"id"),
+ * Lokalisasi antarmuka. Bahasa aktif di [lang] ("en"/"id"),
  * disinkronkan dari Settings di App(). Pemanggil memakai
  * `I18n.t("kunci", "English fallback")`: teks Inggris tetap tertulis di
  * tempat pemakaian sebagai sumber & cadangan, terjemahan Indonesia
@@ -40,6 +40,16 @@ object I18n {
         "ctl_lock" to "Kunci",
         "ctl_off" to "Mati",
         "ctl_screen" to "Layar",
+        "slow_conn" to "Koneksi lambat. Coba kualitas lebih rendah.",
+        "sleep_done" to "Timer tidur: dijeda",
+        "sleep_end" to "Akhir episode",
+        "skip_outro" to "Lewati outro",
+        "cancel" to "Batal",
+        "subs_na" to "Tidak tersedia",
+        "audio_only" to "Hanya audio",
+        "fit_fill" to "Pas layar / penuh",
+        "download" to "Unduh",
+        "pip_na" to "Picture-in-Picture tidak tersedia",
         "swipe_hint" to "Geser kiri: kecerahan · kanan: volume · ketuk dua kali di sisi: ±10 dtk · tahan: 2×",
         "notifications" to "Notifikasi",
         "mark_all_read" to "Tandai semua dibaca",

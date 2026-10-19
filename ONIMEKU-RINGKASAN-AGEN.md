@@ -102,7 +102,7 @@ Ubah state hanya lewat `upd { it.copy(...) }`; data per-profil lewat `updP`. `ig
 
 ### Fitur pemutar
 
-Fullscreen/landscape, kontrol auto-sembunyi 3,5 dtk, ketuk dua kali ±10 dtk, geser kiri/kanan = kecerahan/volume, pilih subtitle (default Indonesia -> Inggris -> pertama), kualitas, trek audio, Up next (20 dtk terakhir), daftar episode, timer tidur, kunci kontrol, kecepatan 0,5–2×, PiP, pemutaran latar + MediaSession, saran turunkan kualitas (3x macet/90 dtk), simpan progres tiap 10 dtk.
+Fullscreen/landscape, kontrol auto-sembunyi 3,5 dtk, ketuk dua kali ±10 dtk, geser kiri/kanan = kecerahan/volume, pilih subtitle (default Indonesia -> Inggris -> pertama), kualitas, trek audio, Up next (20 dtk terakhir), daftar episode, timer tidur, kunci kontrol, kecepatan 0,5–2×, PiP, pemutaran latar + MediaSession, saran turunkan kualitas (3x macet/90 dtk), simpan progres tiap 10 dtk, Prev/Next, Fit/Fill + cubit, geser horizontal seek, rotasi = fullscreen, hitung mundur autoplay + Batal, Skip outro, timer tidur akhir episode, Hanya audio (lihat CHANGELOG debug.56; semuanya belum dikompilasi). Seek bar + sheet pengaturan ada di `ui/PlayerParts.kt`.
 
 ---
 

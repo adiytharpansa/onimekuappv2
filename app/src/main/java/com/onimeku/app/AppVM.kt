@@ -39,10 +39,12 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     var s by mutableStateOf(store.load()); private set
     var stack by mutableStateOf<List<Route>>(listOf(Route.Home)); private set
-    // Keadaan fullscreen pemutar disimpan di VM (debug.31): sebelumnya di
+    // Keadaan fullscreen pemutar disimpan di VM: sebelumnya di
     // PlayerReady yang dibongkar tiap pindah episode sehingga fullscreen
     // selalu lepas. Direset otomatis saat rute teratas bukan pemutar.
     var playerFull by mutableStateOf(false)
+    // Posisi (ms) saat jalur putar gagal & pindah ke jalur cadangan: pemutar baru melanjutkan dari sini, bukan dari progres 10 dtk terakhir.
+    var resumeMs: Pair<String, Long>? = null
     // Kecepatan putar dipertahankan antar episode (diatur dari roda gigi pemutar).
     var playerSpeed by mutableStateOf(1f)
     var toastMsg by mutableStateOf<String?>(null); private set
@@ -86,7 +88,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var refreshing by mutableStateOf(false); private set
     fun refresh() { refreshing = true; reloadCatalog() }
 
-    // Kesegaran katalog (debug.33): kapan terakhir data katalog tiba dari API
+    // Kesegaran katalog: kapan terakhir data katalog tiba dari API
     // + penanda muat berjalan, agar penyegaran otomatis tidak menumpuk.
     @Volatile private var lastFetchAt = 0L
     @Volatile private var catalogBusy = false
@@ -372,7 +374,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     /** Isi unduhan (ambil data putar + antrekan). Dipisah dari download()
-     *  agar downloadAll bisa menjalankannya BERURUTAN (debug.31). */
+     *  agar downloadAll bisa menjalankannya BERURUTAN. */
     private suspend fun startDownload(id: String, ep: Int) {
         val k = "$id:$ep"
         val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
@@ -397,7 +399,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val todo = nums.filter { !hasDl(id, it) }
         if (todo.isEmpty()) { toast("All episodes already saved"); return }
         toast("Starting ${todo.size} downloads")
-        // Berurutan (debug.31): satu pengambilan data putar pada satu
+        // Berurutan: satu pengambilan data putar pada satu
         // waktu. Sebelumnya semua episode menembak fetchPlayback paralel —
         // untuk judul ratusan episode itu membanjiri jaringan dan hulu.
         viewModelScope.launch { for (n in todo) startDownload(id, n) }
@@ -417,7 +419,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         toast("All downloads removed")
     }
 
-    // ---- Komentar per judul (debug.31; backend Supabase, data/Comments.kt) ----
+    // ---- Komentar per judul ----
     var comments by mutableStateOf<List<com.onimeku.app.data.CommentRow>>(emptyList()); private set
     var commentsBusy by mutableStateOf(false); private set
     fun loadComments(id: String) {
@@ -448,7 +450,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         updP { pr ->
             var base = pr.base; var prog = pr.prog; var seen = pr.seen; var last = pr.last; var watch = pr.watch
             if (t >= 5) base = id
-            if (t >= dur * 0.9) { prog = prog - k; if (k !in seen) seen = seen + k }
+            if (dur > 0 && t >= dur * 0.9) { prog = prog - k; if (k !in seen) seen = seen + k }
             else if (t >= 5) { prog = prog + (k to t); last = Last(id, ep) }
             // Catatan tontonan (untuk Continue Watching): hanya putar yang
             // benar-benar berjalan (>=5 dtk), terbaru di depan, maks 24 judul.

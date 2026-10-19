@@ -203,7 +203,7 @@ fun SubScreen(vm: AppVM, key: String) {
             "language" -> {
                 Text(I18n.t("choose_language", "Choose the language used in the app."), Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
                 CardBox {
-                    // Bahasa Indonesia kini BENAR-BENAR berfungsi (debug.31);
+                    // Bahasa Indonesia kini BENAR-BENAR berfungsi;
                     // pilihan tersimpan di Settings.lang dan seluruh
                     // antarmuka utama mengikuti lewat I18n.
                     listOf("en" to "English", "id" to "Bahasa Indonesia").forEachIndexed { i, (code, label) ->

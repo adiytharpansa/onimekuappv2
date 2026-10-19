@@ -63,7 +63,7 @@ object Downloads {
         }
 
     /**
-     * Reset satu kali (debug.13): cache media dari era sebelum proksi bisa
+     * Reset satu kali: cache media dari era sebelum proksi bisa
      * menyimpan entri playlist rusak/terpotong (kegagalan jaringan di tengah
      * penulisan) yang dipakai ulang pemutar sebagai kunci cache yang sama,
      * sehingga episode tetap gagal diputar walau stream-nya sudah sehat.
@@ -85,7 +85,7 @@ object Downloads {
     }
 
     /**
-     * Pembersihan satu kali (debug.23): pada era cache-tulis (<= debug.20)
+     * Pembersihan satu kali: pada era cache-tulis (<= debug.20)
      * hasil streaming ikut ditulis ke cache bersama di bawah kunci konten
      * "dl:<id>:<ep>" — termasuk halaman error yang tersimpan sebagai
      * "playlist". Pemutar membaca entri rusak itu lebih dulu dan gagal

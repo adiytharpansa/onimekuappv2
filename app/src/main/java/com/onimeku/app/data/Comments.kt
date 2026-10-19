@@ -13,7 +13,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * Komentar per judul (debug.31): tabel `comments` di Supabase yang sama
+ * Komentar per judul: tabel `comments` di Supabase yang sama
  * dengan sinkronisasi akun (skema + RLS di backend/supabase/schema.sql).
  * Baca: publik (tamu memakai kunci anon). Tulis/hapus: wajib masuk,
  * RLS memaksa user_id = auth.uid(). Semua data komentar mengalir lewat

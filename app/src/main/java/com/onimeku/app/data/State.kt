@@ -34,7 +34,7 @@ data class Settings(
     val alerts: Boolean = true,
     val quality: String = "Auto",
     val bgPlay: Boolean = true,
-    // Bahasa antarmuka: "en" atau "id" (debug.31). Default Inggris agar
+    // Bahasa antarmuka: "en" atau "id". Default Inggris agar
     // keadaan lama tidak berubah; dipilih di Profil -> Language.
     val lang: String = "en",
     // Bahasa subtitle pemutar: "auto" (ikut bahasa aplikasi, Indonesia/English), "id", "en", atau "off".
@@ -42,6 +42,8 @@ data class Settings(
     // Gaya subtitle pemutar: ukuran "small" | "normal" | "large" | "xl", latar hitam di belakang teks.
     val subSize: String = "normal",
     val subBg: Boolean = false,
+    // Petunjuk gestur di halaman pemutar: tampil sampai ditutup/20 dtk menonton, lalu tidak muncul lagi.
+    val gestureHintSeen: Boolean = false,
 )
 
 @Serializable

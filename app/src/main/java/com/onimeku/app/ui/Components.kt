@@ -65,7 +65,12 @@ fun Context.findActivity(): Activity? {
     return null
 }
 
-fun fmt(t: Int): String = "${t / 60}:${(t % 60).toString().padStart(2, '0')}"
+fun fmt(t: Int): String {
+    val s = t.coerceAtLeast(0)
+    val h = s / 3600; val m = s % 3600 / 60; val sec = s % 60
+    val ss = sec.toString().padStart(2, '0')
+    return if (h > 0) "$h:${m.toString().padStart(2, '0')}:$ss" else "$m:$ss"
+}
 
 @Composable
 fun Logo(size: Dp) {

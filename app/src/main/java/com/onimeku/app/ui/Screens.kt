@@ -160,7 +160,7 @@ private fun HomeContent(vm: AppVM) {
         }
         return
     }
-    // Tarik-untuk-segar BUATAN SENDIRI (debug.31): riwayatnya,
+    // Tarik-untuk-segar BUATAN SENDIRI: riwayatnya,
     // PullToRefreshBox material3 1.3 membuat Home crash di emulator
     // (build .17) sehingga fitur ini dimatikan. Implementasi sekarang
     // tidak memakai komponen perpustakaan: koneksi gulir bersarang
@@ -708,7 +708,7 @@ private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifie
 
 /** Aksi sekunder: ikon di atas, label di bawah, tiga sama lebar. */
 @Composable
-private fun ActionTile(
+internal fun ActionTile(
     icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier = Modifier,
     on: Boolean = false, iconOn: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit,
 ) {
@@ -738,17 +738,24 @@ fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
 @Composable
 fun EpisodeCard(
     a: Anime, n: Int, seen: Boolean, progSec: Int?, current: Boolean,
-    onOpen: () -> Unit, nextUp: Boolean = false, trailing: @Composable () -> Unit,
+    onOpen: () -> Unit, nextUp: Boolean = false, durSec: Int = 1440, compact: Boolean = false, trailing: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
-    val frac = when { seen -> 1f; progSec != null -> (progSec / 1440f).coerceIn(0.03f, 0.97f); else -> 0f }
+    val frac = when { seen -> 1f; progSec != null -> (progSec / durSec.coerceAtLeast(1).toFloat()).coerceIn(0.03f, 0.97f); else -> 0f }
     Row(
         Modifier.padding(horizontal = Gutter).padding(bottom = 10.dp).fillMaxWidth().pressable(onOpen).clip(shape)
             .background(if (current) Color(0x1FA6122D) else Bg2)
             .border(1.dp, if (current) Red.copy(alpha = 0.6f) else Line, shape).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.width(118.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)) {
+        // compact = daftar di halaman pemutar: hulu belum punya thumbnail per episode, jadi poster yang sama berulang
+        // terlihat seperti placeholder; tampilkan nomor episode saja.
+        if (compact) {
+            Box(Modifier.size(58.dp).clip(RoundedCornerShape(11.dp)).background(if (current) Red.copy(alpha = 0.9f) else Color(0x1FFFFFFF)), contentAlignment = Alignment.Center) {
+                Text("$n", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                if (frac > 0f) AnimatedProgressBar(frac, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp), track = Color(0x59FFFFFF))
+            }
+        } else Box(Modifier.width(118.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)) {
             RealImage(a, Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().background(Color(0x40000000)))
             Box(Modifier.align(Alignment.Center).size(30.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
@@ -794,7 +801,7 @@ fun DetailScreen(vm: AppVM, id: String) {
     // Katalog daftar berbentuk lite: perkaya judul ini dari endpoint
     // detail (sinopsis penuh + nomor episode asli) sekali per sesi.
     LaunchedEffect(id) { vm.loadDetail(id) }
-    // Pemanasan data putar (debug.37): ambil info stream episode sasaran
+    // Pemanasan data putar: ambil info stream episode sasaran
     // tombol Play (dan episode lanjutan terakhir) SEKARANG, selagi user
     // membaca Detail. Di HP user, resolusi dingin endpoint putar ~5 dtk+
     // di 4G sempat menghabiskan batas tunggu pemutar -> "Stream
@@ -950,7 +957,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                     }
                 }
             }
-            // ==== Komentar (debug.31): backend Supabase (tabel comments).
+            // ==== Komentar: backend Supabase (tabel comments).
             // Tamu bisa membaca; menulis wajib masuk. Hanya dirender bila backend akun aktif. ====
             if (com.onimeku.app.data.Comments.enabled) {
                 item(key = "comments_head") {

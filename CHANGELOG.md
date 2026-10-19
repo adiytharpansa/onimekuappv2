@@ -1,3 +1,14 @@
+## v1.0.0-debug.56 (belum dirilis): Pemutar dirapikan + fitur setara YouTube
+**BELUM DIKOMPILASI / DIUJI** (tanpa Android SDK); hanya diperiksa keseimbangan kurung. Langkah pertama: `gradle :app:assembleDebug :app:testDebugUnitTest`.
+- Halaman pemutar: kartu "Up next" duplikat dihapus; daftar episode ringkas bernomor (hulu belum punya thumbnail/judul per episode); petunjuk gestur bisa ditutup dan hilang sendiri setelah 25 dtk; judul tidak lagi dobel di mode portrait; baris aksi My List / Download / Share + sinopsis (ketuk untuk buka) ditambahkan.
+- Kontrol: tombol Prev/Next di tengah video, Fit/Fill, tooltip waktu + penanda intro/outro (kuning) di seek bar, bilah mengalir halus (animasi linear 1 dtk), dukungan TalkBack pada seek bar.
+- Gestur: geser horizontal = seek, cubit dua jari = Fill/Fit, rotasi HP ke landscape = fullscreen otomatis (portrait = keluar).
+- Autoplay: hitung mundur + tombol Batal; Skip outro (bila API mengirim `outroStart/outroEnd`); timer tidur "akhir episode"; mode Hanya audio; baris Subtitles selalu tampil ("Not available" bila kosong); sheet bisa ditutup dengan geser turun, padding bawah ditambah.
+- Perbaikan: durasi awal 0 (bukan 1440) -> tampil `--:--`; `fmt()` mendukung jam; progres episode memakai durasi asli (`Watch.dur`); `saveProg` tidak lagi menandai "ditonton" bila durasi belum diketahui; galat jaringan sesaat dicoba ulang di tempat (maks 3x); saat pindah ke jalur cadangan posisi terakhir dipertahankan (`AppVM.resumeMs`).
+- Privasi/rilis: probe stream & unggah log otomatis hanya di build DEBUG (pengiriman manual dari About tetap ada).
+- Kode: seek bar + sheet dipindah ke `ui/PlayerParts.kt`; toast pemutar lewat `I18n`; komentar `(debug.NN)` dibersihkan; tes baru `PlayerLogicTest`.
+- Belum dikerjakan (butuh API/arsitektur): thumbnail seek (sprite dari API), thumbnail/judul episode, mini-player swipe-turun, Chromecast, offset subtitle, statistik jaringan.
+
 ## v1.0.0-debug.55 (belum dirilis): Coming Soon otomatis bersih saat rilis
 - Coming Soon hanya berisi judul NOT_YET_RELEASED yang belum punya episode; begitu API menandai rilis atau episode muncul (ep > 0 / available), judul itu hilang dari Coming Soon dan naik ke New Episode Releases (label "Today"), slotnya diisi judul belum tayang berikutnya.
 - Beranda yang dibiarkan terbuka memuat ulang katalog tiap 30 menit (selain refresh ON_RESUME >5 menit), sehingga perubahan tercermin jauh di bawah batas sehari.

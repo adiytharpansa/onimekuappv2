@@ -1,0 +1,302 @@
+package com.onimeku.app.ui
+
+import android.app.PictureInPictureParams
+import android.content.Context
+import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
+import android.util.Rational
+import android.view.WindowManager
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import android.content.pm.ActivityInfo
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import com.onimeku.app.AppVM
+import com.onimeku.app.I18n
+import com.onimeku.app.PlaybackService
+import com.onimeku.app.Route
+import com.onimeku.app.data.Catalog
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.snap
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+
+/**
+ * Seek bar gaya YouTube: bilah buffer, penanda intro/outro (kuning), tooltip waktu saat digeser, dan animasi linear
+ * 1 dtk yang mengisi jeda polling posisi (bilah mengalir halus tanpa recompose tambahan). Dapat dipakai TalkBack.
+ */
+@Composable
+internal fun YtSeekBar(
+    pos: Float, dur: Float, buffered: Float, modifier: Modifier = Modifier,
+    marks: List<Pair<Float, Float>> = emptyList(),
+    onPreview: (Float) -> Unit, onDone: (Float) -> Unit,
+) {
+    var dragging by remember { mutableStateOf(false) }
+    val trackH by androidx.compose.animation.core.animateDpAsState(if (dragging) 5.dp else 3.dp, tween(120), label = "seekH")
+    val thumbR by androidx.compose.animation.core.animateDpAsState(if (dragging) 9.dp else 6.dp, tween(120), label = "seekThumb")
+    val d = dur.coerceAtLeast(1f)
+    val prev by rememberUpdatedState(onPreview)
+    val fin by rememberUpdatedState(onDone)
+    var widthPx by remember { mutableFloatStateOf(0f) }
+    // Loncatan >1,6 dtk (seek / kecepatan tinggi) langsung tanpa animasi; selain itu animasi linear 1 dtk.
+    var lastPos by remember { mutableFloatStateOf(pos) }
+    val jump = kotlin.math.abs(pos - lastPos) > 1.6f
+    SideEffect { lastPos = pos }
+    val shown by animateFloatAsState(
+        pos, if (dragging || jump) snap<Float>() else tween<Float>(1000, easing = LinearEasing), label = "seekPos",
+    )
+    Box(
+        modifier.fillMaxWidth().height(28.dp)
+            .onSizeChanged { widthPx = it.width.toFloat() }
+            .semantics {
+                contentDescription = "Seek bar"
+                stateDescription = "${fmt(pos.toInt())} / ${fmt(d.toInt())}"
+                progressBarRangeInfo = ProgressBarRangeInfo(pos.coerceIn(0f, d), 0f..d)
+                setProgress { v -> fin(v.coerceIn(0f, d)); true }
+            }
+            .pointerInput(d) {
+                detectTapGestures { o -> val v = (o.x / size.width).coerceIn(0f, 1f) * d; prev(v); fin(v) }
+            }
+            .pointerInput(d) {
+                var last = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { o -> dragging = true; last = (o.x / size.width).coerceIn(0f, 1f) * d; prev(last) },
+                    onDragEnd = { dragging = false; fin(last) },
+                    onDragCancel = { dragging = false; fin(last) },
+                ) { change, _ -> change.consume(); last = (change.position.x / size.width).coerceIn(0f, 1f) * d; prev(last) }
+            },
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val h = trackH.toPx(); val cy = size.height / 2f; val r = h / 2f; val w = size.width
+            val pf = (shown / d).coerceIn(0f, 1f)
+            val bf = (buffered / d).coerceIn(pf, 1f)
+            val cr = androidx.compose.ui.geometry.CornerRadius(r, r)
+            drawRoundRect(Color(0x55FFFFFF), androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w, h), cr)
+            drawRoundRect(Color(0x88FFFFFF), androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w * bf, h), cr)
+            marks.forEach { (m0, m1) ->
+                val x0 = (m0 / d).coerceIn(0f, 1f) * w; val x1 = (m1 / d).coerceIn(0f, 1f) * w
+                if (x1 > x0) drawRoundRect(Color(0xFFFFC857), androidx.compose.ui.geometry.Offset(x0, cy - r), androidx.compose.ui.geometry.Size(x1 - x0, h), cr)
+            }
+            drawRoundRect(Red, androidx.compose.ui.geometry.Offset(0f, cy - r), androidx.compose.ui.geometry.Size(w * pf, h), cr)
+            drawCircle(Red, thumbR.toPx(), androidx.compose.ui.geometry.Offset(w * pf, cy))
+        }
+        if (dragging) {
+            Text(
+                fmt(pos.toInt()),
+                Modifier.offset {
+                    val tw = 48.dp.roundToPx()
+                    IntOffset((widthPx * (pos / d).coerceIn(0f, 1f) - tw / 2f).toInt().coerceIn(0, (widthPx - tw).toInt().coerceAtLeast(0)), -36.dp.roundToPx())
+                }.clip(RoundedCornerShape(8.dp)).background(Color(0xCC000000)).padding(horizontal = 8.dp, vertical = 3.dp),
+                fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+            )
+        }
+    }
+}
+
+/** Roda gigi di pemutar -> lembar bawah: Kualitas, Subtitle (+gaya), Kecepatan, Audio, Timer tidur, PiP, Kunci layar. Potret: naik dari bawah; layar penuh: panel kanan bawah. */
+@Composable
+internal fun PlayerSettingsSheet(
+    page: String?, full: Boolean,
+    quality: String, autoRes: Int, qualityOpts: List<String>, onQuality: (String) -> Unit,
+    subTracks: List<com.onimeku.app.data.ApiSubtitle>, subCurrent: Int, subPref: String, subLabel: String,
+    onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
+    subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
+    speed: Float, onSpeed: (Float) -> Unit,
+    audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit,
+    sleepMin: Int, onSleep: (Int) -> Unit, onLock: () -> Unit, onPip: () -> Unit,
+    audioOnly: Boolean, onAudioOnly: () -> Unit,
+    onPage: (String?) -> Unit,
+) {
+    var held by remember { mutableStateOf("main") }
+    LaunchedEffect(page) { if (page != null) held = page }
+    val open = page != null
+    fun qLabel(q: String) = if (q == "Auto" && quality == "Auto" && autoRes > 0) "Auto (${autoRes}p)" else q
+    val sizeNames = listOf("small" to "Small", "normal" to "Normal", "large" to "Large", "xl" to "Extra large")
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.animation.AnimatedVisibility(
+            open, enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(160)),
+        ) {
+            Box(Modifier.fillMaxSize().background(Color(0x8C000000))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPage(null) })
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            open, Modifier.align(if (full) Alignment.BottomEnd else Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically(tween(260)) { it } + androidx.compose.animation.fadeIn(tween(160)),
+            exit = androidx.compose.animation.slideOutVertically(tween(200)) { it } + androidx.compose.animation.fadeOut(tween(160)),
+        ) {
+            val shape = if (full) RoundedCornerShape(18.dp) else RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+            Column(
+                (if (full) Modifier.width(340.dp).padding(end = 16.dp, bottom = 12.dp) else Modifier.fillMaxWidth())
+                    .heightIn(max = if (full) 300.dp else 520.dp)
+                    .clip(shape).background(Bg2).border(1.dp, Line, shape)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                    .then(if (full) Modifier else Modifier.navigationBarsPadding()),
+            ) {
+                if (!full) Box(
+                    Modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
+                        var acc = 0f
+                        detectVerticalDragGestures(onDragStart = { acc = 0f }, onDragEnd = { if (acc > 40f) onPage(null) }) { _, dy -> acc += dy }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) { Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Color(0x55FFFFFF))) }
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 6.dp, bottom = if (full) 6.dp else 18.dp)) {
+                    when (held) {
+                        "quality" -> {
+                            SheetHeader(I18n.t("quality", "Quality")) { onPage("main") }
+                            qualityOpts.forEach { q -> SheetOption(qLabel(q), q == quality) { onQuality(q) } }
+                        }
+                        "subs" -> {
+                            SheetHeader(I18n.t("subtitles", "Subtitles")) { onPage("main") }
+                            val order = subTracks.indices.sortedBy { i -> when (SubLang.code(subTracks[i])) { "id" -> 0; "en" -> 1; else -> 2 } }
+                            SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
+                            val autoSub = if (subPref == "auto" && subCurrent >= 0) subTracks.getOrNull(subCurrent)?.let { " · " + SubLang.display(it, subCurrent) } else null
+                            SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
+                            order.forEach { i -> SheetOption(SubLang.display(subTracks[i], i), subPref != "auto" && subCurrent == i) { onSubTrack(i) } }
+                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
+                            SheetRowItem(Icons.Filled.FormatSize, "Subtitle style", sizeNames.firstOrNull { it.first == subSize }?.second ?: "Normal") { onPage("substyle") }
+                        }
+                        "substyle" -> {
+                            SheetHeader("Subtitle style") { onPage("subs") }
+                            sizeNames.forEach { (k, label) -> SheetOption(label, subSize == k) { onSubSize(k) } }
+                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
+                            Row(Modifier.fillMaxWidth().clickable { onSubBg(!subBg) }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Black background", Modifier.weight(1f), fontSize = 15.sp, color = Color.White)
+                                Switch(subBg, { onSubBg(it) }, colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
+                                    uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50)))
+                            }
+                        }
+                        "speed" -> {
+                            SheetHeader(I18n.t("speed", "Playback speed")) { onPage("main") }
+                            listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { v ->
+                                SheetOption(if (v == 1f) I18n.t("normal", "Normal") else "${spdLabel(v)}×", v == speed) { onSpeed(v) }
+                            }
+                        }
+                        "audio" -> {
+                            SheetHeader("Audio") { onPage("main") }
+                            audioLabels.forEachIndexed { i, l -> SheetOption(l, i == audioIdx) { onAudio(i) } }
+                        }
+                        "sleep" -> {
+                            SheetHeader(I18n.t("ctl_sleep", "Sleep timer")) { onPage("main") }
+                            listOf(0, 15, 30, 60, -1).forEach { m -> SheetOption(when (m) { 0 -> I18n.t("ctl_off", "Off"); -1 -> I18n.t("sleep_end", "End of episode"); else -> "$m min" }, sleepMin == m) { onSleep(m) } }
+                        }
+                        else -> {
+                            SheetRowItem(Icons.Filled.Tune, I18n.t("quality", "Quality"), qLabel(quality)) { onPage("quality") }
+                            SheetRowItem(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), if (subTracks.isNotEmpty()) subLabel else I18n.t("subs_na", "Not available")) { if (subTracks.isNotEmpty()) onPage("subs") }
+                            SheetRowItem(Icons.Filled.Speed, I18n.t("speed", "Playback speed"), if (speed == 1f) I18n.t("normal", "Normal") else "${spdLabel(speed)}×") { onPage("speed") }
+                            if (audioLabels.size > 1) SheetRowItem(Icons.Filled.Audiotrack, "Audio", audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
+                            SheetRowItem(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep timer"), when (sleepMin) { 0 -> I18n.t("ctl_off", "Off"); -1 -> I18n.t("sleep_end", "End of episode"); else -> "$sleepMin min" }) { onPage("sleep") }
+                            SheetRowItem(Icons.Filled.PictureInPictureAlt, "Picture-in-picture", "") { onPip() }
+                            SheetRowItem(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock screen"), "") { onLock() }
+                            SheetRowItem(Icons.Filled.Headphones, I18n.t("audio_only", "Audio only"), if (audioOnly) "On" else "Off") { onAudioOnly() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SheetRowItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(22.dp), tint = Color.White)
+        Text(label, Modifier.weight(1f).padding(start = 16.dp), fontSize = 15.sp, color = Color.White)
+        if (value.isNotEmpty()) {
+            Text(value, fontSize = 13.5.sp, color = NavOff, maxLines = 1)
+            Icon(Icons.Filled.ChevronRight, null, Modifier.padding(start = 4.dp).size(20.dp), tint = NavOff)
+        }
+    }
+}
+
+@Composable
+internal fun SheetHeader(title: String, onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onBack).padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(22.dp), tint = Color.White)
+        Text(title, Modifier.padding(start = 14.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+}
+
+@Composable
+internal fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { if (selected) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText) }
+        Text(label, Modifier.padding(start = 16.dp), fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) RedText else Color.White)
+    }
+}
+
+internal fun spdLabel(f: Float): String = if (f == f.toInt().toFloat()) f.toInt().toString() else f.toString()

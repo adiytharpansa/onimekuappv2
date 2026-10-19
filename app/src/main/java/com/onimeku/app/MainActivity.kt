@@ -145,9 +145,9 @@ class MainActivity : ComponentActivity() {
 @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun App(vm: AppVM) {
-    // Bahasa antarmuka aktif mengikuti Settings (debug.31).
+    // Bahasa antarmuka aktif mengikuti Settings.
     androidx.compose.runtime.SideEffect { I18n.lang = vm.s.settings.lang }
-    // Kesegaran katalog (debug.33): segarkan diam-diam saat aplikasi kembali
+    // Kesegaran katalog: segarkan diam-diam saat aplikasi kembali
     // ke depan, dan periksa berkala tiap 10 menit selama aplikasi terbuka.
     val hostActivity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
     androidx.compose.runtime.DisposableEffect(hostActivity) {
