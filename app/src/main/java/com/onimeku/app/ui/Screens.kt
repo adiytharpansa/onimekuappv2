@@ -522,7 +522,7 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
     val pageW = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     // clipToBounds PER HALAMAN: gambar diperbesar (overscan + Ken Burns) dan digeser (parallax); tanpa klip ia bocor
     // melewati tepi halaman dan menimpa halaman tetangga saat slide, tampak sebagai strip/sambungan yang tidak rapi.
-    Box(Modifier.fillMaxSize().clipToBounds().artBackground(a).clickable { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
+    Box(Modifier.fillMaxSize().clipToBounds().artBackground(a).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
         // Layar lebar: pakai banner (lanskap) bila ada, poster potret akan terpotong parah.
         val req = rememberImg(if (wide) (com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)) else com.onimeku.app.data.PosterHealer.posterFor(a))
         if (req == null) Box(Modifier.fillMaxSize().shimmer())
@@ -708,7 +708,7 @@ fun ItemRow(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.width(108.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)
-            .clickable(onClick = onThumb ?: onOpen)) {
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onThumb ?: onOpen)) {
             RealImage(a, Modifier.fillMaxSize())
             if (thumbLabel.isNotBlank()) Text(thumbLabel, Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
                 .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -757,7 +757,7 @@ fun MyListScreen(vm: AppVM) {
                     recs.forEach { t ->
                         val on = t.id in vm.p.myList
                         Column(Modifier.width(104.dp)) {
-                            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)).artBackground(t).clickable { vm.go(Route.Detail(t.id)) }) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)).artBackground(t).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { vm.go(Route.Detail(t.id)) }) {
                                 RealImage(t, Modifier.fillMaxSize())
                                 t.rating?.replace("★", "")?.trim()?.takeIf { it.isNotBlank() }?.let {
                                     Row(Modifier.padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = 6.dp, vertical = 2.dp),

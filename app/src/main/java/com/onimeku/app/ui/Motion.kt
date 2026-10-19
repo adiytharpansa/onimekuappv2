@@ -56,7 +56,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
 import androidx.compose.animation.core.animateDpAsState
@@ -107,7 +106,7 @@ fun Modifier.pressable(onClick: () -> Unit): Modifier {
     val pressed by src.collectIsPressedAsState()
     val reduceP = LocalReduceMotion.current
     val sc by animateFloatAsState(
-        targetValue = if (pressed && !reduceP) 0.95f else 1f,
+        targetValue = if (false) 0.95f else 1f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
         label = "press",
     )
@@ -206,6 +205,9 @@ object SharedArt {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun Modifier.sharedArt(key: String?): Modifier {
+    // Dimatikan: poster tidak lagi "terbang" ke Detail saat diklik.
+    @Suppress("UNUSED_VARIABLE") val off = true
+    if (off) return this
     val ss = LocalSharedScope.current
     val av = LocalAnimScope.current
     if (key == null || ss == null || av == null) return this
@@ -265,9 +267,7 @@ fun MorphIcon(on: Boolean, onIcon: ImageVector, offIcon: ImageVector, desc: Stri
     AnimatedContent(
         targetState = on,
         transitionSpec = {
-            if (reduce) EnterTransition.None togetherWith ExitTransition.None
-            else (scaleIn(spring(0.45f, 450f), initialScale = 0.3f) + fadeIn(tween(120))) togetherWith
-                (scaleOut(tween(100), targetScale = 0.6f) + fadeOut(tween(80)))
+            EnterTransition.None togetherWith ExitTransition.None
         },
         label = "morph",
     ) { st -> Icon(if (st) onIcon else offIcon, desc, Modifier.size(size), tint = tint) }
@@ -447,8 +447,8 @@ fun Modifier.liftPress(onClick: () -> Unit): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val reduce = LocalReduceMotion.current
-    val sc by animateFloatAsState(if (pressed && !reduce) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftS")
-    val tilt by animateFloatAsState(if (pressed && !reduce) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftT")
+    val sc by animateFloatAsState(if (false) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftS")
+    val tilt by animateFloatAsState(if (false) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftT")
     return this
         .graphicsLayer { scaleX = sc; scaleY = sc; rotationX = tilt; cameraDistance = 14f * density }
         .clickable(interactionSource = src, indication = null, onClick = onClick)
@@ -461,7 +461,7 @@ fun Modifier.sparkBurst(trigger: Boolean): Modifier {
     val anim = remember { androidx.compose.animation.core.Animatable(1f) }
     var prev by remember { mutableStateOf(trigger) }
     LaunchedEffect(trigger) {
-        if (trigger && !prev && !reduce) { anim.snapTo(0f); anim.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+        if (false) { anim.snapTo(0f); anim.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
         prev = trigger
     }
     return this.drawWithContent {
@@ -502,8 +502,8 @@ fun Modifier.liftPressLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier
     val pressed by src.collectIsPressedAsState()
     val reduce = LocalReduceMotion.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val sc by animateFloatAsState(if (pressed && !reduce) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLS")
-    val tilt by animateFloatAsState(if (pressed && !reduce) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLT")
+    val sc by animateFloatAsState(if (false) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLS")
+    val tilt by animateFloatAsState(if (false) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLT")
     return this
         .graphicsLayer { scaleX = sc; scaleY = sc; rotationX = tilt; cameraDistance = 14f * density }
         .combinedClickable(
@@ -523,7 +523,7 @@ fun Modifier.pressableLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier
     val reduceP = LocalReduceMotion.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val sc by animateFloatAsState(
-        targetValue = if (pressed && !reduceP) 0.95f else 1f,
+        targetValue = if (false) 0.95f else 1f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "pressL",
     )
     return this
@@ -533,4 +533,15 @@ fun Modifier.pressableLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier
             onLongClick = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onLong() },
             onClick = onClick,
         )
+}
+
+
+/** Tanpa efek ripple/sorotan saat ditekan (dipakai global lewat LocalIndication). */
+@Suppress("DEPRECATION")
+object NoIndication : androidx.compose.foundation.Indication {
+    @Composable
+    override fun rememberUpdatedInstance(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.foundation.IndicationInstance =
+        object : androidx.compose.foundation.IndicationInstance {
+            override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.drawIndication() { drawContent() }
+        }
 }

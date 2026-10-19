@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             OnimekuTheme {
-                CompositionLocalProvider(LocalEnsureNotif provides { cb -> ensureNotif(cb) }, LocalQuickMenu provides { a -> vm.quick = a.id }) {
+                CompositionLocalProvider(androidx.compose.foundation.LocalIndication provides com.onimeku.app.ui.NoIndication, LocalEnsureNotif provides { cb -> ensureNotif(cb) }, LocalQuickMenu provides { a -> vm.quick = a.id }) {
                     val appVm: AppVM = viewModel()
                     App(appVm)
                 }
@@ -248,7 +248,7 @@ fun App(vm: AppVM) {
                                 (scaleIn(tween(380, easing = ease), initialScale = 0.78f, transformOrigin = o) + fadeIn(tween(300))) togetherWith
                                     (scaleOut(tween(380, easing = ease), targetScale = 1.04f, transformOrigin = o) + fadeOut(tween(220)))
                             }
-                            dir > 0 && t is Route.Detail -> fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+                            dir > 0 && t is Route.Detail -> EnterTransition.None togetherWith ExitTransition.None
                             dir > 0 -> (slideInHorizontally(tween(320, easing = ease)) { it / 4 } + fadeIn(tween(280))) togetherWith
                                 (slideOutHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeOut(tween(220)))
                             // KEMBALI: kebalikannya.
@@ -258,11 +258,11 @@ fun App(vm: AppVM) {
                                 (fadeIn(tween(260)) + scaleIn(tween(320, easing = ease), initialScale = 1.04f, transformOrigin = o)) togetherWith
                                     (scaleOut(tween(320, easing = ease), targetScale = 0.78f, transformOrigin = o) + fadeOut(tween(260)))
                             }
-                            i is Route.Detail -> fadeIn(tween(240)) togetherWith fadeOut(tween(220))
+                            i is Route.Detail -> EnterTransition.None togetherWith ExitTransition.None
                             else -> (slideInHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeIn(tween(280))) togetherWith
                                 (slideOutHorizontally(tween(320, easing = ease)) { it / 4 } + fadeOut(tween(220)))
                         }
-                        ct.also { it.targetContentZIndex = if (dir < 0) -1f else 1f }
+                        (EnterTransition.None togetherWith ExitTransition.None).also { it.targetContentZIndex = if (dir < 0) -1f else 1f }
                     },
                     label = "route",
                 ) { r ->
