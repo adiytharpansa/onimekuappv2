@@ -992,9 +992,15 @@ fun DetailScreen(vm: AppVM, id: String) {
     // di 4G sempat menghabiskan batas tunggu pemutar -> "Stream
     // unavailable" padahal stream-nya hidup. Dengan prefetch, ketukan
     // Play mengenai cache dan video mulai nyaris seketika.
+    val trCtx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(id) {
-        com.onimeku.app.data.ApiClient.prefetchPlayback(id, a.available.firstOrNull() ?: 1)
-        resume?.let { if (it.ep != (a.available.firstOrNull() ?: 1)) com.onimeku.app.data.ApiClient.prefetchPlayback(id, it.ep) }
+        val trOpts = SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl)
+        val firstEp = a.available.firstOrNull() ?: 1
+        com.onimeku.app.data.ApiClient.prefetchPlayback(id, firstEp)
+        resume?.let { if (it.ep != firstEp) com.onimeku.app.data.ApiClient.prefetchPlayback(id, it.ep) }
+        // Siapkan terjemahan subtitle Indonesia/English selagi Detail dibaca.
+        val target = resume?.ep ?: firstEp
+        SubTranslate.prefetch(trCtx, id, target, trOpts)
     }
     val listState = rememberLazyListState()
     val density = LocalDensity.current

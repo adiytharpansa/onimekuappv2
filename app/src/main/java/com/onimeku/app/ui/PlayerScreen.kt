@@ -249,7 +249,8 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // Lengkapi pilihan subtitle Indonesia + English: trek yang kurang diterjemahkan di perangkat,
             // lalu ditambahkan ke pemutar yang sedang berjalan (lihat LaunchedEffect(subCount) di PlayerReady).
             if (ready.subtitles.isNotEmpty()) {
-                val withTr = SubTranslate.fill(ctx, r.id, r.ep, ready.subtitles)
+                val withTr = SubTranslate.fill(ctx, r.id, r.ep, ready.subtitles,
+                    SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl))
                 if (withTr.size != ready.subtitles.size) pb = ready.copy(subtitles = withTr)
             }
         }
@@ -505,6 +506,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 player.prepare()
                 player.playWhenReady = play
                 subReady = false
+                vm.toast(I18n.t("sub_added", "Subtitle added (auto-translated)"))
             }
         }
     }
@@ -702,6 +704,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     LaunchedEffect(player) {
         var n = 0
         var prefetched = false
+        var trPre = false
         while (true) {
             val sec = (player.currentPosition / 1000).toInt()
             if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
@@ -713,6 +716,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (ds != dur) dur = ds
                 // 60 dtk terakhir: ambil data putar episode berikutnya di latar,
                 // supaya autoplay langsung mulai tanpa menunggu API.
+                // Terjemahan subtitle episode berikutnya disiapkan lebih awal (2 menit setelah mulai).
+                if (!trPre && nextEp != null && sec >= 120) {
+                    trPre = true
+                    launch {
+                        com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp)
+                        SubTranslate.prefetch(ctx, r.id, nextEp,
+                            SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl))
+                    }
+                }
                 if (!prefetched && nextEp != null && vm.s.settings.autoplay && ds - sec in 1..60) {
                     prefetched = true
                     launch { com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp) }

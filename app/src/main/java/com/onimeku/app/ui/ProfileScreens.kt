@@ -188,6 +188,20 @@ private fun SwitchRow(title: String, desc: String, checked: Boolean, onChange: (
 }
 
 @Composable
+private fun EngineRow(value: String, onChange: (String) -> Unit) {
+    var t by remember { mutableStateOf(value) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp)) {
+        Text(I18n.t("sub_engine_t", "Translation server (optional)"), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(I18n.t("sub_engine_d", "Your own endpoint for higher-quality translation. Leave empty to translate on this device."), fontSize = 12.5.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp))
+        BasicTextField(
+            t, { t = it; onChange(it.trim()) }, singleLine = true,
+            textStyle = TextStyle(color = Color.White, fontSize = 14.sp), cursorBrush = SolidColor(Red),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1E2130)).padding(horizontal = 12.dp, vertical = 10.dp),
+        )
+    }
+}
+
+@Composable
 fun SubScreen(vm: AppVM, key: String) {
     val ensure = LocalEnsureNotif.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -207,6 +221,14 @@ fun SubScreen(vm: AppVM, key: String) {
                     SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
                     HLine()
                     SwitchRow(I18n.t("pip_t", "Picture-in-picture"), I18n.t("pip_d", "Keep watching in a small window when you press Home while a video is playing."), set.autoPip) { v -> vm.setSettings { it.copy(autoPip = v) } }
+                }
+                Grp(I18n.t("grp_subs", "Subtitles"))
+                CardBox {
+                    SwitchRow(I18n.t("sub_tr_t", "Auto-translate subtitles"), I18n.t("sub_tr_d", "Add Indonesian or English automatically when only one is available."), set.subTranslate) { v -> vm.setSettings { it.copy(subTranslate = v) } }
+                    HLine()
+                    SwitchRow(I18n.t("sub_tr_wifi_t", "Translate on Wi-Fi only"), I18n.t("sub_tr_wifi_d", "Avoid mobile data for language models and translation."), set.subTrWifi) { v -> vm.setSettings { it.copy(subTrWifi = v) } }
+                    HLine()
+                    EngineRow(set.subEngineUrl) { v -> vm.setSettings { it.copy(subEngineUrl = v) } }
                 }
                 Grp(I18n.t("grp_data", "Data and alerts"))
                 CardBox {

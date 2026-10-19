@@ -210,6 +210,10 @@ object ApiClient {
     // tetap mengenai hasil pemanasan.
     private const val PREFETCH_TTL_MS = 600_000L
 
+    /** Lihat data putar yang sudah di-prefetch TANPA mengambilnya (null bila tak ada/kedaluwarsa). */
+    fun peekPrefetched(id: String, ep: Int): Playback? =
+        prefetched["$id:$ep"]?.takeIf { System.currentTimeMillis() - it.at < PREFETCH_TTL_MS }?.pb
+
     /** Panggil saat episode hampir habis: episode berikutnya langsung siap diputar. */
     suspend fun prefetchPlayback(id: String, ep: Int) {
         val k = "$id:$ep"

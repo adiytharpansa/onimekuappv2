@@ -224,6 +224,7 @@ internal fun PlayerSettingsSheet(
                             val autoSub = if (subPref == "auto" && subCurrent >= 0) subTracks.getOrNull(subCurrent)?.let { " · " + SubLang.display(it, subCurrent) } else null
                             SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
                             order.forEach { i -> SheetOption(SubLang.display(subTracks[i], i), subPref != "auto" && subCurrent == i) { onSubTrack(i) } }
+                            if (SubTranslate.busy) Text(I18n.t("sub_translating", "Translating subtitles\u2026"), Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 12.5.sp, color = NavOff)
                             Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
                             SheetRowItem(Icons.Filled.FormatSize, "Subtitle style", sizeNames.firstOrNull { it.first == subSize }?.second ?: "Normal") { onPage("substyle") }
                         }
