@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -175,7 +176,7 @@ val railW: Dp @Composable get() = (LocalConfiguration.current.screenWidthDp * 0.
 fun Poster(
     a: Anime, w: Dp?, modifier: Modifier = Modifier, ep: Boolean = false, badges: Boolean = false,
     label: Boolean = false, rank: Int? = null, meta: Pair<String, String>? = null,
-    progress: Float? = null, compact: Boolean = false, sharedKey: String? = null, onClick: () -> Unit,
+    progress: Float? = null, compact: Boolean = false, sharedKey: String? = null, playIcon: Boolean = false, newBadge: Boolean = false, onClick: () -> Unit,
 ) {
     val sized = if (w != null) modifier.width(w) else modifier.fillMaxWidth()
     Box(
@@ -205,7 +206,13 @@ fun Poster(
         }
         if (badges) {
             a.rating?.let { Tag(it, Color.White, Bg, Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 12.dp), small = compact) }
-            if (a.hd) Tag("HD", Red, Color.White, Modifier.align(Alignment.TopEnd).padding(if (compact) 6.dp else 10.dp), small = compact)
+            if (a.hd || newBadge) Column(
+                Modifier.align(Alignment.TopEnd).padding(if (compact) 6.dp else 10.dp),
+                horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (newBadge) Tag(I18n.t("badge_new", "NEW"), Gold, Bg, small = true)
+                if (a.hd) Tag("HD", Red, Color.White, small = compact)
+            }
         }
         if (rank != null) {
             val big = 60.sp
@@ -225,8 +232,16 @@ fun Poster(
                 Text(meta.second, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+        if (playIcon) {
+            // Penanda "lanjutkan": lingkaran kaca gelap + ikon play di tengah kartu Continue Watching.
+            Box(
+                Modifier.align(Alignment.Center).size(40.dp).clip(CircleShape).background(Color(0x8C080910))
+                    .border(1.dp, Color(0x59FFFFFF), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.PlayArrow, null, Modifier.size(24.dp), tint = Color.White) }
+        }
         if (progress != null) {
-            AnimatedProgressBar(progress, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp))
+            AnimatedProgressBar(progress, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(5.dp))
         }
     }
 }
@@ -248,8 +263,9 @@ fun Tile(a: Anime, vm: AppVM, index: Int = 0) {
         Poster(a, null, badges = true, compact = true, sharedKey = "grid:${a.id}") { vm.go(Route.Detail(a.id)) }
         Text(a.title, Modifier.padding(top = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(a.genres.take(2).joinToString(", "), fontSize = 11.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp),
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Baris genre selalu memesan tinggi (spasi bila genre kosong) supaya kartu di satu baris grid sama tinggi.
+        Text(a.genres.take(2).joinToString(", ").ifBlank { " " }, fontSize = 11.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp),
+            minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

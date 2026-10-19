@@ -92,6 +92,8 @@ object I18n {
         "sec_donghua" to "Donghua",
         "sec_all" to "Semua Anime",
         "browse_all" to "Jelajahi semua",
+        "time_left" to "lagi",
+        "badge_new" to "BARU",
         "play" to "Putar",
         "my_list" to "Daftarku",
         // Detail
@@ -171,6 +173,9 @@ object I18n {
         "autoplay_d" to "Mulai episode berikutnya saat satu episode selesai.",
         "skip_intro_t" to "Lewati intro",
         "skip_intro_d" to "Tampilkan tombol untuk melewati lagu pembuka.",
+        "exit_title" to "Keluar dari Onimeku?",
+        "exit_body" to "Tekan Keluar untuk menutup aplikasi.",
+        "exit" to "Keluar",
         "pip_t" to "Picture-in-picture",
         "pip_d" to "Tetap menonton di jendela kecil saat kamu menekan Home ketika video diputar.",
         "bg_play_t" to "Putar di latar belakang",

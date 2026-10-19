@@ -281,3 +281,12 @@ Belum dikompilasi/diuji. Titik rawan kompilasi: API Media3 session (`MediaSessio
 8. Setiap perubahan: perbarui `CHANGELOG.md` dan bagian 7 dokumen ini; jujur soal apa yang belum dikompilasi/diuji.
 9. Fitur baru wajib punya keadaan loading, kosong, dan galat.
 10. Setelah menambah `Route`, daftarkan di `when (r)` pada `App()` dan putuskan apakah TabBar tampil.
+
+
+---
+
+## Catatan v12 (19 Okt 2026)
+- `Catalog.dedupe/dupKey/franchiseKey`: daftar tampilan (`top`, `popular`, `alphabetical`, dst.) memakai entri unik; `byId` tetap memuat semua id. Gunakan `Catalog.unique` untuk memindai katalog; jangan `Catalog.all` bila tampil ke pengguna.
+- `Catalog.similar` menyaring franchise yang sama (`franchiseKey`) dan butuh overlap genre >= 2 bila memungkinkan.
+- `Poster(playIcon = true)` untuk kartu Continue Watching. Home "All Anime" dibatasi 24 judul + chip genre + tombol Browse all.
+- Belum dikompilasi di lingkungan ini; jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` sebelum rilis (ada `CatalogTest` baru).

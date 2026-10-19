@@ -26,7 +26,8 @@ val Solid = Color(0xFF2B2E3B)
 
 // Token hero Beranda (sebelumnya angka tersebar di Screens.kt).
 val HeroMeta = Color(0xFFD5D8E3)
-val HeroSynopsis = Color(0xFFB9BDCB)
+val HeroSynopsis = Color(0xFFD0D3DF)   // lebih terang: kontras sinopsis di atas gambar ramai
+val ChipGlass = Color(0x99080910)       // latar chip rating/status di hero (kaca gelap, terbaca di gambar terang)
 val GlassFill = Color(0x59080910)
 val GlassStroke = Color(0x66FFFFFF)
 val HeroPad = 20.dp

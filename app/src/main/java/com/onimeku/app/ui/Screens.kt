@@ -6,6 +6,10 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.graphics.graphicsLayer
@@ -169,7 +173,14 @@ private fun HomeContent(vm: AppVM) {
     // LazyColumn: hanya baris yang terlihat (+ prefetch) yang dikomposisi. Dulu seluruh baris
     // (belasan rail genre) digambar sekaligus saat Home dibuka.
     val base = p.base?.let { Catalog.byId[it] }
-    val similar = remember(base?.id, Catalog.all) { base?.let { b -> Catalog.similar(b.id).map { it.id } }.orEmpty() }
+    val similar = remember(base?.id, Catalog.all) {
+        base?.let { b ->
+            val ids = Catalog.similar(b.id).map { it.id }
+            // Hindari baris yang sama dengan Top Hits; bila tersisa terlalu sedikit, pakai daftar penuh.
+            val fresh = ids.filter { it !in Catalog.top }
+            if (fresh.size >= 3) fresh else ids
+        }.orEmpty()
+    }
     // Continue Watching = anime yang BENAR-BENAR sudah ditonton (perintah
     // user 19 Okt 2026), terbaru dulu, realtime dari catatan tontonan +
     // progres tersimpan. Yang tampil hanya judul dengan progres aktif
@@ -201,7 +212,8 @@ private fun HomeContent(vm: AppVM) {
     LaunchedEffect(Unit) {
         while (true) { delay(30 * 60_000L); vm.refreshIfStale(30 * 60_000L) }
     }
-    val allRows = remember(Catalog.all) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.chunked(3) }
+    // Home hanya menampilkan 24 judul pertama (8 baris); sisanya lewat "Browse all" (daftar penuh + filter genre).
+    val allRows = remember(Catalog.all) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.take(24).chunked(3) }
     var pullPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val ptrThresholdPx = with(density) { 90.dp.toPx() }
@@ -254,7 +266,12 @@ private fun HomeContent(vm: AppVM) {
                         items(contItems, key = { it.a.id }) { c ->
                             Poster(
                                 c.a, contW, ep = true,
-                                meta = c.a.title to ("Episode ${c.ep}" + if (c.pos > 0) " · ${fmt(c.pos)}" else ""),
+                                meta = c.a.title to ("Episode ${c.ep}" + when {
+                                    c.pos > 0 && c.dur > c.pos -> " · ${fmt(c.dur - c.pos)} ${I18n.t("time_left", "left")}"
+                                    c.pos > 0 -> " · ${fmt(c.pos)}"
+                                    else -> ""
+                                }),
+                                playIcon = true,
                                 progress = when {
                                     c.pos > 0 && c.dur > 0 -> (c.pos.toFloat() / c.dur).coerceIn(0.03f, 0.97f)
                                     c.pos > 0 -> (c.pos / 1440f).coerceIn(0.03f, 0.97f)
@@ -299,7 +316,7 @@ private fun HomeContent(vm: AppVM) {
                                 // Judul anime di bawah kartu (dulu kartu hanya bertuliskan "Episode N" tanpa nama anime).
                                 Column(Modifier.width(railW)) {
                                     // debug.33: ukuran poster potret SAMA dengan rail lain (dulu kartu lanskap 232:150).
-                                    Poster(a, railW, badges = true, meta = "Episode $ep" to whenTxt) { vm.go(Route.Detail(id)) }
+                                    Poster(a, railW, badges = true, meta = "Episode $ep" to whenTxt, newBadge = whenTxt == "Today" || whenTxt == "Yesterday") { vm.go(Route.Detail(id)) }
                                     Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
                                         minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
@@ -318,7 +335,14 @@ private fun HomeContent(vm: AppVM) {
         item(key = "all-head", contentType = "all-head") {
             Column {
                 Spacer(Modifier.height(SectionGap))
-                SectionHead(I18n.t("sec_all", "All Anime"))
+                SectionHead(I18n.t("sec_all", "All Anime")) { vm.go(Route.SeeAll("all")) }
+                // Pintasan genre: ketuk untuk membuka daftar tersaring.
+                LazyRow(
+                    Modifier.padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                ) {
+                    items(Catalog.chips, key = { it }) { g -> Chip(g) { vm.go(Route.SeeAll("genre:$g")) } }
+                }
             }
         }
         items(allRows.size, key = { "all-row:$it" }, contentType = { "all-row" }) { r ->
@@ -326,6 +350,11 @@ private fun HomeContent(vm: AppVM) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEachIndexed { c, a -> Box(Modifier.weight(1f)) { Tile(a, vm, (r * 3 + c) % 9) } }
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        item(key = "all-more", contentType = "all-more") {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                Btn(I18n.t("browse_all", "Browse all"), BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.go(Route.SeeAll("all")) }
             }
         }
     }
@@ -375,23 +404,36 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
         .take(5).ifEmpty { Catalog.all.take(1) }
     if (items.isEmpty()) return
     val pager = rememberPagerState { items.size }
+    // Carousel berhenti berputar selama jari menyentuh hero (tahan untuk membaca), lanjut setelah dilepas.
+    var held by remember { mutableStateOf(false) }
     // Dikunci pada currentPage: geser manual otomatis mengulang hitung mundur 5,5 dtk,
     // persis sama dengan animasi isi titik (HeroDot) yang juga mulai ulang tiap halaman berganti.
     LaunchedEffect(pager.currentPage, items.size) {
         if (items.size > 1) {
             delay(5500)
-            while (pager.isScrollInProgress) delay(100)
+            while (pager.isScrollInProgress || held) delay(100)
             pager.animateScrollToPage((pager.currentPage + 1) % items.size)
         }
     }
     // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
-    Box(Modifier.fillMaxWidth().height(heroH).clipToBounds().background(Bg)) {
+    Box(
+        Modifier.fillMaxWidth().height(heroH).clipToBounds().background(Bg).pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                held = true
+                do {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                } while (e.changes.any { it.pressed })
+                held = false
+            }
+        },
+    ) {
         // Stretch saat ditarik HANYA pada gambar (di HeroPage); teks & tombol tidak ikut membesar/terpotong.
         HorizontalPager(pager, Modifier.fillMaxSize()) { i ->
             HeroPage(vm, items[i.coerceIn(0, items.lastIndex)], pull) { (pager.currentPage - i) + pager.currentPageOffsetFraction }
         }
         // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
-        Box(Modifier.fillMaxWidth().height(90.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x40000000), Color.Transparent))) })
+        Box(Modifier.fillMaxWidth().height(120.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x8C000000), Color(0x33000000), Color.Transparent))) })
         if (items.size > 1) {
             // Titik indikator: tepat di atas tombol "+", rata tengah dengannya (kotak selebar tombol; baris titik boleh lebih lebar, dipusatkan).
             Box(Modifier.align(Alignment.BottomEnd).padding(end = HeroPad, bottom = HeroBottomPad + HeroActionW + HeroDotsGap).width(HeroActionW)) {
@@ -429,7 +471,7 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             alignment = Alignment.TopCenter,
         )
         Box(Modifier.fillMaxSize().drawBehind {
-            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.26f to Color.Transparent, 0.52f to Color(0x3314161F), 0.8f to Color(0xE614161F), 1f to Bg))
+            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.26f to Color.Transparent, 0.45f to Color(0x4D14161F), 0.72f to Color(0xD914161F), 0.88f to Color(0xF214161F), 1f to Bg))
         })
         val dens = LocalDensity.current
         // Batasi font scale sistem di hero agar kolom teks tidak melebihi tinggi hero.
@@ -446,15 +488,18 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
                 StatusPill(a.status)
             }
             Text(a.title, Modifier.padding(top = 12.dp), fontSize = 32.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp, letterSpacing = (-0.6).sp,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(
                 a.year.takeIf { it > 0 }?.toString(),
-                a.eps.takeIf { it > 0 }?.let { "$it ${if (it == 1) "episode" else "episodes"}" },
+                // Judul yang masih tayang: tulis episode terakhir ("Ep 11"), bukan "11 episodes" seolah sudah tamat.
+                if (a.status == "Airing" && a.ep > 0) "Ep ${a.ep}"
+                else a.eps.takeIf { it > 0 }?.let { "$it ${if (it == 1) "episode" else "episodes"}" },
                 a.genres.take(2).joinToString(", ").ifBlank { null },
             ).joinToString("  ·  ")
             Text(meta, Modifier.padding(top = 6.dp), fontSize = 13.sp, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (a.synopsis.isNotBlank()) Text(a.synopsis, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 19.sp,
-                color = HeroSynopsis, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // Selalu memesan 2 baris (juga saat sinopsis kosong) agar posisi tombol sama di semua slide.
+            Text(a.synopsis, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 19.sp,
+                color = HeroSynopsis, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = HeroActionsTop), horizontalArrangement = Arrangement.spacedBy(HeroActionGap), verticalAlignment = Alignment.CenterVertically) {
                 PlayButton(I18n.t("play", "Play"), null, Modifier.weight(1f)) { vm.go(Route.Player(a.id, firstEp)) }
                 Box(
@@ -494,7 +539,7 @@ fun CalendarScreen(vm: AppVM) {
     val sched = vm.schedule
     val realList = if (sched.isNotEmpty()) {
         val sel = days[vm.calDay]
-        Catalog.all.mapNotNull { a ->
+        Catalog.unique.mapNotNull { a ->
             val s = sched[a.id] ?: return@mapNotNull null
             val dt = java.time.Instant.ofEpochSecond(s.airingAt).atZone(java.time.ZoneId.systemDefault())
             if (dt.toLocalDate() == sel) Triple(a, s, dt) else null
@@ -665,7 +710,7 @@ fun GlassButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: Str
 @Composable
 private fun ScorePill(score: String) {
     Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x33FFC857)).padding(horizontal = 8.dp, vertical = 4.dp),
+        Modifier.clip(RoundedCornerShape(8.dp)).background(ChipGlass).background(Color(0x26FFC857)).padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(Icons.Filled.Star, null, Modifier.size(13.dp), tint = Gold)
@@ -677,7 +722,7 @@ private fun ScorePill(score: String) {
 private fun StatusPill(status: String) {
     val live = status.equals("Airing", ignoreCase = true)
     Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x26FFFFFF)).padding(horizontal = 8.dp, vertical = 4.dp),
+        Modifier.clip(RoundedCornerShape(8.dp)).background(ChipGlass).padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (live) PulseDot(GoodGreen) else Box(Modifier.size(6.dp).clip(CircleShape).background(NavOff))

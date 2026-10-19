@@ -78,8 +78,38 @@ object Catalog {
         }
     }
 
-    private class Derived(val src: List<Anime>) {
-        val byId: Map<String, Anime> = src.associateBy { it.id }
+    /**
+     * Kunci kemiripan untuk menggabungkan entri ganda (poster sama, atau judul sama
+     * setelah tanda baca/spasi dibuang). Contoh: "#Compass2.0 Animation Project" dan
+     * "#Compass2.0: Animation Project" memakai poster yang sama -> satu kartu saja.
+     */
+    internal fun dupKey(a: Anime): String =
+        a.poster?.takeIf { it.isNotBlank() } ?: a.title.lowercase().filter { it.isLetterOrDigit() }
+
+    /** Kunci franchise: judul tanpa "Season N", "Part N", sub-judul setelah ":" dan angka akhir. */
+    internal fun franchiseKey(title: String): String =
+        title.lowercase()
+            .substringBefore(":")
+            .replace(Regex("\\b(season|part|cour|s)\\s*\\d+\\b"), " ")
+            .replace(Regex("\\b(the )?(final|last)( season)?\\b"), " ")
+            .filter { it.isLetterOrDigit() }
+            .trimEnd { it.isDigit() }
+
+    /** Pilih entri terbaik dari kelompok ganda: punya rating, episode terbanyak, lalu paling baru diperbarui. */
+    private val bestFirst = compareByDescending<Anime> { if (it.rating != null) 1 else 0 }
+        .thenByDescending { it.ep }
+        .thenByDescending { it.updatedAt ?: "" }
+
+    internal fun dedupe(list: List<Anime>): List<Anime> {
+        val best = list.groupBy { dupKey(it) }.mapValues { (_, g) -> g.sortedWith(bestFirst).first().id }
+        return list.filter { best[dupKey(it)] == it.id }
+    }
+
+    private class Derived(val full: List<Anime>) {
+        /** Semua id (termasuk entri ganda) tetap bisa dibuka: riwayat tonton / My List lama memakainya. */
+        val byId: Map<String, Anime> = full.associateBy { it.id }
+        /** Daftar tampilan: tanpa entri ganda. */
+        val src: List<Anime> = dedupe(full)
         val popular: List<String> = src.sortedWith(byScore).map { it.id }
         val top: List<String> = popular.take(10)
         val airing: List<String> = src.filter { it.apiStatus == "RELEASING" }.sortedWith(byScore).map { it.id }
@@ -120,11 +150,14 @@ object Catalog {
         get() {
             val cur = all // membaca state: Compose ikut memantau perubahan katalog
             val c = cache
-            if (c != null && c.src === cur) return c
+            if (c != null && c.full === cur) return c
             return Derived(cur).also { cache = it }
         }
 
     val byId: Map<String, Anime> get() = d.byId
+
+    /** Seluruh katalog tanpa entri ganda (untuk daftar yang dipindai langsung, mis. Kalender). */
+    val unique: List<Anime> get() = d.src
 
     /** Judul yang belum tayang, urut dari yang paling dekat. */
     val comingSoon: List<String> get() = d.comingSoon
@@ -176,9 +209,11 @@ object Catalog {
         // Kemiripan: tumpang-tindih genre dulu, lalu negara/jenis yang sama
         // (donghua tidak lagi mendominasi rekomendasi anime Jepang hanya
         // karena genre-nya kebetulan sama), lalu skor tertinggi.
-        return all.filter { it.id != id }
+        val fk = franchiseKey(base.title)
+        val strong = if (g.size >= 2) 2 else 1
+        return d.src.filter { it.id != id && franchiseKey(it.title) != fk }
             .map { it to it.genres.count { x -> x in g } }
-            .filter { it.second > 0 }
+            .filter { it.second >= strong }
             .sortedWith(
                 compareByDescending<Pair<Anime, Int>> { it.second }
                     .thenByDescending { if (it.first.country == base.country) 1 else 0 }

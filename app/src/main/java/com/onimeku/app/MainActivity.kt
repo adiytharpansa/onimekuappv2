@@ -11,6 +11,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.onimeku.app.ui.LocalReduceMotion
+import com.onimeku.app.ui.RedText
 import com.onimeku.app.ui.LocalSharedScope
 import com.onimeku.app.ui.LocalAnimScope
 import android.Manifest
@@ -175,6 +176,18 @@ fun App(vm: AppVM) {
             backP = 0f
         }
     }
+    // Back di akar: tab lain -> kembali ke Beranda dulu; di Beranda -> konfirmasi keluar (seperti YouTube).
+    var confirmExit by remember { mutableStateOf(false) }
+    BackHandler(enabled = vm.stack.size <= 1 && !vm.welcomeOpen && !vm.inPip) {
+        if (vm.route != Route.Home) vm.setTab(Route.Home) else confirmExit = true
+    }
+    if (confirmExit) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirmExit = false },
+        title = { androidx.compose.material3.Text(I18n.t("exit_title", "Exit Onimeku?")) },
+        text = { androidx.compose.material3.Text(I18n.t("exit_body", "Press Exit to close the app.")) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmExit = false; hostActivity?.finish() }) { androidx.compose.material3.Text(I18n.t("exit", "Exit"), color = RedText) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmExit = false }) { androidx.compose.material3.Text(I18n.t("cancel", "Cancel")) } },
+    )
     // Hormati "Hapus animasi" / skala animasi 0 di Android.
     val ctxMotion = androidx.compose.ui.platform.LocalContext.current
     val reduceMotion = remember {
@@ -281,26 +294,17 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
         T(Route.ProfileTab, I18n.t("tab_profile", "Profile"), NavGlyph.Profile),
     )
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val selIdx = tabs.indexOfFirst { it.r == vm.tab }.coerceAtLeast(0)
-    val pos by animateFloatAsState(selIdx.toFloat(), spring(dampingRatio = 0.78f, stiffness = 380f), label = "tabBar")
     Box(
         // Solid + garis tipis di atas, supaya konten yang digulir tidak tembus di balik tab bar.
         modifier.fillMaxWidth().background(Bg)
             .drawBehind { drawLine(Line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
             .navigationBarsPadding().height(TabBarHeight),
     ) {
-    // Penanda merah tua yang meluncur mengikuti tab aktif, DI BAWAH ikon + label (rata tengah tiap tab).
-    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = 5.dp).height(3.dp).drawBehind {
-        val seg = size.width / tabs.size
-        val w = 18.dp.toPx()
-        drawRoundRect(Red, Offset(pos * seg + (seg - w) / 2f, 0f), androidx.compose.ui.geometry.Size(w, size.height),
-            androidx.compose.ui.geometry.CornerRadius(size.height, size.height))
-    })
     Row(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         tabs.forEach { t ->
             val sel = vm.tab == t.r
             // Tanpa ripple/sorotan putih transparan: indication = null. Umpan balik sentuhan hanya
-            // mengecilkan ikon sedikit; satu-satunya penanda aktif adalah kapsul + garis merah tua.
+            // mengecilkan ikon sedikit; satu-satunya penanda aktif adalah kapsul merah tua (garis bawah dibuang karena dobel).
             val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             val pressed by src.collectIsPressedAsState()
             Column(

@@ -1,3 +1,29 @@
+# v13 — Lanjutan perapian Home (19 Okt 2026)
+- Kartu "New Episode Releases": lencana NEW/BARU untuk episode rilis hari ini atau kemarin (ditumpuk di atas HD).
+- Hero carousel berhenti berputar selama jari menyentuh hero, lanjut setelah dilepas.
+- Belum dikerjakan: auto-play trailer dan pilihan judul English/Romaji, karena API katalog belum menyediakan data trailer maupun judul alternatif.
+
+# v12 — Perapian Home berdasarkan tinjauan UI (19 Okt 2026)
+
+## Bug / konsistensi
+- Katalog: entri ganda (poster sama atau judul sama setelah tanda baca dibuang) digabung di semua daftar tampilan; id lama tetap bisa dibuka lewat `byId`.
+- "Because you watched": tidak lagi merekomendasikan season lain dari franchise yang sama; butuh minimal 2 genre sama bila anime dasar punya >= 2 genre; judul yang sudah ada di Top Hits disaring.
+- Hero: judul dan sinopsis selalu memesan 2 baris sehingga tombol Play tidak bergeser antar slide; judul yang masih tayang menulis "Ep N" (bukan "N episodes").
+- Grid: baris genre di Tile selalu memesan tinggi, kartu satu baris grid sama tinggi.
+
+## Tampilan
+- Hero: scrim atas dan bawah lebih pekat, sinopsis lebih terang, chip rating/status memakai kaca gelap.
+- Tab bar: satu penanda aktif saja (kapsul); garis bawah dobel dibuang.
+- Continue Watching: ikon play di tengah kartu, sisa waktu ("21:05 left"), progress bar 5dp.
+
+## Struktur Home
+- "All Anime" dibatasi 24 judul, ditambah chip genre dan tombol "Browse all" (daftar penuh + filter di See all).
+
+Catatan: belum dikompilasi di sini (tanpa Android SDK). Jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` / workflow CI.
+
+## v1.0.0-debug.58 (belum dikompilasi): Konfirmasi keluar
+- Tombol/gestur kembali di Beranda menampilkan dialog "Keluar dari Onimeku?" (Batal/Keluar); di tab lain kembali dulu ke Beranda. Tidak aktif saat PiP atau Welcome.
+
 ## v1.0.0-debug.57 (belum dikompilasi): PiP seperti YouTube
 - PiP otomatis (tekan Home) hanya saat video diputar dan bisa dimatikan di Profil -> Picture-in-picture (`Settings.autoPip`).
 - Menutup jendela PiP (X) kini menghentikan pemutaran (sebelumnya audio lanjut karena Putar di latar aktif); mengetuk jendela PiP membuka kembali pemutar dan lanjut.
