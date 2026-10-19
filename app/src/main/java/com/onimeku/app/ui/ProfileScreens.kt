@@ -189,6 +189,8 @@ fun SubScreen(vm: AppVM, key: String) {
                     SwitchRow(I18n.t("skip_intro_t", "Skip intro"), I18n.t("skip_intro_d", "Show a button to skip opening songs."), set.skipIntro) { v -> vm.setSettings { it.copy(skipIntro = v) } }
                     HLine()
                     SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
+                    HLine()
+                    SwitchRow(I18n.t("pip_t", "Picture-in-picture"), I18n.t("pip_d", "Keep watching in a small window when you press Home while a video is playing."), set.autoPip) { v -> vm.setSettings { it.copy(autoPip = v) } }
                 }
                 Grp(I18n.t("grp_data", "Data and alerts"))
                 CardBox {

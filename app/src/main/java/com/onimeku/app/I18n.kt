@@ -171,6 +171,8 @@ object I18n {
         "autoplay_d" to "Mulai episode berikutnya saat satu episode selesai.",
         "skip_intro_t" to "Lewati intro",
         "skip_intro_d" to "Tampilkan tombol untuk melewati lagu pembuka.",
+        "pip_t" to "Picture-in-picture",
+        "pip_d" to "Tetap menonton di jendela kecil saat kamu menekan Home ketika video diputar.",
         "bg_play_t" to "Putar di latar belakang",
         "bg_play_d" to "Audio tetap berjalan dengan kontrol layar kunci saat kamu keluar aplikasi.",
         "grp_data" to "Data dan notifikasi",

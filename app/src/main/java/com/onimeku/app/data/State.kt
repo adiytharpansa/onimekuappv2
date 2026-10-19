@@ -44,6 +44,8 @@ data class Settings(
     val subBg: Boolean = false,
     // Petunjuk gestur di halaman pemutar: tampil sampai ditutup/20 dtk menonton, lalu tidak muncul lagi.
     val gestureHintSeen: Boolean = false,
+    // Picture-in-picture otomatis saat menekan Home/gestur home ketika video diputar (seperti YouTube).
+    val autoPip: Boolean = true,
 )
 
 @Serializable

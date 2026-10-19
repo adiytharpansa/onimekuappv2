@@ -1,3 +1,7 @@
+## v1.0.0-debug.57 (belum dikompilasi): PiP seperti YouTube
+- PiP otomatis (tekan Home) hanya saat video diputar dan bisa dimatikan di Profil -> Picture-in-picture (`Settings.autoPip`).
+- Menutup jendela PiP (X) kini menghentikan pemutaran (sebelumnya audio lanjut karena Putar di latar aktif); mengetuk jendela PiP membuka kembali pemutar dan lanjut.
+
 ## v1.0.0-debug.56 (belum dirilis): Pemutar dirapikan + fitur setara YouTube
 **BELUM DIKOMPILASI / DIUJI** (tanpa Android SDK); hanya diperiksa keseimbangan kurung. Langkah pertama: `gradle :app:assembleDebug :app:testDebugUnitTest`.
 - Halaman pemutar: kartu "Up next" duplikat dihapus; daftar episode ringkas bernomor (hulu belum punya thumbnail/judul per episode); petunjuk gestur bisa ditutup dan hilang sendiri setelah 25 dtk; judul tidak lagi dobel di mode portrait; baris aksi My List / Download / Share + sinopsis (ketuk untuk buka) ditambahkan.

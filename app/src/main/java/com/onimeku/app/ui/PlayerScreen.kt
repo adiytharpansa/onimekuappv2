@@ -678,7 +678,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             fun videoOff(off: Boolean) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, off).build()
             }
-            if (e == Lifecycle.Event.ON_STOP && !vm.inPip) { if (bg) videoOff(true) else player.pause() }
+            if (e == Lifecycle.Event.ON_STOP) {
+                // ON_STOP saat masih di PiP = jendela PiP ditutup (X): berhenti seperti YouTube, jangan lanjut berbunyi di latar.
+                // Mengetuk jendela PiP (membuka kembali) tidak memicu ON_STOP, jadi pemutaran lanjut normal.
+                if (vm.inPip || act?.isInPictureInPictureMode == true) player.pause()
+                else if (bg) videoOff(true) else player.pause()
+            }
             if (e == Lifecycle.Event.ON_START) videoOff(audioOnlyNow)
         }
         owner.lifecycle.addObserver(o)
@@ -746,8 +751,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val hasNext = (if (a.available.isNotEmpty()) a.available.lastOrNull() else a.eps)?.let { r.ep < it } ?: (r.ep < a.eps)
 
     // PiP ala YouTube: parameter diperbarui tiap rasio/status putar/posisi video berubah; auto-masuk PiP hanya saat video diputar.
-    LaunchedEffect(wantPlay, vidRatio, pipRect, hasPrev, hasNext) {
-        val p = pipParams(ctx, wantPlay, wantPlay, vidRatio, pipRect, hasPrev, hasNext)
+    val autoPip = vm.s.settings.autoPip
+    LaunchedEffect(wantPlay, vidRatio, pipRect, hasPrev, hasNext, autoPip) {
+        // Auto-enter hanya saat video benar-benar diputar dan pengaturan Picture-in-picture aktif.
+        val p = pipParams(ctx, wantPlay && autoPip, wantPlay, vidRatio, pipRect, hasPrev, hasNext)
         vm.pipParams = p
         act?.setPictureInPictureParams(p)
     }
