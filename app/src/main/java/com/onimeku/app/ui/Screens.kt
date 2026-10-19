@@ -420,16 +420,25 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
     val items = (pool.filter { !it.banner.isNullOrBlank() } + pool.filter { it.banner.isNullOrBlank() })
         .take(5).ifEmpty { Catalog.all.take(1) }
     if (items.isEmpty()) return
-    val pager = rememberPagerState { items.size }
+    // Pager "tak terbatas": halaman virtual besar, isi diambil dengan modulo. Dengan begitu slide otomatis
+    // SELALU bergerak maju satu halaman (dulu dari slide ke-5 ke ke-1 menggulung mundur melewati semua halaman
+    // sehingga tampak loncat/berantakan).
+    val n = items.size
+    val pager = rememberPagerState(initialPage = HeroStart - HeroStart % n) { if (n > 1) HeroPages else 1 }
+    val reduceMotion = LocalReduceMotion.current
     // Carousel berhenti berputar selama jari menyentuh hero (tahan untuk membaca), lanjut setelah dilepas.
     var held by remember { mutableStateOf(false) }
-    // Dikunci pada currentPage: geser manual otomatis mengulang hitung mundur 5,5 dtk,
-    // persis sama dengan animasi isi titik (HeroDot) yang juga mulai ulang tiap halaman berganti.
-    LaunchedEffect(pager.currentPage, items.size) {
-        if (items.size > 1) {
+    // Dikunci pada settledPage (BUKAN currentPage): currentPage berganti di tengah animasi, sehingga efek lama
+    // dibatalkan di tengah jalan dan hero berhenti di posisi setengah-geser (penyebab slide tidak presisi).
+    // settledPage hanya berganti setelah slide benar-benar berhenti, jadi animasi selalu tuntas dan menempel rapi.
+    LaunchedEffect(pager.settledPage, n) {
+        if (n > 1) {
             delay(5500)
             while (pager.isScrollInProgress || held) delay(100)
-            pager.animateScrollToPage((pager.currentPage + 1) % items.size)
+            pager.animateScrollToPage(
+                pager.settledPage + 1,
+                animationSpec = tween(if (reduceMotion) 0 else 850, easing = androidx.compose.animation.core.CubicBezierEasing(0.33f, 0f, 0.15f, 1f)),
+            )
         }
     }
     // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
@@ -452,22 +461,42 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
         },
     ) {
         // Stretch saat ditarik HANYA pada gambar (di HeroPage); teks & tombol tidak ikut membesar/terpotong.
-        HorizontalPager(pager, Modifier.fillMaxSize()) { i ->
-            HeroPage(vm, items[i.coerceIn(0, items.lastIndex)], pull) { (pager.currentPage - i) + pager.currentPageOffsetFraction }
+        // beyondViewportPageCount = 1: halaman tetangga sudah dimuat (gambar & warna) sebelum digeser masuk.
+        HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
+            HeroPage(vm, items[i % n], pull) { (pager.currentPage - i) + pager.currentPageOffsetFraction }
         }
         // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
         Box(Modifier.fillMaxWidth().height(120.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x8C000000), Color(0x33000000), Color.Transparent))) })
         if (items.size > 1) {
             // Titik indikator: tepat di atas tombol "+", rata tengah dengannya (kotak selebar tombol; baris titik boleh lebih lebar, dipusatkan).
-            Box(Modifier.align(Alignment.BottomEnd).graphicsLayer { translationY = -pull() }.padding(end = HeroPad, bottom = HeroBottomPad + HeroActionW + HeroDotsGap).width(HeroActionW)) {
+            // Ikut turun bersama hero (tidak ditahan) agar tetap tepat di atas tombol "+".
+            Box(Modifier.align(Alignment.BottomEnd).padding(end = HeroPad, bottom = HeroBottomPad + HeroActionW + HeroDotsGap).width(HeroActionW)) {
                 Row(Modifier.wrapContentWidth(Alignment.CenterHorizontally, unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items.indices.forEach { i ->
-                        HeroDot(selected = pager.currentPage == i, page = pager.currentPage)
+                        HeroDot(selected = pager.currentPage % n == i, page = pager.settledPage)
                     }
                 }
             }
         }
     }
+}
+
+private const val HeroPages = 100_000
+private const val HeroStart = HeroPages / 2
+
+/** Zoom lambat (Ken Burns) sebagai State, dibaca di blok graphicsLayer sehingga tidak merekomposisi tiap frame. */
+@Composable
+private fun rememberHeroKen(): androidx.compose.runtime.State<Float> {
+    if (LocalReduceMotion.current) return remember { mutableFloatStateOf(1f) }
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "heroKen")
+    return t.animateFloat(
+        1f, 1.08f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            tween(9000, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "heroKenScale",
+    )
 }
 
 @Composable
@@ -478,6 +507,8 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
     // Warna dominan poster menyepuh gradasi, tombol Play, dan label HD (merah tema bila belum terhitung / poster abu-abu).
     val tint = rememberPosterColor(a.poster)
     val accent by androidx.compose.animation.animateColorAsState(tint ?: Red, tween(500), label = "heroAccent")
+    val ken = rememberHeroKen()
+    val pageW = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     // clipToBounds PER HALAMAN: gambar diperbesar (overscan + Ken Burns) dan digeser (parallax); tanpa klip ia bocor
     // melewati tepi halaman dan menimpa halaman tetangga saat slide, tampak sebagai strip/sambungan yang tidak rapi.
     Box(Modifier.fillMaxSize().clipToBounds().artBackground(a).clickable { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
@@ -491,12 +522,13 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
                 // Gambar sedikit diperbesar (HeroOverscan) sebagai ruang parallax, jadi tepinya tidak
                 // pernah membuka celah gelap saat digeser. Saat tarik-segar hero memanjang (layout),
                 // gambar otomatis mengisi tinggi baru lewat ContentScale.Crop.
-                val z = HeroOverscan
+                // Ken Burns digabung ke satu layer (dulu dua graphicsLayer bersarang dengan titik pusat berbeda -> bergetar).
+                val z = HeroOverscan * ken.value
                 scaleX = z; scaleY = z
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
                 translationY = vm.homeScrollPx().coerceAtMost(4000) * 0.35f
                 translationX = -pageOffset() * size.width * HeroParallax
-            }.kenBurns(),
+            },
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             alignment = Alignment.TopCenter,
         )
@@ -515,11 +547,12 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             LocalDensity provides androidx.compose.ui.unit.Density(dens.density, fontScale = dens.fontScale.coerceAtMost(1.15f)),
         ) {
         Column(Modifier.align(Alignment.BottomStart).graphicsLayer {
-            // Teks & tombol menyatu dengan halaman saat slide (hanya sedikit memudar, bukan hilang sendiri).
-            alpha = (1f - kotlin.math.abs(pageOffset()) * 0.5f).coerceIn(0f, 1f)
-            // Hero memanjang ke bawah saat ditarik; teks/tombol ditahan di posisi asal sehingga ruang baru
-            // terbuka tepat di bawah tombol Play dan konten di bawahnya turun dari titik itu.
-            translationY = -pull()
+            // Saat slide: teks tertinggal sedikit di belakang gambar (kedalaman) dan memudar lembut, lalu muncul
+            // kembali di halaman berikutnya. Tidak ada translationY: saat hero memanjang (tarik-segar) rating,
+            // judul, deskripsi, Play dan "+" ikut turun bersama tombol "Surprise me" di bawahnya.
+            val o = pageOffset()
+            alpha = (1f - kotlin.math.abs(o) * 1.6f).coerceIn(0f, 1f)
+            translationX = -o * pageW * 0.3f
         }.widthIn(max = 600.dp).padding(start = HeroPad, end = HeroPad, bottom = HeroBottomPad)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 a.rating?.let { ScorePill(it) }

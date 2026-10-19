@@ -1,3 +1,10 @@
+# v14.1 — Hero carousel dirapikan (19 Okt 2026)
+**Belum dikompilasi** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu.
+- Slide otomatis presisi: efek auto-slide dikunci ke `settledPage` (dulu `currentPage` membatalkan animasi di tengah jalan sehingga hero berhenti setengah-geser).
+- Pager tak terbatas (modulo): slide terakhir -> pertama bergerak maju, tidak lagi menggulung mundur melewati semua halaman.
+- Transisi mulus: tween 850 ms kurva halus, halaman tetangga dimuat lebih dulu (`beyondViewportPageCount = 1`), Ken Burns + overscan digabung jadi satu graphicsLayer (tidak bergetar), teks tertinggal 30% di belakang gambar sambil memudar.
+- Tarik-segar: rating, judul, deskripsi, Play, "+" dan titik indikator kini ikut turun bersama "Surprise me" (tidak lagi ditahan di posisi lama sehingga tidak ada celah kosong).
+
 # v14 — Personalisasi, aksi cepat, tablet (19 Okt 2026)
 **Belum dikompilasi dan belum dijalankan** (tanpa Android SDK). Jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` dulu.
 
