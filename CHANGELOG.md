@@ -1,3 +1,16 @@
+## v1.0.0-debug.49 (belum dirilis): Perapian Detail & Pemutar
+- Detail: parallax gambar hero dibatasi 7% (di bawah overhang skala 1,15) sehingga tidak ada celah di tepi atas saat digulir; font scale sistem dibatasi 1,15x di hero; "0 eps" tidak lagi tampil bila jumlah episode belum diketahui.
+- Detail: teks Newest/Oldest, More like this, No episodes, Saved offline, Download episode kini lewat I18n; waktu komentar ditampilkan dalam zona waktu perangkat (bukan string UTC mentah).
+- Pemutar (layar penuh): bar atas, bar bawah, dan tombol kunci diberi padding displayCutout horizontal + jarak bawah, agar tidak tertutup notch/sudut membulat pada mode edge-to-edge.
+- Pemutar: HUD Brightness/Volume, "Can't play this video", "Retry", "Stream unavailable" dilokalkan via I18n.
+
+## v1.0.0-debug.48 (belum dirilis): Perapian hero Beranda
+- Hero: efek tarik-untuk-segar (stretch) kini hanya pada gambar; judul, pill, tombol Play dan "+" tidak lagi ikut membesar/terpotong atau menimpa titik indikator.
+- Hero: gambar diberi overscan 20% + parallax 10% sehingga tidak ada pita gelap saat digeser; `translationX` ganda pada teks dihapus (teks halaman tidak lagi bertumpuk).
+- Hero: font scale sistem dibatasi 1,15x di area hero; auto-slide kini dikunci ke `currentPage` agar sinkron dengan isi titik indikator dan reset saat geser manual.
+- Lanjut Menonton: kartu lebih lebar (58% layar) supaya judul tidak terpotong. "Karena kamu menonton": nama anime pindah ke subjudul (SectionHead.subtitle).
+- Token warna/jarak hero dipindah ke Theme.kt (HeroMeta, HeroSynopsis, GlassFill, GlassStroke, HeroPad, HeroBottomPad, HeroOverscan, HeroParallax).
+
 ## v1.0.0-debug.47 (belum dirilis): Pemutar ala YouTube (lanjutan)
 - Bilah seek baru (YtSeekBar): tipis, segmen buffer, progres merah, bulatan penunjuk membesar saat digeser, ketuk = lompat.
 - Waktu `0:42 / 24:10` + tombol layar penuh dipindah ke kiri/kanan bawah; tombol tengah jadi ikon putih polos (tanpa lingkaran merah).

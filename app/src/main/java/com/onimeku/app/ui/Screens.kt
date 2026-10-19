@@ -65,12 +65,12 @@ private val SectionGap = 26.dp
 
 /** Satu baris poster bergulir horizontal dengan judul bagian + "See all". */
 @Composable
-private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: String?, ranked: Boolean = false, delayMs: Int = 0) {
+private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: String?, ranked: Boolean = false, delayMs: Int = 0, subtitle: String? = null) {
     val items = ids.mapNotNull { Catalog.byId[it] }
     if (items.isEmpty()) return
     Column(if (delayMs >= 0) Modifier.fadeSlideIn(delayMs) else Modifier) {
         Spacer(Modifier.height(SectionGap))
-        SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
+        SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } }, subtitle = subtitle)
         Rail {
             itemsIndexed(items, key = { _, a -> a.id }) { i, a ->
                 PosterCard(a, railW, rank = if (ranked) i + 1 else null, sharedKey = "row:$title:${a.id}", index = i) { vm.go(Route.Detail(a.id)) }
@@ -192,10 +192,11 @@ private fun HomeContent(vm: AppVM) {
                 Column(Modifier.fadeSlideIn(0)) {
                     Spacer(Modifier.height(SectionGap))
                     SectionHead(I18n.t("sec_continue", "Continue Watching"))
+                    val contW = (LocalConfiguration.current.screenWidthDp * 0.58f).coerceIn(210f, 300f).dp
                     Rail {
                         items(contItems, key = { it.a.id }) { c ->
                             Poster(
-                                c.a, railW, ep = true,
+                                c.a, contW, ep = true,
                                 meta = c.a.title to ("Episode ${c.ep}" + if (c.pos > 0) " · ${fmt(c.pos)}" else ""),
                                 progress = when {
                                     c.pos > 0 && c.dur > 0 -> (c.pos.toFloat() / c.dur).coerceIn(0.03f, 0.97f)
@@ -209,7 +210,7 @@ private fun HomeContent(vm: AppVM) {
             }
         }
         if (base != null && similar.isNotEmpty()) {
-            item(key = "because", contentType = "rail") { PosterRow("${I18n.t("sec_because", "Because you watched")} ${base.title}", similar, vm, seeAll = null, delayMs = 0) }
+            item(key = "because", contentType = "rail") { PosterRow(I18n.t("sec_because", "Because you watched"), similar, vm, seeAll = null, delayMs = 0, subtitle = base.title) }
         }
         item(key = "top", contentType = "rail") { PosterRow(I18n.t("sec_top", "Top Hits Anime"), Catalog.top, vm, seeAll = "top", ranked = true, delayMs = 0) }
         if (fresh.isNotEmpty()) {
@@ -299,21 +300,20 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
         .take(5).ifEmpty { Catalog.all.take(1) }
     if (items.isEmpty()) return
     val pager = rememberPagerState { items.size }
-    LaunchedEffect(pager, items.size) {
-        if (items.size > 1) while (true) {
+    // Dikunci pada currentPage: geser manual otomatis mengulang hitung mundur 5,5 dtk,
+    // persis sama dengan animasi isi titik (HeroDot) yang juga mulai ulang tiap halaman berganti.
+    LaunchedEffect(pager.currentPage, items.size) {
+        if (items.size > 1) {
             delay(5500)
-            if (!pager.isScrollInProgress) pager.animateScrollToPage((pager.currentPage + 1) % items.size)
+            while (pager.isScrollInProgress) delay(100)
+            pager.animateScrollToPage((pager.currentPage + 1) % items.size)
         }
     }
     // clipToBounds: gambar parallax digeser ke bawah saat digulir; tanpa klip ia bocor ke bagian di bawah hero.
     Box(Modifier.fillMaxWidth().height(heroH).clipToBounds().background(Bg)) {
-        // Saat ditarik, poster membesar dari tepi atas (stretch) — selalu penuh, tidak pernah ada celah hitam.
-        Box(Modifier.fillMaxSize().graphicsLayer {
-            val s = 1f + (pull() / size.height).coerceIn(0f, 0.3f) * 0.6f
-            scaleX = s; scaleY = s
-            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
-        }) {
-            HorizontalPager(pager, Modifier.fillMaxSize()) { i -> HeroPage(vm, items[i.coerceIn(0, items.lastIndex)]) { (pager.currentPage - i) + pager.currentPageOffsetFraction } }
+        // Stretch saat ditarik HANYA pada gambar (di HeroPage); teks & tombol tidak ikut membesar/terpotong.
+        HorizontalPager(pager, Modifier.fillMaxSize()) { i ->
+            HeroPage(vm, items[i.coerceIn(0, items.lastIndex)], pull) { (pager.currentPage - i) + pager.currentPageOffsetFraction }
         }
         // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
         Box(Modifier.fillMaxWidth().height(90.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x40000000), Color.Transparent))) })
@@ -328,7 +328,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
 }
 
 @Composable
-private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
+private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> Float) {
     val on = a.id in vm.p.myList
     val firstEp = a.available.firstOrNull() ?: 1
     Box(Modifier.fillMaxSize().artBackground(a).clickable { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
@@ -338,8 +338,14 @@ private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
             model = req, contentDescription = a.title,
             // Parallax: gambar bergeser 35% dari jarak scroll.
             modifier = Modifier.fillMaxSize().sharedArt("hero:${a.id}").graphicsLayer {
+                // Gambar sedikit diperbesar (HeroOverscan) sebagai ruang parallax, jadi tepinya tidak
+                // pernah membuka celah gelap saat digeser. Stretch tarik-segar juga hanya di sini.
+                val stretch = 1f + (pull() / size.height).coerceIn(0f, 0.3f) * 0.6f
+                val z = HeroOverscan * stretch
+                scaleX = z; scaleY = z
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
                 translationY = vm.homeScrollPx().coerceAtMost(4000) * 0.35f
-                translationX = -pageOffset() * size.width * 0.3f // parallax: gambar lebih lambat dari halaman
+                translationX = -pageOffset() * size.width * HeroParallax
             }.kenBurns(),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             alignment = Alignment.TopCenter,
@@ -347,11 +353,15 @@ private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
         Box(Modifier.fillMaxSize().drawBehind {
             drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.26f to Color.Transparent, 0.52f to Color(0x3314161F), 0.8f to Color(0xE614161F), 1f to Bg))
         })
+        val dens = LocalDensity.current
+        // Batasi font scale sistem di hero agar kolom teks tidak melebihi tinggi hero.
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalDensity provides androidx.compose.ui.unit.Density(dens.density, fontScale = dens.fontScale.coerceAtMost(1.15f)),
+        ) {
         Column(Modifier.align(Alignment.BottomStart).graphicsLayer {
-            val o = pageOffset()
-            alpha = (1f - kotlin.math.abs(o) * 1.6f).coerceIn(0f, 1f) // teks memudar saat geser
-            translationX = o * size.width * 0.2f
-        }.padding(start = 20.dp, end = 20.dp, bottom = 44.dp)) {
+            // Halaman sudah digeser pager; di sini cukup memudar (tanpa translationX tambahan yang membuat teks bertumpuk).
+            alpha = (1f - kotlin.math.abs(pageOffset()) * 1.6f).coerceIn(0f, 1f)
+        }.padding(start = HeroPad, end = HeroPad, bottom = HeroBottomPad)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 a.rating?.let { ScorePill(it) }
                 if (a.hd) Tag("HD", Red, Color.White)
@@ -364,18 +374,19 @@ private fun HeroPage(vm: AppVM, a: Anime, pageOffset: () -> Float) {
                 a.eps.takeIf { it > 0 }?.let { "$it ${if (it == 1) "episode" else "episodes"}" },
                 a.genres.take(2).joinToString(", ").ifBlank { null },
             ).joinToString("  ·  ")
-            Text(meta, Modifier.padding(top = 6.dp), fontSize = 13.sp, color = Color(0xFFD5D8E3), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(meta, Modifier.padding(top = 6.dp), fontSize = 13.sp, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (a.synopsis.isNotBlank()) Text(a.synopsis, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 19.sp,
-                color = Color(0xFFB9BDCB), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                color = HeroSynopsis, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlayButton(I18n.t("play", "Play"), null, Modifier.weight(1f)) { vm.go(Route.Player(a.id, firstEp)) }
                 Box(
                     Modifier.size(56.dp).pressable { vm.toggleML(a.id) }.clip(RoundedCornerShape(18.dp))
-                        .background(if (on) Color.White else Color(0x59080910))
-                        .border(1.dp, if (on) Color.White else Color(0x66FFFFFF), RoundedCornerShape(18.dp)).sparkBurst(on),
+                        .background(if (on) Color.White else GlassFill)
+                        .border(1.dp, if (on) Color.White else GlassStroke, RoundedCornerShape(18.dp)).sparkBurst(on),
                     contentAlignment = Alignment.Center,
                 ) { MorphIcon(on, Icons.Filled.Check, Icons.Filled.Add, if (on) "Added" else "My List", 26.dp, if (on) Bg else Color.White) }
             }
+        }
         }
     }
 }
@@ -733,12 +744,18 @@ fun DetailScreen(vm: AppVM, id: String) {
                 Box(Modifier.fillMaxWidth().height(heroH).clipToBounds().artBackground(a)) {
                     RealImage(a, Modifier.fillMaxSize().sharedArt(SharedArt.key?.takeIf { it.endsWith(":${a.id}") }).graphicsLayer {
                         val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
-                        translationY = minOf(off * 0.45f, size.height * 0.12f)
+                        // Geser maksimum 7% < overhang skala 1,15 (7,5%): tepi atas gambar tidak pernah membuka celah saat digulir.
+                        translationY = minOf(off * 0.45f, size.height * 0.07f)
                         scaleX = 1.15f; scaleY = 1.15f
                     })
                     // scrim atas (ikon terbaca) + peleburan ke latar di bawah
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
                         0f to Color(0x99080910), 0.28f to Color.Transparent, 0.5f to Color(0x2214161F), 0.82f to Color(0xE614161F), 1f to Bg)))
+                    // Batasi font scale sistem di hero Detail (tinggi hero tetap) agar judul 3 baris tidak keluar dari layar.
+                    val dens0 = LocalDensity.current
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        LocalDensity provides androidx.compose.ui.unit.Density(dens0.density, fontScale = dens0.fontScale.coerceAtMost(1.15f)),
+                    ) {
                     Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().graphicsLayer {
                         val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else heroPx
                         val f = (off / (heroPx * 0.6f)).coerceIn(0f, 1f)
@@ -753,8 +770,9 @@ fun DetailScreen(vm: AppVM, id: String) {
                         }
                         Text(a.title, Modifier.padding(top = 10.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold,
                             lineHeight = 33.sp, letterSpacing = (-0.5).sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), "${a.eps} eps", a.genres.take(2).joinToString(", ").ifBlank { null }).joinToString("  ·  "),
+                        Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.eps.takeIf { it > 0 }?.let { "$it eps" }, a.genres.take(2).joinToString(", ").ifBlank { null }).joinToString("  ·  "),
                             Modifier.padding(top = 6.dp), fontSize = 13.sp, color = InkSoft, maxLines = 1)
+                    }
                     }
                 }
             }
@@ -811,11 +829,11 @@ fun DetailScreen(vm: AppVM, id: String) {
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Icon(Icons.Filled.SwapVert, null, Modifier.size(15.dp), tint = InkSoft)
-                        Text(if (newestFirst) "Newest" else "Oldest", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
+                        Text(if (newestFirst) I18n.t("ep_newest", "Newest") else I18n.t("ep_oldest", "Oldest"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                if (epNums.isEmpty()) Text("No episodes available yet.", Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = 14.sp)
+                if (epNums.isEmpty()) Text(I18n.t("no_eps", "No episodes available yet."), Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = 14.sp)
             }
             itemsIndexed(epNums, key = { _, n -> "ep$n" }) { idx, n ->
                 val k = "$id:$n"
@@ -828,8 +846,8 @@ fun DetailScreen(vm: AppVM, id: String) {
                 ) {
                     when {
                         pct != null -> DownloadRing(pct) { vm.download(id, n) }
-                        dl -> IconChip(Icons.Filled.Check, "Saved offline", on = true) { vm.download(id, n) }
-                        else -> IconChip(Icons.Outlined.Download, "Download episode $n") { vm.download(id, n) }
+                        dl -> IconChip(Icons.Filled.Check, I18n.t("saved_offline", "Saved offline"), on = true) { vm.download(id, n) }
+                        else -> IconChip(Icons.Outlined.Download, "${I18n.t("download_ep", "Download episode")} $n") { vm.download(id, n) }
                     }
                 }
                 }
@@ -837,7 +855,7 @@ fun DetailScreen(vm: AppVM, id: String) {
             if (sim.isNotEmpty()) {
                 item(key = "similar") {
                     Spacer(Modifier.height(22.dp))
-                    SectionTitle("More like this")
+                    SectionTitle(I18n.t("more_like", "More like this"))
                     Spacer(Modifier.height(12.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = Gutter)) {
                         items(sim, key = { it.id }) { x -> PosterCard(x, railW) { vm.go(Route.Detail(x.id)) } }
@@ -891,7 +909,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(c.author.ifBlank { "User" }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (mine) RedText else Color.White)
                                 Spacer(Modifier.weight(1f))
-                                Text(if (c.created_at.length >= 16) c.created_at.substring(0, 10) + " " + c.created_at.substring(11, 16) else "", fontSize = 11.sp, color = NavOff)
+                                Text(commentTime(c.created_at), fontSize = 11.sp, color = NavOff)
                             }
                             Text(c.body, fontSize = 14.sp, color = InkSoft, lineHeight = 20.sp, modifier = Modifier.padding(top = 3.dp))
                             if (mine) Text(I18n.t("comment_delete", "Delete"), fontSize = 12.sp, color = NavOff,
@@ -912,6 +930,12 @@ fun DetailScreen(vm: AppVM, id: String) {
         }
     }
 }
+
+/** Waktu komentar dari server (UTC ISO) ditampilkan dalam zona waktu perangkat, mis. "19 Okt 14:05". */
+private fun commentTime(iso: String): String = runCatching {
+    java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.getDefault()))
+}.getOrElse { if (iso.length >= 16) iso.substring(0, 10) + " " + iso.substring(11, 16) else "" }
 
 @Composable
 fun SeeAllScreen(vm: AppVM, key: String) {

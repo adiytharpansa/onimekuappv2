@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 val Bg = Color(0xFF14161F)
 val Bg2 = Color(0xFF1B1E2A)
@@ -22,6 +23,16 @@ val NavOff = Color(0xFF9EA4B8)
 // Emas untuk skor/rating (satu-satunya aksen hangat; jangan dipakai untuk tombol).
 val Gold = Color(0xFFFFC857)
 val Solid = Color(0xFF2B2E3B)
+
+// Token hero Beranda (sebelumnya angka tersebar di Screens.kt).
+val HeroMeta = Color(0xFFD5D8E3)
+val HeroSynopsis = Color(0xFFB9BDCB)
+val GlassFill = Color(0x59080910)
+val GlassStroke = Color(0x66FFFFFF)
+val HeroPad = 20.dp
+val HeroBottomPad = 48.dp   // ruang untuk titik indikator di bawah tombol
+const val HeroOverscan = 1.2f   // gambar diperbesar 20% sebagai ruang parallax
+const val HeroParallax = 0.1f   // geser gambar = 10% lebar halaman (<= (HeroOverscan-1)/2)
 
 @Composable
 fun OnimekuTheme(content: @Composable () -> Unit) {

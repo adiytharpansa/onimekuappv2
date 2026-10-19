@@ -281,11 +281,15 @@ fun Rail(content: LazyListScope.() -> Unit) {
 }
 
 @Composable
-fun SectionHead(title: String, onAll: (() -> Unit)? = null) {
+fun SectionHead(title: String, onAll: (() -> Unit)? = null, subtitle: String? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.padding(end = 10.dp).width(4.dp).height(20.dp).growIn().clip(CircleShape).background(Red))
-        Text(title, Modifier.weight(1f).padding(end = 12.dp), fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
-            letterSpacing = (-0.2).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.padding(end = 10.dp).width(4.dp).height(if (subtitle != null) 38.dp else 20.dp).growIn().clip(CircleShape).background(Red))
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.2).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, Modifier.padding(top = 2.dp), fontSize = 14.sp, color = InkSoft,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         if (onAll != null) Row(
             Modifier.clip(CircleShape).clickable(onClick = onAll).padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,

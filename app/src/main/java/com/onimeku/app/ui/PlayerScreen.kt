@@ -24,6 +24,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Fullscreen
@@ -784,13 +788,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         if (left) {
                             br = (br + d).coerceIn(0.2f, 1f)
                             act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = br } }
-                            hud = "Brightness ${(br * 100).roundToInt()}%"
+                            hud = "${I18n.t("brightness", "Brightness")} ${(br * 100).roundToInt()}%"
                         } else {
                             val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                             val cur = audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max.toFloat()
                             val v = (cur + d).coerceIn(0f, 1f)
                             audio.setStreamVolume(AudioManager.STREAM_MUSIC, (v * max).roundToInt(), 0)
-                            hud = "Volume ${(v * 100).roundToInt()}%"
+                            hud = "${I18n.t("volume", "Volume")} ${(v * 100).roundToInt()}%"
                         }
                         hudTick++
                     }
@@ -825,8 +829,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Chip(I18n.t("play_now", "Play now")) { vm.replaceTop(Route.Player(r.id, nextEp)) }
                 }
             }
+            // Layar penuh landscape: kontrol dijauhkan dari notch/kamera & sudut membulat (edge-to-edge membuatnya tertutup).
+            val cutPad = if (full) Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)) else Modifier
             if (locked && showUi) {
-                Box(Modifier.align(Alignment.CenterStart).padding(start = 16.dp).size(44.dp).clip(CircleShape).background(Color(0x99000000))
+                Box(Modifier.align(Alignment.CenterStart).then(cutPad).padding(start = 16.dp).size(44.dp).clip(CircleShape).background(Color(0x99000000))
                     .clickable { locked = false; uiTick++ }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.LockOpen, "Unlock controls")
                 }
@@ -855,7 +861,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0xB3080910), 0.32f to Color(0x33080910), 0.6f to Color(0x33080910), 1f to Color(0xD9080910))))
 
                 // ---- Bar atas: kembali · judul · CC · roda gigi ----
-                Row(Modifier.align(Alignment.TopStart).graphicsLayer { translationY = -(1f - uiA) * 28.dp.toPx() }.fillMaxWidth().padding(start = 6.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.align(Alignment.TopStart).graphicsLayer { translationY = -(1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = 6.dp, end = 8.dp, top = if (full) 12.dp else 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(42.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                     }
@@ -885,12 +891,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (failed) {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(30.dp), tint = RedText)
-                        Text("Can’t play this video", Modifier.padding(top = 6.dp), fontWeight = FontWeight.SemiBold)
+                        Text(I18n.t("cant_play", "Can’t play this video"), Modifier.padding(top = 6.dp), fontWeight = FontWeight.SemiBold)
                         if (errMsg != null) {
                             Text(errMsg!!, Modifier.padding(top = 2.dp, start = 32.dp, end = 32.dp), fontSize = 10.sp, color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
                         Spacer(Modifier.height(10.dp))
-                        Chip("Retry", icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
+                        Chip(I18n.t("retry", "Retry"), icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
                     }
                 } else {
                     var rotB by remember { mutableStateOf(0f) }
@@ -917,7 +923,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
 
                 // ---- Bawah: waktu + layar penuh (kanan), bilah seek tipis dengan buffer ----
-                Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().padding(horizontal = if (full) 28.dp else 14.dp)) {
+                Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = if (full) 28.dp else 14.dp, end = if (full) 28.dp else 14.dp, bottom = if (full) 10.dp else 0.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(fmt(pos.toInt()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                         Text(" / ${fmt(dur)}", fontSize = 12.5.sp, color = Color(0xB3FFFFFF))
@@ -1065,7 +1071,7 @@ private fun PlayerStatus(vm: AppVM, a: com.onimeku.app.data.Anime, r: Route.Play
                         Text(I18n.t("loading_stream", "Loading stream…"), Modifier.padding(top = 12.dp), fontSize = 13.sp, color = InkSoft)
                     } else {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(34.dp), tint = RedText)
-                        Text("Stream unavailable", Modifier.padding(top = 8.dp), fontWeight = FontWeight.SemiBold)
+                        Text(I18n.t("stream_unavail", "Stream unavailable"), Modifier.padding(top = 8.dp), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
