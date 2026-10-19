@@ -205,6 +205,8 @@ fun Modifier.sharedArt(key: String?): Modifier {
 object PlayerOrigin {
     var origin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.4f)
     fun set(x: Float, y: Float) { origin = androidx.compose.ui.graphics.TransformOrigin(x.coerceIn(0f, 1f), y.coerceIn(0f, 1f)) }
+    /** Kembali ke titik bawaan (dipanggil setiap rute meninggalkan pemutar, agar bukaan berikutnya dari widget/notifikasi tidak tumbuh dari titik sentuhan lama yang acak). */
+    fun reset() { origin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.4f) }
 }
 
 /** Animasi item daftar (LazyRow/LazyColumn): memudar saat masuk/keluar, item lain menutup celah dengan pegas. Mati bila reduce-motion. */

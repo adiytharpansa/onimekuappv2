@@ -201,8 +201,14 @@ fun App(vm: AppVM) {
     BackHandler(enabled = vm.stack.size <= 1 && !vm.welcomeOpen && !vm.inPip) {
         if (vm.route != Route.Home) vm.setTab(Route.Home) else confirmExit = true
     }
-    // Hero Beranda dijeda selama dialog terbuka (tidak berganti poster di balik scrim).
-    LaunchedEffect(confirmExit) { vm.overlayOpen = confirmExit }
+    // Hero Beranda dijeda selama dialog/lembar terbuka (tidak berganti poster di balik scrim):
+    // dialog keluar DAN QuickMenu tekan-lama sama-sama menjedanya.
+    LaunchedEffect(confirmExit, vm.quick) { vm.overlayOpen = confirmExit || vm.quick != null }
+    // Titik asal transisi pemutar diatur ulang setiap kali rute bukan pemutar,
+    // agar pemutar yang dibuka dari widget/notifikasi tumbuh dari titik bawaan,
+    // bukan dari sisa sentuhan lama. Ketukan yang membuka pemutar selalu tercatat
+    // sesudah ini (saat tombol/poster diketuk), jadi titik yang benar tetap menang.
+    LaunchedEffect(vm.route) { if (vm.route !is Route.Player) PlayerOrigin.reset() }
     if (confirmExit) ExitDialog(onCancel = { confirmExit = false }, onExit = { confirmExit = false; hostActivity?.finish() })
     // Hormati "Hapus animasi" / skala animasi 0 di Android.
     val ctxMotion = androidx.compose.ui.platform.LocalContext.current
