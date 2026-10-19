@@ -190,11 +190,42 @@ object ApiClient {
     }
 
     /**
-     * Hulu tidak menyediakan endpoint jadwal tayang. Kalender aplikasi
-     * otomatis jatuh ke turunan hari/jam dari katalog (jalur cadangan
-     * yang memang sudah ada di AppVM).
+     * Jadwal tayang ASLI dari API (/api/schedule, 19 Okt 2026):
+     * episode berikutnya per judul yang sedang tayang — sumber
+     * kalender Shikimori (eksak) + pola terpelajari server dari
+     * waktu episode benar-benar masuk katalog. Bila gagal/kosong,
+     * Kalender memakai cadangan turunan katalog seperti sebelumnya.
      */
-    suspend fun fetchSchedule(): List<ApiScheduleItem> = emptyList()
+    suspend fun fetchSchedule(): List<ApiScheduleItem> {
+        val r = json.decodeFromString<ScheduleResp>(getTextRetry("$BASE/api/schedule"))
+        return r.data.filter { it.id.isNotBlank() && it.airingAt > 0 }
+    }
+
+    /** Jadwal terakhir yang berhasil dimuat, disimpan di disk oleh aplikasi. */
+    fun loadCachedSchedule(file: java.io.File): List<ApiScheduleItem> {
+        return try {
+            if (!file.exists()) return emptyList()
+            json.decodeFromString(
+                kotlinx.serialization.builtins.ListSerializer(ApiScheduleItem.serializer()),
+                file.readText(),
+            ).filter { it.id.isNotBlank() && it.airingAt > 0 }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCachedSchedule(file: java.io.File, items: List<ApiScheduleItem>) {
+        try {
+            file.writeText(
+                json.encodeToString(
+                    kotlinx.serialization.builtins.ListSerializer(ApiScheduleItem.serializer()),
+                    items,
+                )
+            )
+        } catch (e: Exception) {
+            // cache disk bersifat cadangan; gagal menulis tidak fatal
+        }
+    }
 
     suspend fun fetchDetail(id: String): Anime? {
         val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime?id=${enc(id)}"))
@@ -303,6 +334,12 @@ data class ApiScheduleItem(
     val id: String = "",
     val ep: Int = 0,
     val airingAt: Long = 0,
+)
+
+@Serializable
+data class ScheduleResp(
+    val ok: Boolean = false,
+    val data: List<ApiScheduleItem> = emptyList(),
 )
 
 @Serializable

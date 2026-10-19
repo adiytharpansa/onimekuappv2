@@ -593,19 +593,25 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
 fun CalendarScreen(vm: AppVM) {
     val ensure = LocalEnsureNotif.current
     val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
-    // Kalender SELALU berisi (perintah user 19 Okt 2026): API tidak
-    // menyediakan jadwal tayang per hari, jadi isi halaman diturunkan
-    // dari katalog realtime — judul yang diperbarui pada tanggal
-    // terpilih, lalu daftar Sedang Tayang terbaru yang selalu tampil
-    // di bawahnya agar halaman tidak pernah kosong.
+    // Kalender memakai JADWAL ASLI dari API (/api/schedule) bila sudah
+    // termuat di vm.schedule — hanya judul yang episode berikutnya
+    // benar-benar terjadwal pada tanggal terpilih. Turunan katalog di
+    // bawah hanya cadangan selama jadwal belum termuat (mulai dingin
+    // tanpa cache / API tak terjangkau).
     val selDate = days[vm.calDay]
-    val dayList = remember(selDate, Catalog.all) {
-        Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { a ->
-            runCatching {
+    // Tanggal pembaruan per judul dihitung SEKALI per perubahan katalog,
+    // bukan di-parse ulang dari teks untuk ~900 judul setiap ganti hari
+    // (itu yang membuat pindah hari terasa berat di perangkat kelas bawah).
+    val dateById = remember(Catalog.all) {
+        Catalog.all.associate { a ->
+            a.id to runCatching {
                 java.time.OffsetDateTime.parse(a.updatedAt)
-                    .atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() == selDate
-            }.getOrDefault(false)
+                    .atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate()
+            }.getOrNull()
         }
+    }
+    val dayList = remember(selDate, Catalog.all) {
+        Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { a -> dateById[a.id] == selDate }
     }
     val airingList = remember(Catalog.all) { Catalog.airingFresh.mapNotNull { Catalog.byId[it] }.take(40) }
     // Jadwal ASLI dari API bila sudah termuat: hanya judul dengan episode

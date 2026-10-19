@@ -230,8 +230,24 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
+            // Jadwal tayang: tampilkan cache disk DULU (Kalender langsung
+            // berisi saat dibuka), lalu segarkan dari API di latar dan
+            // simpan hasilnya untuk pembukaan berikutnya.
+            val schedFile = java.io.File(app.filesDir, "schedule_cache.json")
+            val cachedSched = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                ApiClient.loadCachedSchedule(schedFile)
+            }
+            if (cachedSched.isNotEmpty() && schedule.isEmpty()) {
+                schedule = cachedSched.associateBy { it.id }
+            }
             try {
-                schedule = ApiClient.fetchSchedule().associateBy { it.id }
+                val freshSched = ApiClient.fetchSchedule()
+                if (freshSched.isNotEmpty()) {
+                    schedule = freshSched.associateBy { it.id }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        ApiClient.saveCachedSchedule(schedFile, freshSched)
+                    }
+                }
             } catch (e: Exception) {
                 // Jadwal asli gagal dimuat: Calendar memakai cadangan lama.
             }
