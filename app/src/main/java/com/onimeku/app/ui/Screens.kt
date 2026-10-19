@@ -434,7 +434,7 @@ fun CalendarScreen(vm: AppVM) {
                         .border(1.dp, chipBd, RoundedCornerShape(16.dp)).padding(vertical = 11.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, Locale.ENGLISH).uppercase(),
+                    Text(d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, uiLocale()).uppercase(),
                         fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp, color = if (sel) Color(0xCCFFFFFF) else NavOff)
                     Text("${d.dayOfMonth}", Modifier.padding(top = 3.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Box(Modifier.padding(top = 5.dp).size(5.dp).clip(CircleShape).background(if (k == 0) (if (sel) Color.White else RedText) else Color.Transparent))
@@ -453,7 +453,7 @@ fun CalendarScreen(vm: AppVM) {
                     a, thumbLabel = dt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), title = a.title,
                     sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                     onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
             }
         } else {
             if (dayList.isNotEmpty()) {
@@ -463,7 +463,7 @@ fun CalendarScreen(vm: AppVM) {
                     ItemRow(
                         a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                         onOpen = { vm.go(Route.Detail(a.id)) },
-                    ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+                    ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
                 }
                 Spacer(Modifier.height(12.dp))
             }
@@ -474,7 +474,7 @@ fun CalendarScreen(vm: AppVM) {
                 ItemRow(
                     a, thumbLabel = "", title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
                     onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) "Reminder on" else "Remind me", on) { vm.toggleRemind(a.id, ensure) } }
+                ) { IconChip(if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone, if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on) { vm.toggleRemind(a.id, ensure) } }
             }
         }
         } }
@@ -494,7 +494,7 @@ fun ItemRow(
         Box(Modifier.width(108.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)
             .clickable(onClick = onThumb ?: onOpen)) {
             RealImage(a, Modifier.fillMaxSize())
-            Text(thumbLabel, Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
+            if (thumbLabel.isNotBlank()) Text(thumbLabel, Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
                 .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
         Column(Modifier.weight(1f).clickable(onClick = onOpen)) {
@@ -512,7 +512,7 @@ fun MyListScreen(vm: AppVM) {
     AnimeGrid(l, vm) {
         RootTitle(I18n.t("tab_mylist", "My List"))
         if (l.isEmpty()) EmptyBox(I18n.t("mylist_empty_t", "Your list is empty"), I18n.t("mylist_empty_b", "Tap My List on any anime to save it here.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
-        else Text("${l.size} saved", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+        else Text("${l.size} ${I18n.t("n_saved", "saved")}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
     }
 }
 
@@ -522,16 +522,16 @@ fun DownloadsScreen(vm: AppVM) = Page {
     val d = vm.s.downloads
     if (d.isEmpty()) EmptyBox(I18n.t("dl_none_t", "No downloads yet"), I18n.t("dl_none_b", "Open an anime and tap the download icon on an episode to watch it offline.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
     else {
-        Text("${d.size} episode${if (d.size > 1) "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-        Box(Modifier.padding(bottom = 12.dp)) { Chip("Delete all", icon = Icons.Outlined.Delete) { vm.removeAllDl() } }
+        Text("${d.size} ${I18n.t("n_episodes_unit", "episode")}${if (d.size > 1 && I18n.lang != "id") "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        Box(Modifier.padding(bottom = 12.dp)) { Chip(I18n.t("delete_all", "Delete all"), icon = Icons.Outlined.Delete) { vm.removeAllDl() } }
         d.forEachIndexed { idx, x ->
             val a = Catalog.byId[x.id] ?: return@forEachIndexed
             val pct = vm.downloading["${x.id}:${x.ep}"]
             Column(Modifier.fadeSlideIn(minOf(idx, 5) * 50)) {
                 ItemRow(a, "Ep ${x.ep}", a.title,
-                    if (pct != null) "Downloading… $pct%" else "Episode ${x.ep} · Saved offline",
+                    if (pct != null) "${I18n.t("downloading", "Downloading…")} $pct%" else "Episode ${x.ep} · ${I18n.t("saved_offline", "Saved offline")}",
                     onOpen = { vm.go(Route.Player(x.id, x.ep)) }) {
-                    IconChip(Icons.Outlined.Delete, "Remove download") { vm.removeDl(x.id, x.ep) }
+                    IconChip(Icons.Outlined.Delete, I18n.t("remove_dl", "Remove download")) { vm.removeDl(x.id, x.ep) }
                 }
                 if (pct != null) {
                     val animPct by animateFloatAsState(pct / 100f, tween(300), label = "dlBar")
@@ -932,9 +932,11 @@ fun DetailScreen(vm: AppVM, id: String) {
 }
 
 /** Waktu komentar dari server (UTC ISO) ditampilkan dalam zona waktu perangkat, mis. "19 Okt 14:05". */
+private fun uiLocale(): Locale = if (I18n.lang == "id") Locale.forLanguageTag("id") else Locale.ENGLISH
+
 private fun commentTime(iso: String): String = runCatching {
     java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())
-        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.getDefault()))
+        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm", uiLocale()))
 }.getOrElse { if (iso.length >= 16) iso.substring(0, 10) + " " + iso.substring(11, 16) else "" }
 
 @Composable
@@ -1035,9 +1037,9 @@ fun SearchScreen(vm: AppVM) {
         }
         group("Genre") { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }
         group("Status") { Catalog.statuses.forEach { v -> Chip(v, st == v) { st = if (st == v) "" else v } } }
-        group("Year") {
+        group(I18n.t("f_year", "Year")) {
             Catalog.years.forEach { v -> Chip(v, yr == v) { yr = if (yr == v) "" else v } }
-            if (any) Chip("Clear") { gs = emptyList(); yr = ""; st = "" }
+            if (any) Chip(I18n.t("clear", "Clear")) { gs = emptyList(); yr = ""; st = "" }
         }
         Spacer(Modifier.height(8.dp))
         if (q.trim().lowercase() != query) {
@@ -1045,18 +1047,18 @@ fun SearchScreen(vm: AppVM) {
         }
 
         if (query.isEmpty() && !any) {
-            if (vm.s.hist.isEmpty()) EmptyBox("Find your next anime", "Search a title or genre, or pick filters above.")
+            if (vm.s.hist.isEmpty()) EmptyBox(I18n.t("find_next_t", "Find your next anime"), I18n.t("find_next_b", "Search a title or genre, or pick filters above."))
             else {
-                Text("Recent searches", Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)
+                Text(I18n.t("recent_searches", "Recent searches"), Modifier.padding(top = 10.dp), color = NavOff, fontSize = 13.sp)
                 FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     vm.s.hist.forEach { h -> Chip(h) { q = h } }
-                    Chip("Clear history") { vm.clearHist() }
+                    Chip(I18n.t("clear_hist", "Clear history")) { vm.clearHist() }
                 }
             }
         } else if (results.isEmpty()) {
             EmptyBox(I18n.t("no_results_t", "No results"), I18n.t("no_results_b", "Nothing matches. Try fewer filters or check the spelling."))
         } else {
-            Text("${results.size} result${if (results.size > 1) "s" else ""}", Modifier.padding(bottom = 2.dp), color = NavOff, fontSize = 13.sp)
+            Text("${results.size} ${I18n.t("n_results", "result")}${if (results.size > 1 && I18n.lang != "id") "s" else ""}", Modifier.padding(bottom = 2.dp), color = NavOff, fontSize = 13.sp)
         }
     }
 }

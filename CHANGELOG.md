@@ -1,3 +1,9 @@
+## v1.0.0-debug.50 (belum dirilis): Perapian Kalender, Daftarku, Unduhan, Cari, gestur Pemutar
+- Pemutar: gestur geser vertikal (kecerahan/volume) kini punya zona aman: diabaikan di tepi kiri/kanan 28dp dan 12% atas/bawah, sehingga tidak bentrok dengan gestur kembali sistem, bilah kontrol, atau seek bar.
+- Kalender: nama hari mengikuti bahasa aplikasi (sebelumnya Locale.ENGLISH tetap); daftar "Airing" tidak lagi menampilkan pil gelap kosong di thumbnail (ItemRow hanya menggambar label bila ada isi).
+- Kalender/Daftarku/Unduhan/Cari: teks Reminder on/Remind me, "N saved", "N episodes", Delete all, Downloading…, Saved offline, Find your next anime, Recent searches, Clear history, Clear, "N results", Year dilokalkan via I18n (pluralisasi "s" hanya untuk Inggris).
+- Waktu komentar memakai locale bahasa aplikasi.
+
 ## v1.0.0-debug.49 (belum dirilis): Perapian Detail & Pemutar
 - Detail: parallax gambar hero dibatasi 7% (di bawah overhang skala 1,15) sehingga tidak ada celah di tepi atas saat digulir; font scale sistem dibatasi 1,15x di hero; "0 eps" tidak lagi tampil bila jumlah episode belum diketahui.
 - Detail: teks Newest/Oldest, More like this, No episodes, Saved offline, Download episode kini lewat I18n; waktu komentar ditampilkan dalam zona waktu perangkat (bukan string UTC mentah).

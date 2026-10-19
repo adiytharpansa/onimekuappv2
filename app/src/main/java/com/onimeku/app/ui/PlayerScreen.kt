@@ -781,7 +781,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
                 .pointerInput(Unit) {
                     var left = true
-                    detectVerticalDragGestures(onDragStart = { left = it.x < size.width / 2 }) { change, dy ->
+                    var ok = true
+                    val edge = 28.dp.toPx()
+                    // Zona aman: abaikan sentuhan di tepi kiri/kanan (gestur kembali sistem) dan 12% atas/bawah (bilah kontrol, seek bar).
+                    detectVerticalDragGestures(onDragStart = {
+                        left = it.x < size.width / 2
+                        ok = it.x > edge && it.x < size.width - edge && it.y > size.height * 0.12f && it.y < size.height * 0.88f
+                    }) { change, dy ->
+                        if (!ok) return@detectVerticalDragGestures
                         change.consume()
                         if (locked) return@detectVerticalDragGestures
                         val d = -dy / size.height * 1.3f
