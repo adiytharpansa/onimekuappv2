@@ -45,6 +45,9 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var playerFull by mutableStateOf(false)
     /** Id anime yang menu aksi cepatnya (tekan-lama kartu) sedang terbuka; null = tertutup. */
     var quick by mutableStateOf<String?>(null)
+
+    /** True saat dialog modal (mis. konfirmasi keluar) tampil; auto-slide hero dijeda. */
+    var overlayOpen by mutableStateOf(false)
     // Posisi (ms) saat jalur putar gagal & pindah ke jalur cadangan: pemutar baru melanjutkan dari sini, bukan dari progres 10 dtk terakhir.
     var resumeMs: Pair<String, Long>? = null
     // Kecepatan putar dipertahankan antar episode (diatur dari roda gigi pemutar).
@@ -279,12 +282,18 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     // ---------- navigation ----------
     /** Arah transisi terakhir: 1 = masuk (push), -1 = kembali (pop), 0 = sejajar (tab / ganti episode). Dibaca oleh AnimatedContent. */
     var navDir = 0
-    fun go(r: Route) { navDir = 1; stack = stack + r; afterNav() }
-    fun back(animated: Boolean = true) { navDir = if (animated) -1 else 0; stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
-    fun setTab(r: Route) { navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
-    fun replaceTop(r: Route) { navDir = 0; stack = stack.dropLast(1) + r; afterNav() }
+    /** Arah perpindahan tab: -1 ke kiri, 1 ke kanan, 0 bukan perpindahan tab (dibaca transisi rute di MainActivity). */
+    var tabDir = 0
+    /** Urutan tab di bilah bawah (Downloads tidak ada di bilah; disisipkan agar tetap berurutan). -1 = bukan halaman akar tab. */
+    fun tabIndex(r: Route): Int = when (r) {
+        Route.Home -> 0; Route.Calendar -> 1; Route.MyList -> 2; Route.Downloads -> 3; Route.Search -> 4; Route.ProfileTab -> 5; else -> -1
+    }
+    fun go(r: Route) { navDir = 1; tabDir = 0; stack = stack + r; afterNav() }
+    fun back(animated: Boolean = true) { navDir = if (animated) -1 else 0; tabDir = 0; stack = if (stack.size > 1) stack.dropLast(1) else listOf(Route.Home); afterNav() }
+    fun setTab(r: Route) { val from = tabIndex(tab); val to = tabIndex(r); tabDir = if (from >= 0 && to >= 0) Integer.signum(to - from) else 0; navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
+    fun replaceTop(r: Route) { navDir = 0; tabDir = 0; stack = stack.dropLast(1) + r; afterNav() }
     private fun afterNav() { quick = null; if (stack.lastOrNull() !is Route.Player) playerFull = false }
-    fun openSettings() { stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
+    fun openSettings() { tabDir = 0; stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
 
     fun toast(m: String) {
         toastMsg = m

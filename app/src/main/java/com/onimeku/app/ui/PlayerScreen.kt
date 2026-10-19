@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -482,6 +483,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val audioOnlyNow by rememberUpdatedState(audioOnly)
     var fullByRot by remember { mutableStateOf(false) }      // fullscreen karena HP diputar (bukan tombol)
     val orient = LocalConfiguration.current.orientation
+    // Portrait <-> landscape/fullscreen dianimasikan (tinggi area video tumbuh/menyusut) agar tidak "melompat".
+    val reduceMotionP = LocalReduceMotion.current
+    val fullA by androidx.compose.animation.core.animateFloatAsState(
+        if (full) 1f else 0f,
+        androidx.compose.animation.core.tween(if (reduceMotionP) 0 else 380, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "playerFull",
+    )
     var dtSide by remember { mutableIntStateOf(0) }          // ketuk dua kali: -1 kiri, 1 kanan
     var dtSecs by remember { mutableIntStateOf(0) }
     var dtTick by remember { mutableIntStateOf(0) }
@@ -804,11 +812,19 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val thumbSrc = remember { MutableInteractionSource() }
 
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(if (full) Color.Black else Bg)) {
+    Column(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.lerp(Bg, Color.Black, fullA))) {
       // Area video: penuh lebar, menempel di bawah status bar (tanpa bingkai), hitam pekat.
-      Box(if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
+      Box(Modifier.fillMaxWidth().background(Color.Black).let { if (fullA < 1f) it.statusBarsPadding() else it }) {
         Box(
-            (if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f)).background(Color.Black)
+            Modifier.fillMaxWidth().layout { m, c ->
+                // Tinggi: 16:9 saat portrait -> seluruh sisa layar saat fullscreen, diinterpolasi oleh fullA.
+                val w = c.maxWidth
+                val hVideo = (w * 9f / 16f)
+                val hFull = if (c.hasBoundedHeight) c.maxHeight.toFloat() else hVideo
+                val h = (hVideo + (hFull - hVideo) * fullA).toInt().coerceAtLeast(0)
+                val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
+                layout(w, h) { p.place(0, 0) }
+            }.background(Color.Black)
                 .onGloballyPositioned { c ->
                     val bnd = c.boundsInWindow()
                     val nr = android.graphics.Rect(bnd.left.toInt(), bnd.top.toInt(), bnd.right.toInt(), bnd.bottom.toInt())
@@ -1063,7 +1079,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
       }
 
-      if (!full) {
+      if (!full || fullA < 0.999f) {
         // ===== Panel di bawah video: info, navigasi episode, kontrol, daftar episode =====
         val epStart = 2 // item "info" + "ephead" mendahului daftar episode
         LazyColumn(
