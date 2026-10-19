@@ -1,3 +1,8 @@
+## v1.0.0-debug.53 (belum dirilis): Coming Soon di Beranda
+- Beranda: bagian baru "Coming Soon" tepat di atas "New Episode Releases" — kartu lanskap 16:10 (sampul lebar), lencana merah COMING SOON + tahun rilis, judul dan genre di atas gradasi; "See all" membuka grid lengkap (SeeAll "soon"). Sumber: judul berstatus NOT_YET_RELEASED dari API (Catalog.comingSoon, tahun terdekat dulu); bagian disembunyikan bila tidak ada.
+- Status NOT_YET_RELEASED kini tampil "Upcoming"/"Segera hadir" (sebelumnya salah ditampilkan "Airing"); ditambahkan ke filter Status di Cari.
+- Perbaikan kompilasi: SectionHead(title, subtitle, onAll) — urutan parameter diubah agar trailing lambda tetap mengikat ke onAll.
+
 ## v1.0.0-debug.52 (belum dirilis): Titik indikator di atas tombol "+"
 - Titik indikator carousel dipindah ke atas tombol "+" (rata tengah dengannya, jarak HeroDotsGap 11dp); ruang sinopsis-ke-tombol dilebarkan ke HeroActionsTop 28dp agar titik tidak menempel teks. Menggantikan penempatan di bawah Play (debug.51).
 

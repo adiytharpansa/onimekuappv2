@@ -33,7 +33,8 @@ data class Anime(
     val status: String
         get() = when (apiStatus) {
             "FINISHED" -> "Completed"
-            "RELEASING", "NOT_YET_RELEASED" -> "Airing"
+            "RELEASING" -> "Airing"
+            "NOT_YET_RELEASED" -> "Upcoming"
             else -> if (ep < eps) "Airing" else "Completed"
         }
 }
@@ -91,6 +92,10 @@ object Catalog {
             compareByDescending<Anime> { it.year }.thenByDescending { it.updatedAt ?: "" },
         ).map { it.id }
         val donghua: List<String> = src.filter { it.country == "CN" }.sortedWith(byScore).map { it.id }
+        /** Belum tayang (NOT_YET_RELEASED): tahun terdekat dulu, lalu yang paling baru diperbarui. */
+        val comingSoon: List<String> = src.filter { it.apiStatus == "NOT_YET_RELEASED" }
+            .sortedWith(compareBy<Anime> { if (it.year > 0) it.year else Int.MAX_VALUE }.thenByDescending { it.updatedAt ?: "" })
+            .map { it.id }
         val alphabetical: List<String> = src.sortedBy { it.title.lowercase() }.map { it.id }
         private val genreCount: List<Map.Entry<String, Int>> =
             src.flatMap { it.genres }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }
@@ -116,6 +121,9 @@ object Catalog {
         }
 
     val byId: Map<String, Anime> get() = d.byId
+
+    /** Judul yang belum tayang, urut dari yang paling dekat. */
+    val comingSoon: List<String> get() = d.comingSoon
 
     /** Sepuluh judul skor tertinggi (baris "Top Hits Anime" + hero). */
     val top: List<String> get() = d.top
@@ -156,7 +164,7 @@ object Catalog {
 
     val years: List<String> get() = d.years
 
-    val statuses = listOf("Airing", "Completed")
+    val statuses = listOf("Airing", "Completed", "Upcoming")
 
     fun similar(id: String): List<Anime> {
         val base = byId[id] ?: return emptyList()

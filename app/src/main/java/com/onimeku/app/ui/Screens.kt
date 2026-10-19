@@ -70,11 +70,52 @@ private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: Strin
     if (items.isEmpty()) return
     Column(if (delayMs >= 0) Modifier.fadeSlideIn(delayMs) else Modifier) {
         Spacer(Modifier.height(SectionGap))
-        SectionHead(title, seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } }, subtitle = subtitle)
+        SectionHead(title, subtitle = subtitle, onAll = seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
         Rail {
             itemsIndexed(items, key = { _, a -> a.id }) { i, a ->
                 PosterCard(a, railW, rank = if (ranked) i + 1 else null, sharedKey = "row:$title:${a.id}", index = i) { vm.go(Route.Detail(a.id)) }
             }
+        }
+    }
+}
+
+/**
+ * Kartu "Coming Soon": lanskap 16:10 dengan sampul lebar, lencana merah di kiri atas, tahun rilis (kaca gelap)
+ * di kanan atas, judul + genre di bawah di atas gradasi. Ketuk = buka Detail.
+ */
+@Composable
+private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(20.dp)
+    val key = "soon:${a.id}"
+    Box(
+        Modifier.width(w).liftPress { SharedArt.key = key; onClick() }.aspectRatio(16f / 10f)
+            .sharedArt(key).clip(shape).artBackground(a).border(1.dp, Line, shape),
+    ) {
+        val req = rememberImg(com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a))
+        if (req == null) Box(Modifier.fillMaxSize().shimmer())
+        else coil.compose.AsyncImage(
+            model = req, contentDescription = a.title, modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop, alignment = Alignment.TopCenter,
+        )
+        Box(Modifier.fillMaxSize().drawBehind {
+            drawRect(Brush.verticalGradient(0f to Color(0x59080910), 0.3f to Color.Transparent, 0.55f to Color(0x2214161F), 1f to Color(0xF214161F)))
+        })
+        Row(
+            Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(8.dp)).background(Red).padding(horizontal = 9.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(Icons.Outlined.Schedule, null, Modifier.size(12.dp), tint = Color.White)
+            Text(I18n.t("coming_badge", "COMING SOON"), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = Color.White, maxLines = 1, softWrap = false)
+        }
+        if (a.year > 0) Text(
+            "${a.year}", Modifier.align(Alignment.TopEnd).padding(12.dp).clip(RoundedCornerShape(8.dp)).background(GlassFill)
+                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 9.dp, vertical = 4.dp),
+            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+        )
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) {
+            Text(a.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp, letterSpacing = (-0.2).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val meta = a.genres.take(3).joinToString("  ·  ")
+            if (meta.isNotBlank()) Text(meta, Modifier.padding(top = 3.dp), fontSize = 12.sp, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -144,6 +185,7 @@ private fun HomeContent(vm: AppVM) {
         out.take(12)
     }
     val fresh = Catalog.new
+    val soon = Catalog.comingSoon.take(12)
     val allRows = remember(Catalog.all) { Catalog.alphabetical.mapNotNull { Catalog.byId[it] }.chunked(3) }
     var pullPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
@@ -213,6 +255,21 @@ private fun HomeContent(vm: AppVM) {
             item(key = "because", contentType = "rail") { PosterRow(I18n.t("sec_because", "Because you watched"), similar, vm, seeAll = null, delayMs = 0, subtitle = base.title) }
         }
         item(key = "top", contentType = "rail") { PosterRow(I18n.t("sec_top", "Top Hits Anime"), Catalog.top, vm, seeAll = "top", ranked = true, delayMs = 0) }
+        // Coming Soon: tepat di atas "New Episode Releases". Disembunyikan bila API tidak punya judul NOT_YET_RELEASED.
+        if (soon.isNotEmpty()) {
+            item(key = "soon", contentType = "rail") {
+                Column(Modifier.fadeSlideIn(40)) {
+                    Spacer(Modifier.height(SectionGap))
+                    SectionHead(I18n.t("sec_coming", "Coming Soon")) { vm.go(Route.SeeAll("soon")) }
+                    val cw = (LocalConfiguration.current.screenWidthDp * 0.74f).coerceIn(250f, 340f).dp
+                    Rail {
+                        items(soon, key = { it }) { id ->
+                            Catalog.byId[id]?.let { a -> ComingSoonCard(a, cw) { vm.go(Route.Detail(id)) } }
+                        }
+                    }
+                }
+            }
+        }
         if (fresh.isNotEmpty()) {
             item(key = "new", contentType = "rail") {
                 Column(Modifier.fadeSlideIn(70)) {
@@ -951,6 +1008,7 @@ fun SeeAllScreen(vm: AppVM, key: String) {
         key == "popular" -> I18n.t("sec_popular", "Popular") to Catalog.popular
         key == "latest" -> "Latest Releases" to Catalog.latest
         key == "donghua" -> I18n.t("sec_donghua", "Donghua") to Catalog.donghua
+        key == "soon" -> I18n.t("sec_coming", "Coming Soon") to Catalog.comingSoon
         key.startsWith("genre:") -> key.removePrefix("genre:") to Catalog.byGenre(key.removePrefix("genre:"))
         else -> I18n.t("sec_new_eps", "New Episode Releases") to Catalog.new.map { it.first }
     }

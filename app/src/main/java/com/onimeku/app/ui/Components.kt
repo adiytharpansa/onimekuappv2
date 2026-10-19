@@ -281,7 +281,7 @@ fun Rail(content: LazyListScope.() -> Unit) {
 }
 
 @Composable
-fun SectionHead(title: String, onAll: (() -> Unit)? = null, subtitle: String? = null) {
+fun SectionHead(title: String, subtitle: String? = null, onAll: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.padding(end = 10.dp).width(4.dp).height(if (subtitle != null) 38.dp else 20.dp).growIn().clip(CircleShape).background(Red))
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
