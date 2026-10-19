@@ -92,7 +92,15 @@ object Catalog {
      * sendirian (bisa menggabungkan judul berbeda), jadi dipakai URL utuh tanpa query.
      */
     internal fun posterFileKey(url: String): String {
-        val clean = url.lowercase().substringBefore('?').substringBefore('#')
+        // Poster dari API selalu terbungkus /api/img?u=<url asli ter-encode>:
+        // identitas gambar adalah URL DI DALAM bungkus itu. Memakai bungkusnya
+        // membuat SEMUA judul berposter berbagi kunci yang sama (substringBefore('?')
+        // membuang parameter u=) sehingga dedupe menggabungkan seluruh katalog
+        // jadi satu — bug debug.53 (Beranda hanya menampilkan 1 anime).
+        val inner = url.substringAfter("u=", "").takeIf { it.isNotBlank() }
+            ?.let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrNull() }
+        val target = (inner ?: url).lowercase()
+        val clean = target.substringBefore('?').substringBefore('#')
         val file = clean.substringAfterLast('/').substringBeforeLast('.')
         return if (file.length >= 10) file else clean
     }
