@@ -67,7 +67,8 @@ object SubTranslate {
         if (!o.wifiOnly) return true
         return try {
             val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            !cm.isActiveNetworkMetered
+            val metered = cm.isActiveNetworkMetered
+            !metered
         } catch (e: Exception) { true }
     }
 
