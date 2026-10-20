@@ -21,8 +21,8 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"${prop("ONIMEKU_SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${prop("ONIMEKU_SUPABASE_KEY")}\"")
         // Server terjemahan subtitle bersama (server/README-translate.md). Kosong = hanya ML Kit di HP.
-        buildConfigField("String", "TR_URL", "\"${prop(\"ONIMEKU_TR_URL\")}\"")
-        buildConfigField("String", "TR_KEY", "\"${prop(\"ONIMEKU_TR_KEY\")}\"")
+        buildConfigField("String", "TR_URL", "\"${prop("ONIMEKU_TR_URL")}\"")
+        buildConfigField("String", "TR_KEY", "\"${prop("ONIMEKU_TR_KEY")}\"")
     }
     // Tanda tangan rilis: aktif hanya bila ONIMEKU_STORE_FILE diberikan (gradle.properties / -P / CI).
     signingConfigs {
