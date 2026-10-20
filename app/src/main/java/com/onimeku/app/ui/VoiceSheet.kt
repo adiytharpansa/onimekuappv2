@@ -108,7 +108,11 @@ fun VoiceSearchSheet(onApply: (String) -> Unit, onType: () -> Unit, onDismiss: (
         if (!ok) state = errorFor(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS)
     }
     // Judul katalog ternormalisasi, dihitung sekali per perubahan katalog.
-    val titles = remember(Catalog.all) { Catalog.unique.map { it to norm(it.title) } }
+    // Dulu dihitung di main thread saat sheet terbuka (lowercase + filter untuk ribuan judul -> sheet tersendat saat muncul).
+    val titles by produceState(initialValue = emptyList<Pair<Anime, String>>(), Catalog.all) {
+        val u = Catalog.unique
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { u.map { it to norm(it.title) } }
+    }
     LaunchedEffect(Unit) { if (!granted) askPerm.launch(Manifest.permission.RECORD_AUDIO) }
 
     // Pengenal suara: dimulai ulang tiap [attempt] atau ganti bahasa; selalu dilepas saat keluar.

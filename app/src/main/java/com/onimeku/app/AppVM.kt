@@ -509,9 +509,13 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var comments by mutableStateOf<List<com.onimeku.app.data.CommentRow>>(emptyList()); private set
     var commentsBusy by mutableStateOf(false); private set
     private var commentsFor = ""
+    private var commentsJob: Job? = null
     fun loadComments(id: String) {
         if (commentsFor != id) { comments = emptyList(); commentsFor = id }
-        viewModelScope.launch {
+        // Pemutar memanggil ini dari dua tempat sekaligus, dan tiap kirim/hapus komentar memanggilnya lagi: tanpa pembatalan,
+        // hasil permintaan LAMA bisa menimpa yang baru dan commentsBusy jadi false terlalu cepat.
+        commentsJob?.cancel()
+        commentsJob = viewModelScope.launch {
             commentsBusy = true
             comments = com.onimeku.app.data.Comments.list(id, s.account)
             commentsBusy = false
