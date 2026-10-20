@@ -87,6 +87,19 @@ object ImageLoading {
 }
 
 /**
+ * Kunci cache-memori Coil per URL gambar yang sudah pernah tampil. Dipakai sebagai `placeholderMemoryCacheKey`:
+ * gambar yang sudah termuat di Home langsung tampil (tanpa kilau) saat Detail dibuka, lalu diganti versi penuh.
+ * Hanya diakses dari main thread (komposisi + onSuccess). Dibatasi 300 entri (LRU).
+ */
+object ImageKeys {
+    private val map = object : LinkedHashMap<String, coil.memory.MemoryCache.Key>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, coil.memory.MemoryCache.Key>?): Boolean = size > 300
+    }
+    fun put(url: String, key: coil.memory.MemoryCache.Key?) { if (key != null) map[url] = key }
+    fun get(url: String?): coil.memory.MemoryCache.Key? = if (url == null) null else map[url]
+}
+
+/**
  * Satu jam kilau untuk SEMUA poster yang sedang memuat (dipasang sekali di akar aplikasi).
  * Dulu tiap poster tanpa skeleton menjalankan transisi tak berujung sendiri-sendiri (belasan sekaligus,
  * sapuan tidak selaras). Kini satu jam, tersinkron lintas poster, dan BERHENTI total saat tak ada gambar
@@ -176,14 +189,20 @@ fun PosterGridSkeleton(rows: Int = 4, modifier: Modifier = Modifier, hPad: andro
 fun LoadedImage(
     url: String?, title: String, modifier: Modifier = Modifier, pending: Boolean = false,
     alignment: Alignment = Alignment.Center,
+    placeholderUrl: String? = null,
 ) {
     val ctx = LocalContext.current
-    var state by remember(url) { mutableIntStateOf(0) }   // 0 memuat, 1 siap, 2 gagal, 3 menunggu coba ulang
+    // Gambar yang SUDAH ada di cache memori (url ini, atau [placeholderUrl] mis. poster untuk hero Detail) tampil seketika
+    // sebagai placeholder: tidak ada kilau di frame pertama. Dicek sinkron ke cache; kunci basi (sudah tergusur) diabaikan.
+    val phKey = remember(url, placeholderUrl) {
+        (ImageKeys.get(url) ?: ImageKeys.get(placeholderUrl))?.takeIf { coil.Coil.imageLoader(ctx).memoryCache?.get(it) != null }
+    }
+    var state by remember(url) { mutableIntStateOf(if (phKey != null) 1 else 0) }   // 0 memuat, 1 siap, 2 gagal, 3 menunggu coba ulang
     var retry by remember(url) { mutableIntStateOf(0) }
-    var instant by remember(url) { mutableStateOf(false) }
+    var instant by remember(url) { mutableStateOf(phKey != null) }
     val reveal by animateFloatAsState(if (state == 1) 1f else 0f, tween(if (instant) 0 else 480, easing = FastOutSlowInEasing), label = "imgReveal")
     LaunchedEffect(state) { if (state == 3) { delay(1600); retry++; state = 0 } }
-    val req = remember(url, retry) { if (url.isNullOrBlank()) null else ImageRequest.Builder(ctx).data(url).build() }
+    val req = remember(url, retry) { if (url.isNullOrBlank()) null else ImageRequest.Builder(ctx).data(url).placeholderMemoryCacheKey(phKey).precision(coil.size.Precision.INEXACT).build() }
     // Daftarkan ke jam kilau bersama selama kilau tampil; didaftarkan ulang bila status berubah, dilepas saat keluar layar.
     val shimmering = if (req == null) pending else (state != 1 && state != 2)
     androidx.compose.runtime.DisposableEffect(shimmering) {
@@ -207,6 +226,7 @@ fun LoadedImage(
                     alignment = alignment,
                     onSuccess = { s ->
                         instant = s.result.dataSource == coil.decode.DataSource.MEMORY_CACHE
+                        if (url != null) ImageKeys.put(url, s.result.memoryCacheKey)
                         state = 1
                     },
                     onError = { state = if (retry < 1) 3 else 2 },

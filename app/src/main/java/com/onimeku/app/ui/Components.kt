@@ -153,7 +153,8 @@ fun Modifier.artBackground(a: Anime): Modifier = this.background(Bg2)
 @Composable
 fun RealImage(a: Anime, modifier: Modifier = Modifier) {
     val img = com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
-    LoadedImage(img, a.title, modifier, pending = !a.poster.isNullOrBlank() || !a.banner.isNullOrBlank())
+    LoadedImage(img, a.title, modifier, pending = !a.poster.isNullOrBlank() || !a.banner.isNullOrBlank(),
+        placeholderUrl = com.onimeku.app.data.PosterHealer.posterFor(a))
 }
 
 /** Judul tanpa sufiks tahun di akhir: "False Memory (2026)" -> "False Memory" (tahun dipindah ke baris meta). */

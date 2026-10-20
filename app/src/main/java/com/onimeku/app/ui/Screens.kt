@@ -449,6 +449,9 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
     val n = items.size
     val pager = rememberPagerState(initialPage = HeroStart - HeroStart % n) { if (n > 1) HeroPages else 1 }
     val reduceMotion = LocalReduceMotion.current
+    // SATU jam zoom Ken Burns untuk semua halaman (dulu tiap HeroPage menjalankan transisi tak berujung sendiri;
+    // dengan beyondViewportPageCount = 1 itu 3 animasi paralel).
+    val ken = rememberHeroKen()
     // Carousel berhenti berputar selama jari menyentuh hero (tahan untuk membaca), lanjut setelah dilepas.
     var held by remember { mutableStateOf(false) }
     // Dikunci pada settledPage (BUKAN currentPage): currentPage berganti di tengah animasi, sehingga efek lama
@@ -458,7 +461,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
         if (n > 1) {
             delay(5500)
             // Jeda juga saat Home tidak di depan (membuka Detail/Player): jangan animasi di balik transisi.
-            while (pager.isScrollInProgress || held || vm.overlayOpen || vm.route != Route.Home) delay(100)
+            while (pager.isScrollInProgress || held || vm.overlayOpen || vm.route != Route.Home || vm.homeScroll.firstVisibleItemIndex > 0) delay(100)
             pager.animateScrollToPage(
                 pager.settledPage + 1,
                 animationSpec = tween(if (reduceMotion) 0 else 850, easing = androidx.compose.animation.core.CubicBezierEasing(0.33f, 0f, 0.15f, 1f)),
@@ -487,7 +490,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
         // Stretch saat ditarik HANYA pada gambar (di HeroPage); teks & tombol tidak ikut membesar/terpotong.
         // beyondViewportPageCount = 1: halaman tetangga sudah dimuat (gambar & warna) sebelum digeser masuk.
         HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
-            HeroPage(vm, items[i % n], pull) { (pager.currentPage - i) + pager.currentPageOffsetFraction }
+            HeroPage(vm, items[i % n], pull, ken) { (pager.currentPage - i) + pager.currentPageOffsetFraction }
         }
         // Scrim tipis di atas supaya status bar & lonceng tetap terbaca di poster terang.
         Box(Modifier.fillMaxWidth().height(120.dp).drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x8C000000), Color(0x33000000), Color.Transparent))) })
@@ -524,20 +527,20 @@ private fun rememberHeroKen(): androidx.compose.runtime.State<Float> {
 }
 
 @Composable
-private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> Float) {
+private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, ken: androidx.compose.runtime.State<Float>, pageOffset: () -> Float) {
     val on = a.id in vm.p.myList
     val firstEp = a.available.firstOrNull() ?: 1
     val wide = LocalConfiguration.current.screenWidthDp >= 700
     // Warna dominan poster menyepuh gradasi, tombol Play, dan label HD (merah tema bila belum terhitung / poster abu-abu).
     val tint = rememberPosterColor(a.poster)
     val accent by androidx.compose.animation.animateColorAsState(tint ?: Red, tween(500), label = "heroAccent")
-    val ken = rememberHeroKen()
     val pageW = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     // clipToBounds PER HALAMAN: gambar diperbesar (overscan + Ken Burns) dan digeser (parallax); tanpa klip ia bocor
     // melewati tepi halaman dan menimpa halaman tetangga saat slide, tampak sebagai strip/sambungan yang tidak rapi.
     Box(Modifier.fillMaxSize().clipToBounds().artBackground(a).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { SharedArt.key = "hero:${a.id}"; vm.go(Route.Detail(a.id)) }) {
         // Layar lebar: pakai banner (lanskap) bila ada, poster potret akan terpotong parah.
-        val req = rememberImg(if (wide) (com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)) else com.onimeku.app.data.PosterHealer.posterFor(a))
+        val heroUrl = if (wide) (com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)) else com.onimeku.app.data.PosterHealer.posterFor(a)
+        val req = rememberImg(heroUrl)
         if (req == null) Box(Modifier.fillMaxSize().shimmer())
         else coil.compose.AsyncImage(
             model = req, contentDescription = a.title,
@@ -555,6 +558,7 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
             },
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             alignment = Alignment.TopCenter,
+            onSuccess = { s -> if (heroUrl != null) ImageKeys.put(heroUrl, s.result.memoryCacheKey) },
         )
         // Sepuhan warna poster di bagian bawah gambar (di bawah peleburan ke latar).
         Box(Modifier.fillMaxSize().drawBehind {

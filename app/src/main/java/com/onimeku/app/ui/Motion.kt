@@ -153,7 +153,7 @@ fun rememberImg(url: String?): ImageRequest? {
     val ctx = LocalContext.current
     return remember(url) {
         if (url.isNullOrBlank()) null
-        else ImageRequest.Builder(ctx).data(url).crossfade(350).build()
+        else ImageRequest.Builder(ctx).data(url).crossfade(350).precision(coil.size.Precision.INEXACT).build()
     }
 }
 
