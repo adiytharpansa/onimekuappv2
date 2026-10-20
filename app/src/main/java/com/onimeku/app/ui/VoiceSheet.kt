@@ -217,7 +217,7 @@ private fun LangToggle(lang: String, onPick: (String) -> Unit) {
 private fun MicPulse(level: Float, active: Boolean) {
     val reduce = LocalReduceMotion.current
     val t = rememberInfiniteTransition(label = "mic")
-    fun ring(offset: Int) = t.animateFloat(
+    @Composable fun ring(offset: Int) = t.animateFloat(
         0f, 1f, infiniteRepeatable(tween(2000, easing = LinearOutSlowInEasing), RepeatMode.Restart, StartOffset(offset)), label = "ring$offset",
     )
     val r1 by ring(0); val r2 by ring(1000)
