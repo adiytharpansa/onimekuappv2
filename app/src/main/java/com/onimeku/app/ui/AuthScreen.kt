@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -68,7 +69,7 @@ private fun AuthField(
     }
 }
 
-/** Halaman Sign in / Sign up (email + kata sandi). */
+/** Halaman Sign in / Sign up (email + kata sandi, plus Google dan Facebook). */
 @Composable
 fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
     var signUp by rememberSaveable { mutableStateOf(startSignUp) }
@@ -92,14 +93,11 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
         Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp, bottom = 14.dp)) { Logo(64.dp) }
         Text(if (signUp) I18n.t("create_account_t", "Create your account") else I18n.t("welcome_back", "Welcome back"), Modifier.fillMaxWidth(), fontSize = 28.sp,
             fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Text(
-            if (signUp) "Save your list and keep watching on any device." else "Sign in to sync your list and progress.",
-            Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 26.dp), color = InkSoft, fontSize = 14.sp, textAlign = TextAlign.Center,
-        )
+        Spacer(Modifier.height(28.dp))
 
         if (!AuthClient.configured) {
             CardBox(Modifier.padding(bottom = 18.dp)) {
-                Text("Accounts are not available in this build yet. You can keep using Onimeku as a guest.",
+                Text("Accounts aren't available yet.",
                     Modifier.padding(16.dp), color = InkSoft, fontSize = 13.5.sp)
             }
         }
@@ -114,29 +112,53 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
             Text(it, color = RedText, fontSize = 13.5.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
         }
 
-        Box(Modifier.padding(top = 6.dp)) {
+        if (!signUp) {
+            Text(I18n.t("forgot_password", "Forgot password?"), Modifier.align(Alignment.End).offset(y = (-6).dp).clip(RoundedCornerShape(8.dp))
+                .clickable {
+                    if (!EmailRx.matches(email.trim())) { tried = true; vm.toast("Enter your email first") } else vm.resetPassword(email)
+                }.padding(horizontal = 8.dp, vertical = 6.dp), color = RedText, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+        }
+
+        Box(Modifier.padding(top = if (signUp) 6.dp else 2.dp)) {
             Btn(if (vm.authBusy) I18n.t("please_wait", "Please wait…") else if (signUp) I18n.t("create_account_b", "Create account") else I18n.t("sign_in", "Sign in"), BtnStyle.Play,
                 modifier = Modifier.fillMaxWidth(), height = 54.dp, loading = vm.authBusy) { submit() }
         }
 
-        if (!signUp) {
-            Text("Forgot password?", Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp).clip(RoundedCornerShape(8.dp))
-                .clickable {
-                    if (!EmailRx.matches(email.trim())) { tried = true; vm.toast("Enter your email first") } else vm.resetPassword(email)
-                }.padding(horizontal = 10.dp, vertical = 6.dp), color = RedText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        // Pemisah + masuk/daftar dengan akun sosial (tepat di bawah tombol utama).
+        Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).height(1.dp).background(Line))
+            Text(I18n.t("or", "or"), Modifier.padding(horizontal = 14.dp), color = NavOff, fontSize = 12.5.sp)
+            Box(Modifier.weight(1f).height(1.dp).background(Line))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SocialButton("Google", Modifier.weight(1f), enabled = !vm.authBusy, icon = { GoogleIcon(20.dp) }) { vm.socialSignIn("google") }
+            SocialButton("Facebook", Modifier.weight(1f), enabled = !vm.authBusy, icon = { FacebookIcon(20.dp) }) { vm.socialSignIn("facebook") }
         }
 
-        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 28.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (signUp) "Already have an account? " else "New to Onimeku? ", color = InkSoft, fontSize = 14.sp)
             Text(if (signUp) I18n.t("sign_in", "Sign in") else I18n.t("sign_up", "Sign up"), color = RedText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { signUp = !signUp; tried = false; vm.authError = null }.padding(6.dp))
         }
 
-        Text("By continuing you agree to our Terms of Service and Privacy Policy.", Modifier.fillMaxWidth().padding(top = 18.dp),
-            color = NavOff, fontSize = 12.sp, textAlign = TextAlign.Center)
-        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text("Terms", color = RedText, fontSize = 12.5.sp, modifier = Modifier.clickable { vm.go(Route.Sub("terms")) }.padding(6.dp))
-            Text("Privacy", color = RedText, fontSize = 12.5.sp, modifier = Modifier.clickable { vm.go(Route.Sub("privacy")) }.padding(6.dp))
+        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Text("Terms", color = RedText, fontSize = 12.5.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("terms")) }.padding(8.dp))
+            Text("Privacy", color = RedText, fontSize = 12.5.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("privacy")) }.padding(8.dp))
         }
+    }
+}
+
+/** Tombol akun sosial: pil gelap tipis berbingkai, ikon merek + nama, tinggi sama dengan tombol utama. */
+@Composable
+private fun SocialButton(label: String, modifier: Modifier, enabled: Boolean, icon: @Composable () -> Unit, onClick: () -> Unit) {
+    Row(
+        modifier.height(52.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
+            .alpha(if (enabled) 1f else 0.5f)
+            .pressable { if (enabled) onClick() }.padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+    ) {
+        icon()
+        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }

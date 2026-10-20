@@ -118,6 +118,13 @@ class MainActivity : ComponentActivity() {
                 if (l != null) vm.go(Route.Player(l.id, l.ep)) else vm.toast(I18n.t("nothing_to_continue", "Nothing to continue yet"))
             }
             "search" -> { vm.closeWelcome(); vm.setTab(Route.Search) }
+            // Hasil login Google/Facebook (Supabase mengirim token di fragment URL).
+            "auth-callback" -> {
+                val q = android.net.Uri.parse("onimeku://x?" + (d.encodedFragment ?: d.encodedQuery ?: ""))
+                val at = q.getQueryParameter("access_token")
+                if (!at.isNullOrBlank()) vm.finishSocial(at, q.getQueryParameter("refresh_token").orEmpty())
+                else vm.authError = q.getQueryParameter("error_description") ?: "Sign in was cancelled."
+            }
         }
     }
 

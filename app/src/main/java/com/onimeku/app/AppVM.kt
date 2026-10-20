@@ -693,6 +693,27 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Masuk/daftar dengan Google atau Facebook: buka halaman OAuth di browser; hasilnya kembali lewat finishSocial. */
+    fun socialSignIn(provider: String) {
+        if (authBusy) return
+        if (!AuthClient.configured) { toast("Accounts are not available in this build yet"); return }
+        authError = null
+        try {
+            app.startActivity(
+                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(AuthClient.socialUrl(provider)))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (e: Exception) { authError = "No browser found to continue." }
+    }
+
+    fun finishSocial(accessToken: String, refreshToken: String) = runAuth {
+        val acc = AuthClient.fromTokens(accessToken, refreshToken)
+        upd { it.copy(account = acc) }
+        pullAndMerge()
+        toast("Welcome back")
+        setTab(Route.ProfileTab)
+    }
+
     fun resetPassword(email: String) = runAuth {
         AuthClient.recover(email.trim())
         toast("Reset link sent if the email exists")

@@ -88,6 +88,31 @@ object AuthClient {
         }.toString())
     }
 
+    /** Alamat OAuth Supabase; setelah login, browser kembali ke aplikasi lewat onimeku://auth-callback. */
+    fun socialUrl(provider: String): String =
+        BuildConfig.SUPABASE_URL.trimEnd('/') + "/auth/v1/authorize?provider=" + provider +
+            "&redirect_to=" + java.net.URLEncoder.encode("onimeku://auth-callback", "UTF-8")
+
+    /** Lengkapi akun dari token hasil login sosial (ambil id + email lewat /auth/v1/user). */
+    suspend fun fromTokens(accessToken: String, refreshToken: String): Account = withContext(Dispatchers.IO) {
+        if (!configured) throw AuthException("Sign in is not available yet. Please try again later.")
+        val rb = Request.Builder()
+            .url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/auth/v1/user")
+            .header("apikey", BuildConfig.SUPABASE_KEY)
+            .header("Authorization", "Bearer $accessToken")
+            .get().build()
+        http.newCall(rb).execute().use { r ->
+            val text = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw AuthException("Sign in failed. Please try again.")
+            val u = try { json.parseToJsonElement(text).jsonObject } catch (e: Exception) { throw AuthException("Sign in failed. Please try again.") }
+            Account(
+                u["id"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                u["email"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                accessToken, refreshToken,
+            )
+        }
+    }
+
     suspend fun signOut(accessToken: String) { call("/auth/v1/logout", "{}", accessToken) }
 
     /** Tukar refresh token dengan sesi baru (token akses berumur pendek). */

@@ -43,6 +43,7 @@
                 <data android:scheme="onimeku" android:host="anime" />
                 <data android:scheme="onimeku" android:host="continue" />
                 <data android:scheme="onimeku" android:host="search" />
+                <data android:scheme="onimeku" android:host="auth-callback" />
             </intent-filter>
             <!-- Pintasan ikon aplikasi (tekan lama ikon): Lanjut menonton, Cari -->
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
