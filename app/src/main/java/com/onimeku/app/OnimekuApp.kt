@@ -16,10 +16,16 @@ class OnimekuApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         com.onimeku.app.data.CrashLog.install(this)
+        // Panaskan Keystore/EncryptedSharedPreferences paralel dengan inisialisasi Activity + Compose,
+        // supaya Store.load() di AppVM tidak menunggu inisialisasi dari nol di main thread.
+        Thread { com.onimeku.app.data.Store.secureOf(this) }.apply { isDaemon = true }.start()
     }
 
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
+            // Klien OkHttp bersama (Net.client): koneksi HTTP/2 + TLS ke host gambar dipakai ulang bersama API/media.
+            // Lambda = malas: klien baru dibuat saat gambar pertama diminta.
+            .okHttpClient { com.onimeku.app.data.Net.client }
             .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.20).build() }
             .diskCache { DiskCache.Builder().directory(cacheDir.resolve("img")).maxSizeBytes(256L * 1024 * 1024).build() }
             .respectCacheHeaders(false)

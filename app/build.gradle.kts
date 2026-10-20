@@ -14,6 +14,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        // Aplikasi hanya punya bahasa en + id: buang string terjemahan 80+ bahasa dari Compose/Material/ML Kit (APK lebih kecil).
+        resourceConfigurations += listOf("en", "id")
         // Kunci publik Supabase untuk Sign in/Sign up (isi di gradle.properties; kosong = fitur akun nonaktif anggun)
         fun prop(n: String) = (project.findProperty(n) as String?)?.replace("\"", "") ?: ""
         buildConfigField("String", "SUPABASE_URL", "\"${prop("ONIMEKU_SUPABASE_URL")}\"")
@@ -44,7 +46,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+        // Buang pemeriksaan null runtime pada parameter/receiver (kode internal): kode lebih kecil dan sedikit lebih cepat.
+        freeCompilerArgs += listOf("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")
+    }
+    packaging {
+        resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}", "/META-INF/DEPENDENCIES", "/META-INF/LICENSE*", "/META-INF/NOTICE*")
+    }
     buildFeatures { compose = true; buildConfig = true }
 }
 

@@ -70,24 +70,46 @@ data class AppState(
 )
 
 class Store(ctx: Context) {
-    private val sp = ctx.getSharedPreferences("onimeku", Context.MODE_PRIVATE)
+    private val appCtx = ctx.applicationContext
+    private val sp = appCtx.getSharedPreferences("onimeku", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     // Token akun disimpan di EncryptedSharedPreferences (kunci di Android Keystore),
     // bukan di JSON state biasa. Bila Keystore gagal, jatuh ke penyimpanan lama.
-    private val secure: android.content.SharedPreferences? by lazy {
-        try {
-            val mk = androidx.security.crypto.MasterKey.Builder(ctx.applicationContext)
-                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
-            androidx.security.crypto.EncryptedSharedPreferences.create(
-                ctx.applicationContext, "onimeku_secure", mk,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-            )
-        } catch (e: Exception) { null }
-    }
+    private val secure: android.content.SharedPreferences? get() = secureOf(appCtx)
     private var lastAcc: Account? = null
     private var accWritten = false
+
+    // Penulisan state: JSON di-encode + ditulis di thread latar tunggal. Sebelumnya tiap upd() (termasuk
+    // simpan progres tonton berkala) meng-encode SELURUH AppState di main thread. Simpan beruntun digabung:
+    // hanya state terbaru yang ditulis. Eksekutor tunggal menjaga urutan tulis.
+    private val pending = java.util.concurrent.atomic.AtomicReference<AppState?>(null)
+    private val io: java.util.concurrent.ExecutorService by lazy {
+        java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "onimeku-store") }
+    }
+
+    companion object {
+        private var secureInst: android.content.SharedPreferences? = null
+        private var secureTried = false
+
+        /** Satu instans terenkripsi per proses (inisialisasi Keystore/Tink mahal). Aman dipanggil dari thread mana pun. */
+        @Synchronized
+        fun secureOf(ctx: Context): android.content.SharedPreferences? {
+            if (!secureTried) {
+                secureInst = try {
+                    val mk = androidx.security.crypto.MasterKey.Builder(ctx.applicationContext)
+                        .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
+                    androidx.security.crypto.EncryptedSharedPreferences.create(
+                        ctx.applicationContext, "onimeku_secure", mk,
+                        androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+                    )
+                } catch (e: Exception) { null }
+                secureTried = true
+            }
+            return secureInst
+        }
+    }
 
     fun load(): AppState {
         val base = try {
@@ -100,6 +122,11 @@ class Store(ctx: Context) {
     }
 
     fun save(s: AppState) {
+        // AppState tidak dapat diubah, jadi aman diserahkan ke thread latar apa adanya.
+        if (pending.getAndSet(s) == null) io.execute { pending.getAndSet(null)?.let { write(it) } }
+    }
+
+    private fun write(s: AppState) {
         val sec = secure
         if (sec == null) { sp.edit().putString("state", json.encodeToString(s.copy(account = null))).apply(); return }
         // Tulis token hanya saat berubah (enkripsi Keystore tidak murah; save() dipanggil tiap simpan progres).

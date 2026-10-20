@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import coil.request.ImageRequest
 import com.onimeku.app.I18n
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 // ---------------------------------------------------------------------------
 // Efek loading tingkat produksi: kilau tersinkron, skeleton per layar, gambar
@@ -78,6 +79,32 @@ fun ProvideShimmer(content: @Composable () -> Unit) {
     val t = rememberInfiniteTransition(label = "shimmerClock")
     val p = t.animateFloat(0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "shimmerPhase")
     CompositionLocalProvider(LocalShimmerPhase provides p, content = content)
+}
+
+/** Jumlah gambar yang sedang menampilkan kilau. Jam kilau bersama hanya berdetak selama > 0. */
+object ImageLoading {
+    val count = androidx.compose.runtime.mutableIntStateOf(0)
+}
+
+/**
+ * Satu jam kilau untuk SEMUA poster yang sedang memuat (dipasang sekali di akar aplikasi).
+ * Dulu tiap poster tanpa skeleton menjalankan transisi tak berujung sendiri-sendiri (belasan sekaligus,
+ * sapuan tidak selaras). Kini satu jam, tersinkron lintas poster, dan BERHENTI total saat tak ada gambar
+ * yang memuat (tidak ada frame terjadwal percuma). Tidak ada state yang dibaca di komposisi: hanya fase gambar.
+ */
+@Composable
+fun ProvideImageShimmer(content: @Composable () -> Unit) {
+    val phase = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { ImageLoading.count.intValue > 0 }.collectLatest { on ->
+            if (on) {
+                while (true) {
+                    androidx.compose.runtime.withFrameNanos { n -> phase.floatValue = ((n / 1_000_000L) % 1500L) / 1500f }
+                }
+            }
+        }
+    }
+    CompositionLocalProvider(LocalShimmerPhase provides phase, content = content)
 }
 
 // ------------------------------------------------------------------ Skeleton per layar
@@ -157,6 +184,12 @@ fun LoadedImage(
     val reveal by animateFloatAsState(if (state == 1) 1f else 0f, tween(if (instant) 0 else 480, easing = FastOutSlowInEasing), label = "imgReveal")
     LaunchedEffect(state) { if (state == 3) { delay(1600); retry++; state = 0 } }
     val req = remember(url, retry) { if (url.isNullOrBlank()) null else ImageRequest.Builder(ctx).data(url).build() }
+    // Daftarkan ke jam kilau bersama selama kilau tampil; didaftarkan ulang bila status berubah, dilepas saat keluar layar.
+    val shimmering = if (req == null) pending else (state != 1 && state != 2)
+    androidx.compose.runtime.DisposableEffect(shimmering) {
+        if (shimmering) ImageLoading.count.intValue++
+        onDispose { if (shimmering) ImageLoading.count.intValue-- }
+    }
     Box(modifier) {
         if (req == null) {
             if (pending) Box(Modifier.fillMaxSize().shimmer()) else ImageFallback(title)

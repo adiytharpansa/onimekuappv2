@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
             OnimekuTheme {
                 CompositionLocalProvider(androidx.compose.foundation.LocalIndication provides com.onimeku.app.ui.NoIndication, LocalEnsureNotif provides { cb -> ensureNotif(cb) }, LocalQuickMenu provides { a -> vm.quick = a.id }) {
                     val appVm: AppVM = viewModel()
-                    App(appVm)
+                    com.onimeku.app.ui.ProvideImageShimmer { App(appVm) }
                 }
             }
         }
@@ -304,7 +304,9 @@ fun App(vm: AppVM) {
             }
             // Bilah loading global: cahaya merah menyapu di puncak layar selama sinkronisasi jaringan.
             if (vm.route !is Route.Player && !vm.welcomeOpen) {
-                TopLoadingBar(vm.syncing || vm.refreshing || vm.detailBusy != null, Modifier.align(Alignment.TopCenter).statusBarsPadding())
+                // Tidak ditampilkan selama skeleton Home (katalog belum ada): skeleton sudah menandakan loading, jangan ganda.
+                val skeletonUp = com.onimeku.app.data.Catalog.all.isEmpty() && com.onimeku.app.data.Catalog.loading
+                TopLoadingBar((vm.syncing || vm.refreshing || vm.detailBusy != null) && !skeletonUp, Modifier.align(Alignment.TopCenter).statusBarsPadding())
             }
             vm.quick?.let { QuickMenuSheet(vm, it) }
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.

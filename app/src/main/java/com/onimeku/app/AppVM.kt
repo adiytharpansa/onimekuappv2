@@ -122,7 +122,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             detailBusy = id
             val full = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }
-            if (full != null) com.onimeku.app.data.Catalog.enrich(full) else detailEnriched.remove(id)
+            if (full != null) com.onimeku.app.data.Catalog.enrichAsync(full) else detailEnriched.remove(id)
             if (detailBusy == id) detailBusy = null
         }
     }
@@ -140,34 +140,44 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var playing by mutableStateOf(false)
 
     init {
-        Downloads.oneTimeResetV13(app)
-        Downloads.oneTimeCleanupV23(app)
-        // Pembersihan sekali (debug.31, perintah user: semua data harus
-        // realtime dari API): snapshot katalog disk + cache gambar lama
-        // dibuang agar buka pertama build ini 100% data API live —
-        // tidak ada poster era resolusi-lama yang tersaji dari cache.
-        try {
-            val flags = app.getSharedPreferences("onimeku_flags", android.content.Context.MODE_PRIVATE)
-            if (!flags.getBoolean("purge_v31", false)) {
-                java.io.File(app.filesDir, "catalog_cache_direct.json").delete()
-                try { coil.Coil.imageLoader(app).diskCache?.clear() } catch (e: Exception) { /* abaikan */ }
-                flags.edit().putBoolean("purge_v31", true).apply()
-            }
-        } catch (e: Exception) { /* abaikan */ }
         PosterHealer.init(app)
-        Reminders.rescheduleAll(app, s)
-        initDownloads()
         watchNetwork()
         reloadCatalog()
         pullAndMerge()
+        // Pekerjaan berat start dipindah dari main thread (sebelumnya menahan frame pertama):
+        // pembersihan sekali, lalu DownloadManager Media3 (buka SQLite + pindai SimpleCache).
+        // Urutan di dalam satu coroutine tetap: pembersihan dulu, baru manager/cache dibuat.
+        viewModelScope.launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                Downloads.oneTimeResetV13(app)
+                Downloads.oneTimeCleanupV23(app)
+                // Pembersihan sekali (debug.31, perintah user: semua data harus
+                // realtime dari API): snapshot katalog disk + cache gambar lama
+                // dibuang agar buka pertama build ini 100% data API live —
+                // tidak ada poster era resolusi-lama yang tersaji dari cache.
+                try {
+                    val flags = app.getSharedPreferences("onimeku_flags", android.content.Context.MODE_PRIVATE)
+                    if (!flags.getBoolean("purge_v31", false)) {
+                        java.io.File(app.filesDir, "catalog_cache_direct.json").delete()
+                        try { coil.Coil.imageLoader(app).diskCache?.clear() } catch (e: Exception) { /* abaikan */ }
+                        flags.edit().putBoolean("purge_v31", true).apply()
+                    }
+                } catch (e: Exception) { /* abaikan */ }
+            }
+            initDownloads()
+        }
     }
 
     /** Sambungkan DownloadManager Media3 ke state aplikasi (progres asli). */
-    private fun initDownloads() {
-        val dm = Downloads.manager(app)
+    private suspend fun initDownloads() {
+        // Membangun DownloadManager + membaca indeks unduhan = I/O berat: lakukan di thread IO.
+        val (dm, existing) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val m = Downloads.manager(app)
+            m to Downloads.states(app)
+        }
         Downloads.setWifiOnly(app, s.settings.wifi)
         // Pulihkan tampilan untuk unduhan dari sesi sebelumnya.
-        for ((contentKey, d) in Downloads.states(app)) {
+        for ((contentKey, d) in existing) {
             val (id, ep) = Downloads.parseKey(contentKey) ?: continue
             val k = "$id:$ep"
             when (d.state) {
@@ -311,7 +321,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun setTab(r: Route) { val from = tabIndex(tab); val to = tabIndex(r); tabDir = if (from >= 0 && to >= 0) Integer.signum(to - from) else 0; navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
     fun replaceTop(r: Route) { navDir = 0; tabDir = 0; stack = stack.dropLast(1) + r; afterNav() }
     private fun afterNav() { quick = null; if (stack.lastOrNull() !is Route.Player) playerFull = false }
-    init { if (s.settings.subTranslate) com.onimeku.app.ui.SubTranslate.warm(app) }
+    init {
+        // Pemanasan model terjemahan + pemangkasan cache subtitle (daftar berkas) tidak perlu menahan main thread.
+        if (s.settings.subTranslate) viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) { com.onimeku.app.ui.SubTranslate.warm(app) }
+    }
 
     fun openSettings() { tabDir = 0; stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
 

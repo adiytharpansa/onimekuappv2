@@ -127,17 +127,10 @@ fun SkeletonBox(modifier: Modifier = Modifier, radius: Dp = 12.dp) {
 /** Klik dengan efek tekan (skala pegas) — terasa "hidup" tanpa ripple. */
 @Composable
 fun Modifier.pressable(onClick: () -> Unit): Modifier {
+    // Efek skala tekan sudah dimatikan (target selalu 1f). Dulu tiap item tetap menjalankan
+    // collectIsPressedAsState + animateFloatAsState + graphicsLayer; kini hanya klik.
     val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val reduceP = LocalReduceMotion.current
-    val sc by animateFloatAsState(
-        targetValue = if (false) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
-        label = "press",
-    )
-    return this
-        .graphicsLayer { scaleX = sc; scaleY = sc }
-        .clickable(interactionSource = src, indication = null, onClick = onClick)
+    return this.clickable(interactionSource = src, indication = null, onClick = onClick)
 }
 
 /** Muncul pertama kali: memudar + naik halus, bisa diberi jeda untuk efek berurutan. */
@@ -489,14 +482,9 @@ fun Modifier.popIn(delayMs: Int = 0): Modifier {
 /** Klik dengan efek "terangkat": mengecil + sedikit miring ke belakang saat ditekan, lalu memantul kembali. */
 @Composable
 fun Modifier.liftPress(onClick: () -> Unit): Modifier {
+    // Efek angkat/miring sudah dimatikan (target selalu netral): tanpa 2 animasi + layer per kartu.
     val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val reduce = LocalReduceMotion.current
-    val sc by animateFloatAsState(if (false) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftS")
-    val tilt by animateFloatAsState(if (false) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftT")
-    return this
-        .graphicsLayer { scaleX = sc; scaleY = sc; rotationX = tilt; cameraDistance = 14f * density }
-        .clickable(interactionSource = src, indication = null, onClick = onClick)
+    return this.clickable(interactionSource = src, indication = null, onClick = onClick)
 }
 
 /** Percikan partikel kecil sekali saat [trigger] berubah dari false ke true (mis. judul masuk My List). */
@@ -544,13 +532,8 @@ fun AnimatedProgressBar(value: Float, modifier: Modifier = Modifier, color: Colo
 fun Modifier.liftPressLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier {
     if (onLong == null) return liftPress(onClick)
     val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val reduce = LocalReduceMotion.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val sc by animateFloatAsState(if (false) 0.94f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLS")
-    val tilt by animateFloatAsState(if (false) 7f else 0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium), label = "liftLT")
     return this
-        .graphicsLayer { scaleX = sc; scaleY = sc; rotationX = tilt; cameraDistance = 14f * density }
         .combinedClickable(
             interactionSource = src, indication = null,
             onLongClick = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onLong() },
@@ -564,15 +547,8 @@ fun Modifier.liftPressLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier
 fun Modifier.pressableLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier {
     if (onLong == null) return pressable(onClick)
     val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val reduceP = LocalReduceMotion.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val sc by animateFloatAsState(
-        targetValue = if (false) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "pressL",
-    )
     return this
-        .graphicsLayer { scaleX = sc; scaleY = sc }
         .combinedClickable(
             interactionSource = src, indication = null,
             onLongClick = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onLong() },

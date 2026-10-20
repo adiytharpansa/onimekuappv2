@@ -74,7 +74,8 @@ private val SectionGap = 26.dp
 /** Satu baris poster bergulir horizontal dengan judul bagian + "See all". */
 @Composable
 private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: String?, ranked: Boolean = false, delayMs: Int = 0, subtitle: String? = null) {
-    val items = ids.mapNotNull { Catalog.byId[it] }
+    // remember: tanpa ini daftar dipetakan ulang (lookup per id) pada SETIAP recomposition baris.
+    val items = remember(ids, Catalog.all) { ids.mapNotNull { Catalog.byId[it] } }
     if (items.isEmpty()) return
     Column(if (delayMs >= 0) Modifier.fadeSlideIn(delayMs) else Modifier) {
         Spacer(Modifier.height(SectionGap))
@@ -156,9 +157,8 @@ private fun HomeContent(vm: AppVM) {
     val p = vm.p
     val heroH = heroHeight()
     if (Catalog.all.isEmpty()) {
-        if (Catalog.loading) {
-            HomeSkeleton(heroH, railW, bottomContentPadding())
-        } else {
+        // Skeleton ditangani HomeScreen (Crossfade); cabang kedua di sini membuat skeleton ganda saat transisi.
+        if (!Catalog.loading) {
             Page(extraTop = 64.dp) {
                 RootTitle(I18n.t("home", "Home"))
                 EmptyBox(I18n.t("catalog_unavail_t", "Catalog unavailable"), I18n.t("catalog_unavail_b", "The catalog could not be loaded. Check your connection, then try again.")) {
@@ -427,9 +427,12 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
     // 2026 "poster paling atas harus HD"): dari 30 terbaru, yang punya
     // BANNER (karya lebar, resolusi tertinggi) didahulukan menurut
     // kebaruan, lalu yang hanya punya poster. Syarat minimum: punya poster.
-    val pool = Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { it.poster != null }.take(30)
-    val items = (pool.filter { !it.banner.isNullOrBlank() } + pool.filter { it.banner.isNullOrBlank() })
-        .take(5).ifEmpty { Catalog.all.take(1) }
+    // remember: dulu dipetakan ulang dari SELURUH daftar freshest (ratusan id) di tiap recomposition Hero.
+    val items = remember(Catalog.all) {
+        val pool = Catalog.freshest.asSequence().mapNotNull { Catalog.byId[it] }.filter { it.poster != null }.take(30).toList()
+        (pool.filter { !it.banner.isNullOrBlank() } + pool.filter { it.banner.isNullOrBlank() })
+            .take(5).ifEmpty { Catalog.all.take(1) }
+    }
     if (items.isEmpty()) return
     // Pager "tak terbatas": halaman virtual besar, isi diambil dengan modulo. Dengan begitu slide otomatis
     // SELALU bergerak maju satu halaman (dulu dari slide ke-5 ke ke-1 menggulung mundur melewati semua halaman

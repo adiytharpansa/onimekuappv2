@@ -18,3 +18,10 @@
 -renamesourcefileattribute SourceFile
 -dontwarn com.google.errorprone.annotations.**   # Tink (security-crypto)
 -dontwarn javax.annotation.**
+
+# --- performa/ukuran (rilis) ---
+# Log verbose/debug dibuang saat R8 mengoptimalkan (tidak berefek pada Log.w/e).
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+}

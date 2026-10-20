@@ -152,7 +152,9 @@ object ApiClient {
         val (raw, mapped) = withContext(Dispatchers.Default) {
             val r = json.decodeFromString<ListResp>(text)
             val rw = r.data.filter { it.id.isNotBlank() && it.title.isNotBlank() }.distinctBy { it.id }
-            rw to rw.map { it.toAnime() }
+            val m = rw.map { it.toAnime() }
+            Catalog.warm(m) // daftar turunan dihitung di thread latar, bukan saat komposisi Home
+            rw to m
         }
         onProgress(mapped)
         onRaw(raw)
@@ -171,6 +173,7 @@ object ApiClient {
                 .distinctBy { it.id }
                 .map { it.toAnime() }
                 .ifEmpty { null }
+                ?.also { Catalog.warm(it) }
         } catch (e: Exception) {
             null
         }
