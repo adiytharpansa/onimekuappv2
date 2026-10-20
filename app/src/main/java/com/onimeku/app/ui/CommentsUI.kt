@@ -216,7 +216,9 @@ private fun CommentItem(c: CommentRow, mine: Boolean, onDelete: () -> Unit) {
                     I18n.t("comment_you", "You"), fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = RedText,
                     modifier = Modifier.clip(CircleShape).background(Color(0x26E8566F)).padding(horizontal = 7.dp, vertical = 1.dp),
                 )
-                Text(commentTime(c.created_at), fontSize = 12.sp, color = NavOff, maxLines = 1)
+                // Parse ISO + buat DateTimeFormatter dulu terjadi pada SETIAP rekomposisi tiap komentar; kini sekali per komentar.
+                val time = remember(c.created_at) { commentTime(c.created_at) }
+                Text(time, fontSize = 12.sp, color = NavOff, maxLines = 1)
                 Spacer(Modifier.weight(1f))
                 if (mine) Box(
                     Modifier.size(28.dp).clip(CircleShape).clickable(onClick = onDelete),
