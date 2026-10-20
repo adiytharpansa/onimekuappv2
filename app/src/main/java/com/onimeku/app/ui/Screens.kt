@@ -1095,7 +1095,9 @@ fun DetailScreen(vm: AppVM, id: String) {
                 Column(Modifier.padding(horizontal = Gutter).padding(top = 20.dp).fadeSlideIn(160)) {
                     Text(I18n.t("synopsis", "Synopsis"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Box(Modifier.padding(top = 8.dp).animateContentSize()) {
-                        Text(a.synopsis, color = InkSoft, fontSize = 14.5.sp, lineHeight = 22.sp,
+                        // Detail lengkap masih diambil dan sinopsis belum ada -> kerangka teks, bukan ruang kosong.
+                        if (a.synopsis.isBlank() && vm.detailBusy == id) TextSkeleton(4)
+                        else Text(a.synopsis, color = InkSoft, fontSize = 14.5.sp, lineHeight = 22.sp,
                             maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
                     }
                     if (a.synopsis.length > 180) {
@@ -1123,7 +1125,10 @@ fun DetailScreen(vm: AppVM, id: String) {
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                if (epNums.isEmpty()) Text(I18n.t("no_eps", "No episodes available yet."), Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = 14.sp)
+                if (epNums.isEmpty()) {
+                    if (vm.detailBusy == id) Box(Modifier.padding(horizontal = Gutter)) { SkeletonRows(3) }
+                    else Text(I18n.t("no_eps", "No episodes available yet."), Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = 14.sp)
+                }
             }
             itemsIndexed(epNums, key = { _, n -> "ep$n" }) { idx, n ->
                 val k = "$id:$n"
@@ -1186,7 +1191,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                     }
                 }
                 if (vm.commentsBusy && vm.comments.isEmpty()) {
-                    item(key = "comments_busy") { Text("…", color = NavOff, modifier = Modifier.padding(horizontal = Gutter, vertical = 16.dp)) }
+                    item(key = "comments_busy") { CommentSkeleton(3, Modifier.padding(horizontal = Gutter, vertical = 16.dp)) }
                 } else if (vm.comments.isEmpty()) {
                     item(key = "comments_empty") {
                         Text(I18n.t("comment_empty", "No comments yet. Be the first."), color = NavOff, fontSize = 14.sp,
@@ -1262,6 +1267,11 @@ fun SeeAllScreen(vm: AppVM, key: String) {
         else -> I18n.t("sec_new_eps", "New Episode Releases") to Catalog.new.map { it.first }
     }
     val items = ids.mapNotNull { Catalog.byId[it] }
+    // Katalog belum tiba: kerangka grid, bukan daftar kosong "0 anime".
+    if (Catalog.all.isEmpty() && Catalog.loading) {
+        Page { SubHead(title, vm); PosterGridSkeleton(4, Modifier.padding(top = 8.dp), hPad = 0.dp) }
+        return
+    }
     AnimeGrid(items, vm) {
         SubHead(title, vm)
         Text("${items.size} anime", color = NavOff, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))

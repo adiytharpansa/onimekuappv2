@@ -118,7 +118,8 @@ fun IconChip(icon: ImageVector, desc: String, on: Boolean = false, onClick: () -
 enum class BtnStyle { Play, Solid, Outline, OutlineOn }
 
 @Composable
-fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modifier = Modifier, height: Dp = 48.dp, onClick: () -> Unit) {
+/** [loading] = true: ikon diganti putaran kecil dan ketukan diabaikan (cegah kirim ganda), teks tetap terbaca. */
+fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modifier = Modifier, height: Dp = 48.dp, loading: Boolean = false, onClick: () -> Unit) {
     val (bg, fg, bd) = when (style) {
         BtnStyle.Play -> Triple(Red, Color.White, Red)
         BtnStyle.Solid -> Triple(Solid, Color.White, Solid)
@@ -127,12 +128,13 @@ fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modi
         BtnStyle.OutlineOn -> Triple(Color.White, Bg, Color.White)
     }
     Row(
-        modifier.pressable(onClick).height(height).clip(CircleShape).background(bg).border(1.5.dp, bd, CircleShape)
+        modifier.pressable { if (!loading) onClick() }.height(height).clip(CircleShape).background(bg).border(1.5.dp, bd, CircleShape)
             .padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = fg)
+        if (loading) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = fg, strokeWidth = 2.dp)
+        else if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = fg)
         Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
@@ -151,21 +153,7 @@ fun Modifier.artBackground(a: Anime): Modifier = this.background(Bg2)
 @Composable
 fun RealImage(a: Anime, modifier: Modifier = Modifier) {
     val img = com.onimeku.app.data.PosterHealer.coverFor(a) ?: com.onimeku.app.data.PosterHealer.posterFor(a)
-    val req = rememberImg(img)
-    val done = remember(a.id, img) { mutableStateOf(false) }
-    Box(modifier) {
-        // Kilau selama gambar dimuat; crossfade saat tiba.
-        if (!done.value && (req != null || !a.poster.isNullOrBlank() || !a.banner.isNullOrBlank())) Box(Modifier.fillMaxSize().shimmer())
-        if (req != null) {
-            coil.compose.AsyncImage(
-                model = req, contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                onSuccess = { done.value = true },
-                onError = { done.value = true },
-            )
-        }
-    }
+    LoadedImage(img, a.title, modifier, pending = !a.poster.isNullOrBlank() || !a.banner.isNullOrBlank())
 }
 
 /** Judul tanpa sufiks tahun di akhir: "False Memory (2026)" -> "False Memory" (tahun dipindah ke baris meta). */
@@ -240,21 +228,8 @@ fun Poster(
         } else {
             com.onimeku.app.data.PosterHealer.posterFor(a)
         }
-        // Kilau selama poster dimuat; hilang saat gambar tiba atau gagal. Crossfade 350 ms saat tampil.
-        val imgDone = remember(a.id, img) { mutableStateOf(false) }
-        val req = rememberImg(img)
-        if (!imgDone.value && (req != null || !a.poster.isNullOrBlank())) {
-            Box(Modifier.fillMaxSize().shimmer())
-        }
-        if (req != null) {
-            coil.compose.AsyncImage(
-                model = req, contentDescription = a.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                onSuccess = { imgDone.value = true },
-                onError = { imgDone.value = true },
-            )
-        }
+        // Kilau -> reveal (fade + zoom halus) -> coba ulang otomatis -> kartu cadangan berinisial (lihat LoadedImage).
+        LoadedImage(img, a.title, Modifier.fillMaxSize(), pending = !a.poster.isNullOrBlank())
         if (badges) {
             val rt = a.rating
             if (rt != null) ScoreBadge(rt, Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 10.dp), small = compact)

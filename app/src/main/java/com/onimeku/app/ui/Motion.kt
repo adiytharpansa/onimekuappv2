@@ -62,6 +62,8 @@ import coil.request.ImageRequest
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.draw.drawWithContent
@@ -77,6 +79,9 @@ private val ShimmerHi = Color(0xFF2C3044)
 /** Kilau bergerak (skeleton loading). Hanya fase gambar yang dihitung ulang tiap frame. */
 @Composable
 fun Modifier.shimmer(): Modifier {
+    // Di dalam ProvideShimmer: satu jam bersama, sapuan menyatu lintas kotak. Di luar: jam sendiri (perilaku lama).
+    val shared = LocalShimmerPhase.current
+    if (shared != null) return this.syncedShimmer(shared)
     val t = rememberInfiniteTransition(label = "shimmer")
     val x by t.animateFloat(
         initialValue = -1f, targetValue = 2f,
@@ -93,6 +98,25 @@ fun Modifier.shimmer(): Modifier {
             ),
         )
     }
+}
+
+/** Kilau menurut koordinat JENDELA: kotak di mana pun melihat sapuan yang sama pada waktu yang sama. */
+@Composable
+private fun Modifier.syncedShimmer(phase: androidx.compose.runtime.State<Float>): Modifier {
+    val screenW = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * androidx.compose.ui.platform.LocalDensity.current.density
+    val pos = remember { floatArrayOf(0f, 0f) }
+    return this
+        .onGloballyPositioned { c -> val o = c.positionInWindow(); pos[0] = o.x; pos[1] = o.y }
+        .drawBehind {
+            val band = screenW * 0.9f
+            val lx = -band + phase.value * (screenW + band * 2f) - pos[0]
+            drawRect(
+                Brush.linearGradient(
+                    colors = listOf(ShimmerBase, ShimmerHi, ShimmerBase),
+                    start = Offset(lx, 0f), end = Offset(lx + band, band * 0.35f),
+                ),
+            )
+        }
 }
 
 @Composable
@@ -142,9 +166,26 @@ fun rememberImg(url: String?): ImageRequest? {
 
 /** Kerangka Home saat katalog pertama kali dimuat. */
 @Composable
-fun HomeSkeleton(heroHeight: Dp, posterWidth: Dp, bottomPad: Dp) {
+fun HomeSkeleton(heroHeight: Dp, posterWidth: Dp, bottomPad: Dp) = ProvideShimmer { HomeSkeletonBody(heroHeight, posterWidth, bottomPad) }
+
+@Composable
+private fun HomeSkeletonBody(heroHeight: Dp, posterWidth: Dp, bottomPad: Dp) {
     Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = bottomPad)) {
-        Box(Modifier.fillMaxWidth().height(heroHeight).shimmer())
+        Box(Modifier.fillMaxWidth().height(heroHeight)) {
+            Box(Modifier.fillMaxSize().shimmer())
+            // Bayangan isi hero: lencana, judul, sinopsis, tombol Play, titik indikator.
+            Column(Modifier.align(androidx.compose.ui.Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 44.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val ink = Color(0x40000000)
+                Box(Modifier.width(90.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(ink))
+                Box(Modifier.fillMaxWidth(0.75f).height(30.dp).clip(RoundedCornerShape(8.dp)).background(ink))
+                Box(Modifier.fillMaxWidth(0.9f).height(13.dp).clip(RoundedCornerShape(6.dp)).background(ink))
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(18.dp)).background(ink))
+                    Box(Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(ink))
+                }
+            }
+        }
         repeat(3) {
             Spacer(Modifier.height(26.dp))
             SkeletonBox(Modifier.padding(horizontal = 16.dp).width(170.dp).height(22.dp), 8.dp)
@@ -164,7 +205,10 @@ fun HomeSkeleton(heroHeight: Dp, posterWidth: Dp, bottomPad: Dp) {
 
 /** Baris kerangka (thumbnail + dua teks) untuk daftar yang masih memuat. */
 @Composable
-fun SkeletonRows(count: Int = 4) {
+fun SkeletonRows(count: Int = 4) = ProvideShimmer { SkeletonRowsBody(count) }
+
+@Composable
+private fun SkeletonRowsBody(count: Int) {
     repeat(count) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SkeletonBox(Modifier.width(96.dp).aspectRatio(16f / 10f), 12.dp)

@@ -120,10 +120,16 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun loadDetail(id: String) {
         if (!detailEnriched.add(id)) return
         viewModelScope.launch {
+            detailBusy = id
             val full = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }
             if (full != null) com.onimeku.app.data.Catalog.enrich(full) else detailEnriched.remove(id)
+            if (detailBusy == id) detailBusy = null
         }
     }
+    /** Id judul yang detail lengkapnya (sinopsis, episode) sedang diambil; null bila tidak ada. Memicu skeleton di Detail. */
+    var detailBusy by mutableStateOf<String?>(null); private set
+    /** True selama katalog disinkronkan dari jaringan (muat awal, tarik-segar, segar-otomatis). Memicu bilah loading global. */
+    var syncing by mutableStateOf(false); private set
 
     /** Jadwal tayang asli dari API: id katalog -> episode berikutnya + waktu. */
     var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())
@@ -238,7 +244,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                 // Jadwal asli gagal dimuat: Calendar memakai cadangan lama.
             }
         }
-        catalogBusy = true
+        catalogBusy = true; syncing = true
         viewModelScope.launch {
             try {
                 val items = ApiClient.fetchCatalog(
@@ -268,7 +274,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             } finally {
                 Catalog.loading = false
                 refreshing = false
-                catalogBusy = false
+                catalogBusy = false; syncing = false
                 Reminders.rescheduleAll(app, s)
             }
         }

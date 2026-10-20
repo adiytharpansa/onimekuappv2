@@ -178,6 +178,8 @@ object I18n {
         "comment_delete" to "Hapus",
         // Pemutar
         "loading_stream" to "Memuat stream…",
+        "loading_stream2" to "Mencari sumber terbaik…",
+        "loading_stream3" to "Hampir siap…",
         "stream_unavailable" to "Stream episode ini sedang tidak tersedia.",
         "subtitles" to "Subtitle",
         "quality" to "Kualitas",

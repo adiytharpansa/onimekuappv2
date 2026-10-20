@@ -1362,8 +1362,7 @@ private fun PlayerStatus(vm: AppVM, a: com.onimeku.app.data.Anime, r: Route.Play
                 Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (loading) {
-                        CircularProgressIndicator(Modifier.size(40.dp), color = Red, strokeWidth = 3.dp)
-                        Text(I18n.t("loading_stream", "Loading stream…"), Modifier.padding(top = 12.dp), fontSize = 13.sp, color = InkSoft)
+                        StreamLoading()
                     } else {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(34.dp), tint = RedText)
                         Text(I18n.t("stream_unavail", "Stream unavailable"), Modifier.padding(top = 8.dp), fontWeight = FontWeight.SemiBold)

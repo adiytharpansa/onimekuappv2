@@ -116,9 +116,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
 
         Box(Modifier.padding(top = 6.dp)) {
             Btn(if (vm.authBusy) I18n.t("please_wait", "Please wait…") else if (signUp) I18n.t("create_account_b", "Create account") else I18n.t("sign_in", "Sign in"), BtnStyle.Play,
-                modifier = Modifier.fillMaxWidth(), height = 54.dp) { if (!vm.authBusy) submit() }
-            if (vm.authBusy) CircularProgressIndicator(Modifier.align(Alignment.CenterStart).padding(start = 22.dp).size(20.dp),
-                color = Color.White, strokeWidth = 2.dp)
+                modifier = Modifier.fillMaxWidth(), height = 54.dp, loading = vm.authBusy) { submit() }
         }
 
         if (!signUp) {

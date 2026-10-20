@@ -299,6 +299,10 @@ fun App(vm: AppVM) {
                     exit = fadeOut(tween(160)) + slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { it },
                 ) { TabBar(vm, Modifier) }
             }
+            // Bilah loading global: cahaya merah menyapu di puncak layar selama sinkronisasi jaringan.
+            if (vm.route !is Route.Player && !vm.welcomeOpen) {
+                TopLoadingBar(vm.syncing || vm.refreshing || vm.detailBusy != null, Modifier.align(Alignment.TopCenter).statusBarsPadding())
+            }
             vm.quick?.let { QuickMenuSheet(vm, it) }
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.
             var lastToast by remember { mutableStateOf("") }
