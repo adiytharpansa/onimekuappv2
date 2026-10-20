@@ -173,6 +173,10 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var mainRetry by remember(r) { mutableIntStateOf(0) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false; pbOffline = false
+        // Data putar yang sudah di-prefetch (dari Detail) tiba nyaris seketika, lalu PlayerReady membangun ExoPlayer
+        // di main thread TEPAT saat animasi masuk (380 ms) berjalan -> patah. Tahan penyerahan [pb] sampai animasi selesai.
+        val t0 = android.os.SystemClock.uptimeMillis()
+        suspend fun settle() { val w = 380L - (android.os.SystemClock.uptimeMillis() - t0); if (w > 0) delay(w) }
         // Batas waktu TOTAL memuat data putar (debug.30, dilonggarkan
         // debug.37): endpoint hulu kadang lambat/flaky (terukur 4,6 dtk
         // dan sesekali 503 untuk Bleach ep1) dan timeout baca per
@@ -193,6 +197,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             }
             if (dl != null && dl.state == androidx.media3.exoplayer.offline.Download.STATE_COMPLETED) {
                 pbOffline = true
+                settle()
                 pb = com.onimeku.app.data.Playback(streamUrl = dl.request.uri.toString(), episode = r.ep)
             } else {
                 pbFailed = true
@@ -252,6 +257,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             val trJob = if (subsNow.isNotEmpty()) async { SubTranslate.fill(ctx, r.id, r.ep, subsNow, trOpts) } else null
             val early = trJob?.let { j -> kotlinx.coroutines.withTimeoutOrNull(3_000) { j.await() } }
             if (early != null && early.size != subsNow.size) ready = ready.copy(subtitles = early)
+            settle()
             pb = ready
             // Uji mandiri jalur stream: GET polos meniru langkah
             // pemutar (master -> varian -> segmen 1) lalu unggah log.

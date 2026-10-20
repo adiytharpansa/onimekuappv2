@@ -25,19 +25,34 @@ object CrashLog {
         }
     }
 
-    fun note(tag: String, msg: String) {
-        val f = file ?: return
+    // Antrean baris + satu thread penulis. Dulu note() membaca lalu menulis ulang berkas (hingga 64 KB) SINKRON di thread
+    // pemanggil; listener ExoPlayer memanggilnya di main thread tiap perubahan state/galat muat -> jeda saat pemutar dibuka.
+    private val queue = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    private val io: java.util.concurrent.ExecutorService by lazy {
+        java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "onimeku-log").apply { isDaemon = true } }
+    }
+
+    private fun flush(f: File) {
         synchronized(lock) {
+            val sb = StringBuilder()
+            while (true) sb.append(queue.poll() ?: break)
+            if (sb.isEmpty()) return
             try {
-                val line = "${java.time.Instant.now()} [$tag] $msg\n"
-                var old = if (f.exists()) f.readText() else ""
-                if (old.length + line.length > MAX) old = old.takeLast(MAX / 2)
-                f.writeText(old + line)
+                if (f.exists() && f.length() + sb.length > MAX) f.writeText(f.readText().takeLast(MAX / 2) + sb)
+                else f.appendText(sb.toString())
             } catch (_: Exception) {}
         }
     }
 
+    fun note(tag: String, msg: String) {
+        val f = file ?: return
+        queue.add("${java.time.Instant.now()} [$tag] $msg\n")
+        // CRASH ditulis sinkron (proses akan mati); catatan lain di thread latar.
+        if (tag == "CRASH") flush(f) else io.execute { flush(f) }
+    }
+
     fun read(): String {
+        file?.let { flush(it) }
         val head = "Onimeku ${com.onimeku.app.BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}\n\n"
         val f = file
         return head + (if (f != null && f.exists()) f.readText().takeLast(20_000) else "(no entries)")
