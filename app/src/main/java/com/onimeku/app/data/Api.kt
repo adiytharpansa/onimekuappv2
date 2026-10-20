@@ -193,11 +193,39 @@ object ApiClient {
     }
 
     /**
-     * Hulu tidak menyediakan endpoint jadwal tayang. Kalender aplikasi
-     * otomatis jatuh ke turunan hari/jam dari katalog (jalur cadangan
-     * yang memang sudah ada di AppVM).
+     * Jadwal tayang ASLI 7 hari ke depan dari AniList (hulu Onimeku tidak punya
+     * endpoint jadwal). Hanya episode dengan airingAt > sekarang; dicocokkan ke
+     * katalog lewat anilistId. Melempar exception bila jaringan gagal agar UI
+     * bisa membedakan "gagal memuat" dari "memang kosong".
      */
-    suspend fun fetchSchedule(): List<ApiScheduleItem> = emptyList()
+    suspend fun fetchSchedule(): List<ApiScheduleItem> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis() / 1000
+        val out = ArrayList<ApiScheduleItem>()
+        var page = 1
+        while (page <= 8) {
+            val query = "query(\$p:Int,\$a:Int,\$b:Int){Page(page:\$p,perPage:50){pageInfo{hasNextPage}" +
+                "airingSchedules(airingAt_greater:\$a,airingAt_lesser:\$b,sort:TIME){airingAt episode mediaId}}}"
+            val body = org.json.JSONObject()
+                .put("query", query)
+                .put("variables", org.json.JSONObject().put("p", page).put("a", now).put("b", now + 7 * 86400))
+                .toString().toRequestBody("application/json".toMediaType())
+            val req = okhttp3.Request.Builder().url("https://graphql.anilist.co")
+                .header("Accept", "application/json").post(body).build()
+            val text = Net.client.newCall(req).execute().use { r ->
+                if (!r.isSuccessful) throw java.io.IOException("AniList HTTP ${r.code}")
+                r.body?.string() ?: throw java.io.IOException("respons kosong")
+            }
+            val pg = org.json.JSONObject(text).getJSONObject("data").getJSONObject("Page")
+            val arr = pg.getJSONArray("airingSchedules")
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                out += ApiScheduleItem(anilistId = o.getInt("mediaId"), ep = o.getInt("episode"), airingAt = o.getLong("airingAt"))
+            }
+            if (!pg.getJSONObject("pageInfo").getBoolean("hasNextPage")) break
+            page++
+        }
+        out
+    }
 
     suspend fun fetchDetail(id: String): Anime? {
         val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime?id=${enc(id)}"))
@@ -307,8 +335,9 @@ object ApiClient {
 
 @Serializable
 data class ApiScheduleItem(
-    val id: String = "",
+    val anilistId: Int = 0,
     val ep: Int = 0,
+    /** Epoch detik waktu tayang. */
     val airingAt: Long = 0,
 )
 

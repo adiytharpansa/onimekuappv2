@@ -131,9 +131,24 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     /** True selama katalog disinkronkan dari jaringan (muat awal, tarik-segar, segar-otomatis). Memicu bilah loading global. */
     var syncing by mutableStateOf(false); private set
 
-    /** Jadwal tayang asli dari API: id katalog -> episode berikutnya + waktu. */
-    var schedule by mutableStateOf<Map<String, ApiScheduleItem>>(emptyMap())
+    /** Jadwal tayang asli (episode yang BELUM tayang). null = belum termuat. */
+    var schedule by mutableStateOf<List<ApiScheduleItem>?>(null)
         private set
+    var scheduleFailed by mutableStateOf(false)
+        private set
+    private var scheduleAt = 0L
+
+    /** Muat jadwal; lewati bila data masih segar (<15 mnt) kecuali [force]. */
+    fun loadSchedule(force: Boolean = false) {
+        if (!force && schedule != null && System.currentTimeMillis() - scheduleAt < 15 * 60_000L) return
+        viewModelScope.launch {
+            try {
+                schedule = ApiClient.fetchSchedule(); scheduleAt = System.currentTimeMillis(); scheduleFailed = false
+            } catch (e: Exception) {
+                if (schedule == null) scheduleFailed = true
+            }
+        }
+    }
     var inPip by mutableStateOf(false)
     /** Parameter PiP terbaru dari pemutar (rasio, aksi, sourceRect) — dipakai MainActivity untuk Android < 12. */
     var pipParams: android.app.PictureInPictureParams? = null
@@ -247,13 +262,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                 if (cached != null && Catalog.all.isEmpty()) { Catalog.all = cached; Catalog.loading = false }
             }
         }
-        viewModelScope.launch {
-            try {
-                schedule = ApiClient.fetchSchedule().associateBy { it.id }
-            } catch (e: Exception) {
-                // Jadwal asli gagal dimuat: Calendar memakai cadangan lama.
-            }
-        }
+        loadSchedule()
         catalogBusy = true; syncing = true
         viewModelScope.launch {
             try {

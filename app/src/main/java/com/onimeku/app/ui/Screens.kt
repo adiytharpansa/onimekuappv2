@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -603,34 +604,26 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
 // ------------------------------------------------------------------ CALENDAR
 @Composable
 fun CalendarScreen(vm: AppVM) {
-    val ensure = LocalEnsureNotif.current
+    val zone = remember { java.time.ZoneId.systemDefault() }
     val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
-    // Kalender SELALU berisi (perintah user 19 Okt 2026): API tidak
-    // menyediakan jadwal tayang per hari, jadi isi halaman diturunkan
-    // dari katalog realtime — judul yang diperbarui pada tanggal
-    // terpilih, lalu daftar Sedang Tayang terbaru yang selalu tampil
-    // di bawahnya agar halaman tidak pernah kosong.
     val selDate = days[vm.calDay]
-    val dayList = remember(selDate, Catalog.all) {
-        Catalog.freshest.mapNotNull { Catalog.byId[it] }.filter { a ->
-            runCatching {
-                java.time.OffsetDateTime.parse(a.updatedAt)
-                    .atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() == selDate
-            }.getOrDefault(false)
-        }
+    LaunchedEffect(Unit) { vm.loadSchedule() }
+    // Detik "sekarang" diperbarui tiap menit: episode yang baru lewat jam tayangnya otomatis hilang.
+    val nowSec by produceState(System.currentTimeMillis() / 1000) {
+        while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() / 1000 }
     }
-    val airingList = remember(Catalog.all) { Catalog.airingFresh.mapNotNull { Catalog.byId[it] }.take(40) }
-    // Jadwal ASLI dari API bila sudah termuat: hanya judul dengan episode
-    // berikutnya yang benar-benar terjadwal pada tanggal terpilih.
     val sched = vm.schedule
-    val realList = if (sched.isNotEmpty()) {
-        val sel = days[vm.calDay]
-        Catalog.unique.mapNotNull { a ->
-            val s = sched[a.id] ?: return@mapNotNull null
-            val dt = java.time.Instant.ofEpochSecond(s.airingAt).atZone(java.time.ZoneId.systemDefault())
-            if (dt.toLocalDate() == sel) Triple(a, s, dt) else null
-        }.sortedBy { it.second.airingAt }
-    } else null
+    val byAnilist = remember(Catalog.all) {
+        Catalog.unique.filter { it.anilistId != null }.groupBy { it.anilistId!! }.mapValues { (_, v) -> v.maxByOrNull { it.ep } ?: v.first() }
+    }
+    // Hanya episode yang BELUM tayang, pada tanggal terpilih, yang ada di katalog aplikasi.
+    val upcoming = remember(sched, byAnilist, selDate, nowSec) {
+        sched.orEmpty().filter { it.airingAt > nowSec }
+            .mapNotNull { s -> byAnilist[s.anilistId]?.let { a -> Triple(a, s, java.time.Instant.ofEpochSecond(s.airingAt).atZone(zone)) } }
+            .filter { it.third.toLocalDate() == selDate }
+            .sortedBy { it.second.airingAt }
+    }
+    val fmt = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
     Page {
         RootTitle(I18n.t("calendar_t", "Release Calendar"), I18n.t("calendar_sub", "Episodes airing this week."))
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -651,39 +644,29 @@ fun CalendarScreen(vm: AppVM) {
             }
         }
         Spacer(Modifier.height(8.dp))
-        if (Catalog.all.isEmpty()) {
-            SkeletonRows(5)
-        } else key(vm.calDay) { Column(Modifier.fadeSlideIn()) {
-        if (realList != null) {
-            if (realList.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
-            else realList.forEach { (a, s, dt) ->
-                ItemRow(
-                    a, thumbLabel = dt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), title = a.title,
-                    sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
-                    onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { if (showBell(a, vm)) RemindBell(a, vm) }
-            }
-        } else {
-            if (dayList.isNotEmpty()) {
-                SectionHead(I18n.t("sec_new_eps", "New Episode Releases"))
-                dayList.forEach { a ->
-                    ItemRow(
-                        a, thumbLabel = a.time, title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
-                        onOpen = { vm.go(Route.Detail(a.id)) },
-                    ) { if (showBell(a, vm)) RemindBell(a, vm) }
+        when {
+            sched == null && vm.scheduleFailed -> EmptyBox(
+                I18n.t("schedule_fail_t", "Couldn't load schedule"),
+                I18n.t("schedule_fail_b", "Check your connection and try again."),
+            ) { TextButton(onClick = { vm.loadSchedule(force = true) }) { Text(I18n.t("retry", "Retry")) } }
+            sched == null || Catalog.all.isEmpty() -> SkeletonRows(5)
+            else -> key(vm.calDay) { Column(Modifier.fadeSlideIn()) {
+                if (upcoming.isEmpty()) {
+                    EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
+                } else {
+                    SectionHead(I18n.t("sec_new_eps", "New Episode Releases"))
+                    upcoming.forEach { (a, s, dt) ->
+                        val mins = ((s.airingAt - nowSec) / 60).coerceAtLeast(0)
+                        val eta = if (selDate == LocalDate.now() && mins < 24 * 60) " · " + (if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m") else ""
+                        ItemRow(
+                            a, thumbLabel = dt.format(fmt), title = a.title,
+                            sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}$eta",
+                            onOpen = { vm.go(Route.Detail(a.id)) },
+                        ) { if (showBell(a, vm)) RemindBell(a, vm) }
+                    }
                 }
-                Spacer(Modifier.height(12.dp))
-            }
-            SectionHead(I18n.t("sec_airing", "Airing") + " · " + I18n.t("sec_latest", "Latest"))
-            if (airingList.isEmpty()) EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
-            else airingList.forEach { a ->
-                ItemRow(
-                    a, thumbLabel = "", title = a.title, sub = "Episode ${a.ep} · ${a.genres.firstOrNull() ?: "Anime"}",
-                    onOpen = { vm.go(Route.Detail(a.id)) },
-                ) { if (showBell(a, vm)) RemindBell(a, vm) }
-            }
+            } }
         }
-        } }
     }
 }
 
