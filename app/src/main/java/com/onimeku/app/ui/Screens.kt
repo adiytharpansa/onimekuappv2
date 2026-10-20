@@ -601,14 +601,6 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
     }
 }
 
-// ------------------------------------------------------------------ CALENDAR
-
-
-/** Lonceng pengingat hanya untuk judul yang BELUM tayang; judul yang sudah rilis tidak punya lonceng (kecuali pengingat lamanya masih aktif, agar bisa dimatikan). */
-
-@Composable
-
-
 @Composable
 fun ItemRow(
     a: Anime, thumbLabel: String, title: String, sub: String, subOk: Boolean = false,
