@@ -482,9 +482,14 @@ fun Modifier.popIn(delayMs: Int = 0): Modifier {
 /** Klik dengan efek "terangkat": mengecil + sedikit miring ke belakang saat ditekan, lalu memantul kembali. */
 @Composable
 fun Modifier.liftPress(onClick: () -> Unit): Modifier {
-    // Efek angkat/miring sudah dimatikan (target selalu netral): tanpa 2 animasi + layer per kartu.
+    // Umpan balik tekan RINGAN: mengecil 3,5% saat disentuh -> klik terasa langsung merespons.
+    // Nilai animasi dibaca di blok graphicsLayer (fase draw), jadi hanya berekomposisi saat tekan/lepas, bukan tiap frame.
     val src = remember { MutableInteractionSource() }
-    return this.clickable(interactionSource = src, indication = null, onClick = onClick)
+    val pressed by src.collectIsPressedAsState()
+    val s = animateFloatAsState(if (pressed) 0.965f else 1f, tween(if (pressed) 70 else 140), label = "pressScale")
+    return this
+        .graphicsLayer { scaleX = s.value; scaleY = s.value }
+        .clickable(interactionSource = src, indication = null, onClick = onClick)
 }
 
 /** Percikan partikel kecil sekali saat [trigger] berubah dari false ke true (mis. judul masuk My List). */
@@ -533,7 +538,10 @@ fun Modifier.liftPressLong(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier
     if (onLong == null) return liftPress(onClick)
     val src = remember { MutableInteractionSource() }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val pressed by src.collectIsPressedAsState()
+    val s = animateFloatAsState(if (pressed) 0.965f else 1f, tween(if (pressed) 70 else 140), label = "pressScaleLong")
     return this
+        .graphicsLayer { scaleX = s.value; scaleY = s.value }
         .combinedClickable(
             interactionSource = src, indication = null,
             onLongClick = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onLong() },

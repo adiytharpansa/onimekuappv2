@@ -119,9 +119,13 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
      */
     fun loadDetail(id: String) {
         if (!detailEnriched.add(id)) return
+        val t0 = android.os.SystemClock.uptimeMillis()
         viewModelScope.launch {
             detailBusy = id
             val full = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }
+            // Jangan ganti katalog (memicu rekomposisi besar) selagi animasi masuk Detail (~300 ms) masih berjalan.
+            val wait = 450L - (android.os.SystemClock.uptimeMillis() - t0)
+            if (wait > 0) delay(wait)
             if (full != null) com.onimeku.app.data.Catalog.enrichAsync(full) else detailEnriched.remove(id)
             if (detailBusy == id) detailBusy = null
         }

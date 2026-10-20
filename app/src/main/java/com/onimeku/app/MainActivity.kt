@@ -251,7 +251,9 @@ fun App(vm: AppVM) {
                                 (scaleIn(tween(380, easing = ease), initialScale = 0.78f, transformOrigin = o) + fadeIn(tween(300))) togetherWith
                                     (scaleOut(tween(380, easing = ease), targetScale = 1.04f, transformOrigin = o) + fadeOut(tween(220)))
                             }
-                            dir > 0 && t is Route.Detail -> EnterTransition.None togetherWith ExitTransition.None
+                            // MASUK Detail: Detail memudar + membesar tipis di atas Home (Home diam di bawah, tanpa kerja ekstra).
+                            dir > 0 && t is Route.Detail ->
+                                (fadeIn(tween(220, easing = ease)) + scaleIn(tween(280, easing = ease), initialScale = 0.97f)) togetherWith ExitTransition.None
                             dir > 0 -> (slideInHorizontally(tween(320, easing = ease)) { it / 4 } + fadeIn(tween(280))) togetherWith
                                 (slideOutHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeOut(tween(220)))
                             // KEMBALI: kebalikannya.
@@ -261,11 +263,14 @@ fun App(vm: AppVM) {
                                 (fadeIn(tween(260)) + scaleIn(tween(320, easing = ease), initialScale = 1.04f, transformOrigin = o)) togetherWith
                                     (scaleOut(tween(320, easing = ease), targetScale = 0.78f, transformOrigin = o) + fadeOut(tween(260)))
                             }
-                            i is Route.Detail -> EnterTransition.None togetherWith ExitTransition.None
+                            // KEMBALI dari Detail: Detail memudar keluar, Home sudah ada di bawahnya.
+                            i is Route.Detail ->
+                                EnterTransition.None togetherWith (fadeOut(tween(200, easing = ease)) + scaleOut(tween(240, easing = ease), targetScale = 0.98f))
                             else -> (slideInHorizontally(tween(320, easing = ease)) { -it / 6 } + fadeIn(tween(280))) togetherWith
                                 (slideOutHorizontally(tween(320, easing = ease)) { it / 4 } + fadeOut(tween(220)))
                         }
-                        (EnterTransition.None togetherWith ExitTransition.None).also { it.targetContentZIndex = if (dir < 0) -1f else 1f }
+                        // BUG LAMA: baris ini membuang `ct` dan selalu memakai transisi kosong -> semua perpindahan layar "patah".
+                        ct.also { it.targetContentZIndex = if (dir < 0) -1f else 1f }
                     },
                     label = "route",
                 ) { r ->
@@ -303,11 +308,7 @@ fun App(vm: AppVM) {
                 ) { TabBar(vm, Modifier) }
             }
             // Bilah loading global: cahaya merah menyapu di puncak layar selama sinkronisasi jaringan.
-            if (vm.route !is Route.Player && !vm.welcomeOpen) {
-                // Tidak ditampilkan selama skeleton Home (katalog belum ada): skeleton sudah menandakan loading, jangan ganda.
-                val skeletonUp = com.onimeku.app.data.Catalog.all.isEmpty() && com.onimeku.app.data.Catalog.loading
-                TopLoadingBar((vm.syncing || vm.refreshing || vm.detailBusy != null) && !skeletonUp, Modifier.align(Alignment.TopCenter).statusBarsPadding())
-            }
+            GlobalLoadingBar(vm, Modifier.align(Alignment.TopCenter).statusBarsPadding())
             vm.quick?.let { QuickMenuSheet(vm, it) }
             // Toast masuk/keluar dengan fade + geser; teks terakhir ditahan selama animasi keluar.
             var lastToast by remember { mutableStateOf("") }
@@ -335,6 +336,28 @@ fun App(vm: AppVM) {
             }
         }
     }
+}
+
+/**
+ * SATU-SATUNYA loader di puncak layar. Prioritas: skeleton > indikator tarik-segar > bilah ini.
+ * Sebelumnya bilah ini menyala bersamaan dengan skeleton Home (saat Crossfade), indikator lingkaran tarik-segar,
+ * dan skeleton Detail -> tampak "loading dobel". Kini:
+ *  - mati selama refresh manual (indikator lingkaran sudah ada) dan selama skeleton tampil,
+ *  - mati di Detail/Player/Auth (Detail punya skeleton sendiri),
+ *  - ditunda 700 ms: sinkronisasi senyap yang cepat selesai tidak membuat bilah berkedip.
+ * Dipisah jadi composable sendiri agar perubahan Catalog/syncing tidak merekomposisi seluruh App.
+ */
+@Composable
+private fun GlobalLoadingBar(vm: AppVM, modifier: Modifier) {
+    val r = vm.route
+    val allowed = !vm.welcomeOpen && r !is Route.Player && r !is Route.Detail && r !is Route.Auth
+    val skeletonUp = com.onimeku.app.data.Catalog.all.isEmpty() && com.onimeku.app.data.Catalog.loading
+    val want = allowed && vm.syncing && !vm.refreshing && !skeletonUp
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(want) {
+        if (want) { kotlinx.coroutines.delay(700); shown = true } else shown = false
+    }
+    TopLoadingBar(shown, modifier)
 }
 
 @Composable

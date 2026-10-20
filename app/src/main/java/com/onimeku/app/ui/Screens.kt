@@ -144,8 +144,16 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boo
 fun HomeScreen(vm: AppVM) {
     // Skeleton memudar halus menjadi konten saat katalog tiba (bukan muncul tiba-tiba).
     val loading = Catalog.all.isEmpty() && Catalog.loading
-    androidx.compose.animation.Crossfade(targetState = loading, animationSpec = androidx.compose.animation.core.tween(380), label = "homeLoad") { l ->
-        if (l) HomeSkeleton(heroHeight(), railW, bottomContentPadding()) else HomeContent(vm)
+    // true hanya bila instance Home ini lahir saat skeleton tampil (mulai dingin). Buka Home saat data sudah ada: tanpa fade.
+    val cameFromSkeleton = remember { loading }
+    if (loading) {
+        HomeSkeleton(heroHeight(), railW, bottomContentPadding())
+    } else {
+        // Crossfade lama menumpuk skeleton + konten selama 380 ms (dua "loading" sekaligus di hero).
+        // Kini skeleton langsung diganti; hanya konten yang memudar masuk.
+        val a = remember { androidx.compose.animation.core.Animatable(if (cameFromSkeleton) 0f else 1f) }
+        LaunchedEffect(Unit) { if (a.value < 1f) a.animateTo(1f, tween(320)) }
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = a.value }) { HomeContent(vm) }
     }
 }
 
@@ -449,7 +457,8 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
     LaunchedEffect(pager.settledPage, n) {
         if (n > 1) {
             delay(5500)
-            while (pager.isScrollInProgress || held || vm.overlayOpen) delay(100)
+            // Jeda juga saat Home tidak di depan (membuka Detail/Player): jangan animasi di balik transisi.
+            while (pager.isScrollInProgress || held || vm.overlayOpen || vm.route != Route.Home) delay(100)
             pager.animateScrollToPage(
                 pager.settledPage + 1,
                 animationSpec = tween(if (reduceMotion) 0 else 850, easing = androidx.compose.animation.core.CubicBezierEasing(0.33f, 0f, 0.15f, 1f)),
@@ -881,9 +890,12 @@ fun DetailScreen(vm: AppVM, id: String) {
     var expanded by rememberSaveable(id) { mutableStateOf(false) }
     var newestFirst by rememberSaveable(id) { mutableStateOf(false) }
     var markEp by remember(id) { mutableStateOf<Int?>(null) }
-    val baseEps = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
-    val epNums = if (newestFirst) baseEps.reversed() else baseEps
-    val sim = Catalog.similar(id)
+    val baseEps = remember(a.available, a.eps) { if (a.available.isNotEmpty()) a.available else (1..a.eps).toList() }
+    val epNums = remember(baseEps, newestFirst) { if (newestFirst) baseEps.reversed() else baseEps }
+    // Dulu Catalog.similar() jalan di main thread pada SETIAP rekomposisi (termasuk saat animasi masuk). Kini di thread latar.
+    val sim by produceState(initialValue = emptyList<Anime>(), id, Catalog.all) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Catalog.similar(id) }
+    }
     val resume = vm.p.last?.takeIf { it.id == id }
     // Katalog daftar berbentuk lite: perkaya judul ini dari endpoint
     // detail (sinopsis penuh + nomor episode asli) sekali per sesi.
@@ -896,13 +908,17 @@ fun DetailScreen(vm: AppVM, id: String) {
     // Play mengenai cache dan video mulai nyaris seketika.
     val trCtx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(id) {
+        // Tunggu animasi masuk selesai, baru pemanasan jaringan (di thread IO) — tidak berebut CPU/jaringan dengan transisi.
+        delay(450)
         val trOpts = SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl)
         val firstEp = a.available.firstOrNull() ?: 1
-        com.onimeku.app.data.ApiClient.prefetchPlayback(id, firstEp)
-        resume?.let { if (it.ep != firstEp) com.onimeku.app.data.ApiClient.prefetchPlayback(id, it.ep) }
-        // Siapkan terjemahan subtitle Indonesia/English selagi Detail dibaca.
         val target = resume?.ep ?: firstEp
-        SubTranslate.prefetch(trCtx, id, target, trOpts)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.onimeku.app.data.ApiClient.prefetchPlayback(id, firstEp)
+            resume?.let { if (it.ep != firstEp) com.onimeku.app.data.ApiClient.prefetchPlayback(id, it.ep) }
+            // Siapkan terjemahan subtitle Indonesia/English selagi Detail dibaca.
+            SubTranslate.prefetch(trCtx, id, target, trOpts)
+        }
     }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -926,7 +942,8 @@ fun DetailScreen(vm: AppVM, id: String) {
         ctx.startActivity(android.content.Intent.createChooser(send, I18n.t("share", "Share")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    Box(Modifier.fillMaxSize()) {
+    // background(Bg) OPAK: Detail memudar masuk di atas Home tanpa Home tembus di baliknya.
+    Box(Modifier.fillMaxSize().background(Bg)) {
         // LazyColumn: judul panjang (ratusan episode) tidak digambar sekaligus.
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = bottomContentPadding())) {
             item(key = "hero") {
