@@ -66,6 +66,28 @@ data class ApiSubtitle(
 )
 
 @Serializable
+data class ApiDoor(
+    val name: String = "",
+    val url: String = "",
+)
+
+@Serializable
+data class ApiDownloadDoor(
+    val name: String = "",
+    val q1080: String = "",
+    val q720: String = "",
+    val q480: String = "",
+    val subsEn: String? = null,
+    val subsId: String? = null,
+)
+
+@Serializable
+data class ApiDownload(
+    val downloadable: Boolean = true,
+    val doors: List<ApiDownloadDoor> = emptyList(),
+)
+
+@Serializable
 data class Playback(
     val streamUrl: String? = null,
     val streamProxyUrl: String? = null,
@@ -77,6 +99,12 @@ data class Playback(
     val poster: String? = null,
     val episode: Int = 0,
     val subtitles: List<ApiSubtitle> = emptyList(),
+    // Gudang (salinan sendiri): penanda internal + semua pintu putar
+    // (master.m3u8 per pintu) + sumber unduhan per pintu/kualitas.
+    val source: String? = null,
+    val doors: List<ApiDoor> = emptyList(),
+    val durationSec: Int? = null,
+    val download: ApiDownload? = null,
     val mediaKind: String? = null,
     val playable: String? = null,
     // Posisi intro (detik) bila API menyediakannya; tombol Skip intro hanya muncul jika keduanya ada.
@@ -147,7 +175,10 @@ object ApiClient {
         onProgress: (List<Anime>) -> Unit = {},
         onRaw: (List<ApiAnime>) -> Unit = {},
     ): List<Anime> {
-        val text = getTextRetry("$BASE/api/anime?lite=1")
+        // Tampilan gudang-saja (perintah user 21 Okt 2026): katalog
+        // yang ditampilkan HANYA judul yang sudah tersalin ke
+        // gudang; metadata tetap dari API katalog kita.
+        val text = getTextRetry("$BASE/api/anime?lite=1&gudang=1")
         // ±900 KB JSON: parse + pemetaan di thread latar agar UI tidak tersendat.
         val (raw, mapped) = withContext(Dispatchers.Default) {
             val r = json.decodeFromString<ListResp>(text)
@@ -228,9 +259,33 @@ object ApiClient {
     }
 
     suspend fun fetchDetail(id: String): Anime? {
-        val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime?id=${enc(id)}"))
+        val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime?id=${enc(id)}&gudang=1"))
         return r.data?.takeIf { it.id.isNotBlank() }?.toAnime()
     }
+
+    /**
+     * Kirim laporan penonton dari tombol lapor di pemutar ke API
+     * (POST /api/gudang-report; format mengikuti rancangan berkas
+     * laporan penyalin: anilistId + episode + catatan). true bila
+     * terkirim; false -> pemanggil menyimpan ke antrean lokal.
+     */
+    suspend fun sendReport(anilistId: Int?, slug: String, ep: Int, note: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val body = org.json.JSONObject()
+                    .put("anilistId", anilistId ?: org.json.JSONObject.NULL)
+                    .put("slug", slug)
+                    .put("episode", ep)
+                    .put("catatan", note)
+                    .toString().toRequestBody("application/json".toMediaType())
+                val req = okhttp3.Request.Builder().url("$BASE/api/gudang-report")
+                    .header("User-Agent", "OnimekuApp/1.0 (Android)")
+                    .post(body).build()
+                Net.client.newCall(req).execute().use { it.isSuccessful }
+            } catch (e: Exception) {
+                false
+            }
+        }
 
     // Data putar yang diambil lebih dulu (episode berikutnya). URL stream
     // bertoken kedaluwarsa, jadi hanya dipakai sekali dan dalam TTL pendek.

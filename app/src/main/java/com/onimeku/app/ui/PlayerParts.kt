@@ -178,6 +178,7 @@ internal fun PlayerSettingsSheet(
     sleepMin: Int, onSleep: (Int) -> Unit, onLock: () -> Unit, onPip: () -> Unit,
     audioOnly: Boolean, onAudioOnly: () -> Unit,
     onPage: (String?) -> Unit,
+    onReport: () -> Unit = {},
 ) {
     var held by remember { mutableStateOf("main") }
     LaunchedEffect(page) { if (page != null) held = page }
@@ -267,6 +268,7 @@ internal fun PlayerSettingsSheet(
                             SheetRowItem(Icons.Filled.PictureInPictureAlt, "Picture-in-picture", "") { onPip() }
                             SheetRowItem(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock screen"), "") { onLock() }
                             SheetRowItem(Icons.Filled.Headphones, I18n.t("audio_only", "Audio only"), if (audioOnly) "On" else "Off") { onAudioOnly() }
+                            SheetRowItem(Icons.Filled.Flag, I18n.t("report_problem", "Report a problem"), "") { onReport() }
                         }
                     }
                 }

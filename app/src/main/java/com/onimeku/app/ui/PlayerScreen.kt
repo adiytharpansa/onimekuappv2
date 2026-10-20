@@ -171,6 +171,10 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     var chainDead by remember(r) { mutableStateOf(false) }
     var useDirect by remember(r) { mutableStateOf(false) }
     var mainRetry by remember(r) { mutableIntStateOf(0) }
+    // Gudang: indeks pintu yang sedang dicoba (daftar pintu diurut
+    // ulang dari pintu terakhir yang berhasil — lihat GudangStore).
+    var doorIdx by remember(r) { mutableIntStateOf(0) }
+    LaunchedEffect(r.id) { com.onimeku.app.data.GudangStore.flushReports(ctx) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false; pbOffline = false
         // Data putar yang sudah di-prefetch (dari Detail) tiba nyaris seketika, lalu PlayerReady membangun ExoPlayer
@@ -198,7 +202,12 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             if (dl != null && dl.state == androidx.media3.exoplayer.offline.Download.STATE_COMPLETED) {
                 pbOffline = true
                 settle()
-                pb = com.onimeku.app.data.Playback(streamUrl = dl.request.uri.toString(), episode = r.ep)
+                // Subtitle luring gudang (en/id) yang ikut terunduh
+                // dipasangkan untuk putar offline.
+                pb = com.onimeku.app.data.Playback(
+                    streamUrl = dl.request.uri.toString(), episode = r.ep,
+                    subtitles = com.onimeku.app.data.GudangStore.offlineSubs(ctx, r.id, r.ep),
+                )
             } else {
                 pbFailed = true
             }
@@ -296,10 +305,20 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         EmbedPlayer(vm, r, a, embedUrl)
         return
     }
+    // Pintu gudang (episode tersalin): daftar pintu dari API,
+    // diurutkan mulai dari pintu terakhir yang berhasil di HP ini.
+    val doors = if (playback.source == "gudang") {
+        com.onimeku.app.data.GudangStore.orderedDoors(ctx, playback.doors)
+    } else {
+        emptyList()
+    }
     // Rantai cadangan putar (meniru web): URL utama (untuk MegaPlay =
     // proksi API) -> coba ulang utama sekali -> URL CDN langsung ->
     // gagal jujur. Embed bukan bagian rantai untuk judul ber-stream.
-    val streamUrl = if (useDirect) {
+    // Untuk gudang: URL = pintu ke-doorIdx; jalur lama tidak dipakai.
+    val streamUrl = if (doors.isNotEmpty()) {
+        doors.getOrNull(doorIdx)?.url?.takeIf { isMediaUrl(it) }
+    } else if (useDirect) {
         playback.directUrl?.takeIf { isMediaUrl(it) } ?: mediaUrl
     } else {
         mediaUrl
@@ -311,19 +330,36 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 
     if (chainDead) {
         PlayerStatus(vm, a, r, loading = false, message = I18n.t("stream_unavailable", "This episode's stream is unavailable right now."),
-            onRetry = { chainDead = false; useDirect = false; mainRetry = 0; attempt++ })
+            onRetry = { chainDead = false; useDirect = false; mainRetry = 0; doorIdx = 0; attempt++ })
         return
     }
 
-    key(useDirect, mainRetry) {
+    key(useDirect, mainRetry, doorIdx) {
         PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline,
+            onDoorSuccess = if (doors.isNotEmpty()) {
+                { doors.getOrNull(doorIdx)?.let { com.onimeku.app.data.GudangStore.saveDoor(ctx, it.name) } }
+            } else {
+                null
+            },
             onSubsTranslated = { list -> pb = pb?.copy(subtitles = list) },
             onFatalError = {
             if (com.onimeku.app.BuildConfig.DEBUG) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("fatal") }
-            // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
-            // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
-            // langsung/embed yang memang lebih rapuh di HP.
-            if (!useDirect && mainRetry == 0) {
+            if (doors.isNotEmpty()) {
+                // Gudang: pindah ke pintu berikutnya DARI DETIK YANG
+                // SAMA (posisi sudah disimpan PlayerReady ke
+                // vm.resumeMs sebelum memanggil ini), maksimal satu
+                // putaran penuh pintu; sesudahnya gagal jujur.
+                if (doorIdx < doors.lastIndex) {
+                    doorIdx++
+                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} pintu gudang gagal, pindah ke ${doors[doorIdx].name}")
+                } else {
+                    chainDead = true
+                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} semua pintu gudang habis")
+                }
+            } else if (!useDirect && mainRetry == 0) {
+                // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
+                // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
+                // langsung/embed yang memang lebih rapuh di HP.
                 mainRetry = 1
                 com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} jalur utama gagal, mencoba ulang sekali")
             } else if (!useDirect && !playback.directUrl.isNullOrBlank()) {
@@ -353,7 +389,7 @@ private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onSubsTranslated: (List<com.onimeku.app.data.ApiSubtitle>) -> Unit = {}, onFatalError: () -> Unit = {}) {
+private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onDoorSuccess: (() -> Unit)? = null, onSubsTranslated: (List<com.onimeku.app.data.ApiSubtitle>) -> Unit = {}, onFatalError: () -> Unit = {}) {
     val player = remember(r, streamUrl) {
         // Transport OkHttp BERSAMA (Net): pool koneksi + cookie dipakai ulang
         // antar-episode; UA peramban + Referer dari API (CDN menolak klien
@@ -655,7 +691,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     applySub(pick)
                 }
             }
-            override fun onRenderedFirstFrame() { rendered = true }
+            override fun onRenderedFirstFrame() {
+                rendered = true
+                // Gudang: pintu ini terbukti memutar — ingat sebagai
+                // pintu awal kunjungan berikutnya.
+                onDoorSuccess?.invoke()
+            }
             override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
                 if (size.width > 0 && size.height > 0) vidRatio = size.width * size.pixelWidthHeightRatio / size.height
                 if (size.height > 0) playingH = size.height
@@ -1142,7 +1183,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             }
                         }
                         Text(I18n.t("report_problem", "Report a problem"),
-                            Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable { reportPlayError(ctx, a.title, r.ep, errMsg) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                            Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable {
+                                com.onimeku.app.data.GudangStore.report(ctx, a.anilistId, r.id, r.ep, "Galat putar di pemutar: ${errMsg ?: "-"}")
+                                vm.toast(I18n.t("report_sent", "Thanks — your report was sent"))
+                            }.padding(horizontal = 10.dp, vertical = 6.dp),
                             fontSize = 12.sp, fontWeight = FontWeight.Medium, color = RedText)
                     }
                 } else {
@@ -1325,6 +1369,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             vm.toast(if (audioOnly) "Audio only: On" else "Audio only: Off")
         },
         onPage = { sheet = it },
+        onReport = {
+            sheet = null
+            com.onimeku.app.data.GudangStore.report(ctx, a.anilistId, r.id, r.ep, "Laporan penonton dari pemutar")
+            vm.toast(I18n.t("report_sent", "Thanks — your report was sent"))
+        },
     )
     }
 }
@@ -1442,14 +1491,6 @@ private fun lowerQuality(q: String): String? = when (q) {
     "720p" -> "480p"
     "480p" -> "360p"
     else -> null
-}
-
-private fun reportPlayError(ctx: Context, title: String, ep: Int, code: String?) {
-    val body = "Onimeku — masalah putar\nJudul: $title\nEpisode: $ep\nKode: ${code ?: "-"}\nPerangkat: ${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE})"
-    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, body)
-    }
-    runCatching { ctx.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 private fun isMediaUrl(u: String): Boolean =

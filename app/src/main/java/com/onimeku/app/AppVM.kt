@@ -183,6 +183,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                         try { coil.Coil.imageLoader(app).diskCache?.clear() } catch (e: Exception) { /* abaikan */ }
                         flags.edit().putBoolean("purge_v31", true).apply()
                     }
+                    // Pembersihan sekali (debug.59, tampilan gudang-saja):
+                    // snapshot katalog disk era katalog-penuh dibuang
+                    // agar judul yang belum tersalin tidak sempat
+                    // tampil dari cache lama pada buka pertama.
+                    if (!flags.getBoolean("purge_v59_gudang", false)) {
+                        java.io.File(app.filesDir, "catalog_cache_direct.json").delete()
+                        flags.edit().putBoolean("purge_v59_gudang", true).apply()
+                    }
                 } catch (e: Exception) { /* abaikan */ }
             }
             initDownloads()
@@ -462,6 +470,36 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     private suspend fun startDownload(id: String, ep: Int, silent: Boolean = false) {
         val k = "$id:$ep"
         val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
+        // Unduhan GUDANG (episode tersalin): ambil anak tangga sesuai
+        // kualitas pilihan pengguna dari pintu gudang (pintu terakhir
+        // yang berhasil bila ada), plus subtitle en/id gudang untuk
+        // putar luring. Jalur unduh lama tidak dipakai sama sekali.
+        if (pb?.source == "gudang") {
+            val dl = pb.download
+            val door = dl?.doors?.firstOrNull { it.name == com.onimeku.app.data.GudangStore.lastDoor(app) }
+                ?: dl?.doors?.firstOrNull()
+            val ladder = when (s.settings.quality) {
+                "1080p" -> door?.q1080
+                "480p" -> door?.q480
+                else -> door?.q720 // "720p" / "Auto" -> 720p untuk luring
+            }
+            if (door == null || ladder.isNullOrBlank() || dl?.downloadable == false) {
+                autoQueued.remove(k)
+                if (!silent) toast("This title can't be downloaded")
+                return
+            }
+            if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
+            downloading[k] = 0
+            Downloads.enqueue(app, id, ep, ladder, null) {
+                autoQueued.remove(k)
+                downloading.remove(k)
+                upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
+                if (!silent) toast("Download failed to start: Episode $ep")
+            }
+            viewModelScope.launch { com.onimeku.app.data.GudangStore.downloadSubs(app, id, ep, door) }
+            toast(if (silent) "Saving Episode $ep for offline" else "Download started: Episode $ep")
+            return
+        }
         val url = pb?.streamUrl
         if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
             autoQueued.remove(k)
