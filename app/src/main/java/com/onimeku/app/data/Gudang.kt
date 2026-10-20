@@ -133,6 +133,83 @@ object GudangStore {
         }
     }
 
+    // ---------------- Muat-dulu putar dari Detail (debug.60) ----------------
+
+    /**
+     * Hangatkan jalur putar episode gudang dari layar Detail: data
+     * putarnya sendiri sudah diambil ApiClient.prefetchPlayback; di sini
+     * playlist master + varian tangga awal + 2–3 segmen pertamanya
+     * DIMINTA dari pintu terakhir-berhasil agar tersimpan di tepi CDN
+     * pintu itu — ketukan Putar sesudahnya mengenai tepi yang hangat dan
+     * frame pertama tiba lebih cepat. Isi segmen dibaca penuh lalu
+     * dibuang (yang dipanaskan tepinya, bukan penyimpanan HP; putar
+     * streaming memang tidak menulis cache bersama).
+     *
+     * Hanya untuk episode gudang; judul non-gudang dilewati. Semua
+     * kegagalan ditelan (usaha terbaik) dan pemanasan berhenti aman bila
+     * data prefetch belum ada / sudah kedaluwarsa.
+     */
+    suspend fun warmStream(ctx: Context, id: String, ep: Int, qualityLabel: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                // Data prefetch Detail kadang tiba beberapa detik sesudah
+                // efek ini mulai (endpoint dingin) — tunggu sebentar
+                // berulang daripada langsung menyerah; pembatalan efek
+                // pemanggil menghentikan penantian ini lewat delay.
+                var pb: Playback? = null
+                for (attempt in 0 until 6) {
+                    pb = ApiClient.peekPrefetched(id, ep)
+                    if (pb != null) break
+                    kotlinx.coroutines.delay(1_500)
+                }
+                val playback = pb ?: return@withContext
+                if (playback.source != "gudang" || playback.doors.isEmpty()) return@withContext
+                val doors = orderedDoors(ctx, playback.doors)
+                val masterUrl = doors.first().url
+                if (masterUrl.isBlank()) return@withContext
+                val client = Net.client.newBuilder()
+                    .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                fun getText(url: String): String? = try {
+                    val req = okhttp3.Request.Builder().url(url)
+                        .header("User-Agent", Net.UA).build()
+                    client.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) resp.body?.string() else null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+                fun getBytes(url: String): Boolean = try {
+                    val req = okhttp3.Request.Builder().url(url)
+                        .header("User-Agent", Net.UA).build()
+                    client.newCall(req).execute().use { resp ->
+                        if (!resp.isSuccessful) return@use false
+                        val body = resp.body ?: return@use false
+                        val buf = ByteArray(64 * 1024)
+                        val input = body.byteStream()
+                        while (input.read(buf) >= 0) { /* baca penuh agar tepi CDN menyimpan berkasnya */ }
+                        true
+                    }
+                } catch (e: Exception) {
+                    false
+                }
+                val master = getText(masterUrl) ?: return@withContext
+                val variant = DoorMath.chooseVariant(
+                    DoorMath.parseVariants(master, masterUrl), qualityLabel,
+                ) ?: return@withContext
+                val variantText = getText(variant.uri) ?: return@withContext
+                val segs = DoorMath.parseSegments(variantText, variant.uri).take(3)
+                var warmed = 0
+                for (s in segs) if (getBytes(s)) warmed++
+                CrashLog.note(
+                    "gudang-warm",
+                    "$id ep$ep pintu=${doors.first().name} varian=${variant.height}p segmen=$warmed/${segs.size}",
+                )
+            } catch (e: Exception) { /* pemanasan usaha terbaik */ }
+        }
+    }
+
     /** Subtitle luring yang tersimpan untuk episode ini (untuk putar offline). */
     fun offlineSubs(ctx: Context, id: String, ep: Int): List<ApiSubtitle> {
         val out = ArrayList<ApiSubtitle>()

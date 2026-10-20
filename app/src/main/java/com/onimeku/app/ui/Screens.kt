@@ -924,6 +924,20 @@ fun DetailScreen(vm: AppVM, id: String) {
             SubTranslate.prefetch(trCtx, id, target, trOpts)
         }
     }
+    // Muat-dulu segmen gudang (debug.60): sesudah data putar episode
+    // sasaran tombol Putar terambil di atas, hangatkan playlist + segmen
+    // pertama tangga awalnya dari pintu terakhir-berhasil (GudangStore
+    // .warmStream memeriksa sendiri sumbernya gudang atau bukan, dan
+    // berhenti aman bila prefetch belum tiba). Pindah layar membatalkan
+    // efek ini; pekerjaan yang sudah terlanjur jalan di IO bersifat
+    // usaha-terbaik dan berhenti di permintaan berikutnya yang gagal.
+    LaunchedEffect(id) {
+        delay(1200)
+        val target = resume?.ep ?: (a.available.firstOrNull() ?: 1)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.onimeku.app.data.GudangStore.warmStream(trCtx, id, target, vm.s.settings.quality)
+        }
+    }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val cfgD = LocalConfiguration.current
