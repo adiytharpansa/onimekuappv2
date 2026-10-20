@@ -1128,7 +1128,7 @@ fun SeeAllScreen(vm: AppVM, key: String) {
         key.startsWith("genre:") -> key.removePrefix("genre:") to Catalog.byGenre(key.removePrefix("genre:"))
         else -> I18n.t("sec_new_eps", "New Episode Releases") to Catalog.new.map { it.first }
     }
-    val items = ids.mapNotNull { Catalog.byId[it] }
+    val items = remember(key, ids, Catalog.all) { ids.mapNotNull { Catalog.byId[it] } }
     // Katalog belum tiba: kerangka grid, bukan daftar kosong "0 anime".
     if (Catalog.all.isEmpty() && Catalog.loading) {
         Page { SubHead(title, vm); PosterGridSkeleton(4, Modifier.padding(top = 8.dp), hPad = 0.dp) }
@@ -1228,11 +1228,22 @@ fun SearchScreen(vm: AppVM) {
     }
 
     val query = appliedQ.trim().lowercase()
-    val results = remember(query, gs, yr, st, Catalog.all) {
-        if (query.isEmpty() && !any) emptyList()
-        else Catalog.all.filter { c ->
-            (query.isEmpty() || c.title.lowercase().contains(query) || c.genres.joinToString(" ").lowercase().contains(query)) &&
-                gs.all { it in c.genres } && (yr.isEmpty() || c.year.toString() == yr) && (st.isEmpty() || c.status == st)
+    // Dulu: tiap perubahan kata/filter memanggil lowercase() + joinToString() untuk SELURUH katalog di main thread
+    // (ribuan alokasi string -> ketukan chip genre terasa tersendat). Kini teks huruf-kecil dihitung SEKALI per katalog
+    // dan penyaringan berjalan di thread latar; hasil lama tetap tampil sampai hasil baru siap (tidak berkedip kosong).
+    val searchIndex by produceState(initialValue = emptyList<Pair<Anime, String>>(), Catalog.all) {
+        val all = Catalog.all
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            all.map { it to (it.title.lowercase() + "\n" + it.genres.joinToString(" ").lowercase()) }
+        }
+    }
+    val results by produceState(initialValue = emptyList<Anime>(), query, gs, yr, st, any, searchIndex) {
+        value = if (query.isEmpty() && !any) emptyList()
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            searchIndex.filter { (c, text) ->
+                (query.isEmpty() || text.contains(query)) &&
+                    gs.all { it in c.genres } && (yr.isEmpty() || c.year.toString() == yr) && (st.isEmpty() || c.status == st)
+            }.map { it.first }
         }
     }
 
