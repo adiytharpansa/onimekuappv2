@@ -164,10 +164,12 @@ object Downloads {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Downloads", NotificationManager.IMPORTANCE_LOW)
         )
-        val dsFactory = CacheDataSource.Factory()
-            .setCache(cache(app))
-            .setUpstreamDataSourceFactory(httpFactory(app))
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        // Hulu multi-pintu (debug.60): segmen episode gudang yang terdaftar
+        // di DoorPoolRegistry diambil bergilir dari semua pintu dengan
+        // cadangan putaran penuh; kunci cache tetap dari URL asli karena
+        // kolam duduk DI BAWAH CacheDataSource ini. Unduhan non-gudang
+        // tidak terdaftar -> diteruskan apa adanya seperti sebelumnya.
+        val dsFactory = dlFactory(app)
         val dm = DownloadManager(
             app, db(app), cache(app), dsFactory,
             java.util.concurrent.Executors.newFixedThreadPool(4),
@@ -175,6 +177,22 @@ object Downloads {
         dm.maxParallelDownloads = 3
         return dm
     }
+
+    /** Factory CacheDataSource unduhan: cache bersama + hulu multi-pintu (dipakai DownloadManager dan pemanasan segmen). */
+    private fun dlFactory(app: Context): CacheDataSource.Factory =
+        CacheDataSource.Factory()
+            .setCache(cache(app))
+            .setUpstreamDataSourceFactory(DoorPoolDataSource.Factory(app, httpFactory(app)))
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+    /**
+     * CacheDataSource BARU varian unduhan (satu per pemanggil/pekerja) di
+     * atas factory yang sama seperti DownloadManager — dipakai pemanasan
+     * segmen gudang (GudangDl) agar penulisannya ke cache identik dengan
+     * jalur unduhan resmi Media3 (CacheWriter + kunci URI segmen).
+     */
+    fun dlCacheDataSource(ctx: Context): CacheDataSource =
+        dlFactory(ctx.applicationContext).createDataSourceForDownloading()
 
     /** Hormati pengaturan "Wi-Fi only": unduhan menunggu jaringan tak terukur. */
     fun setWifiOnly(ctx: Context, wifiOnly: Boolean) {

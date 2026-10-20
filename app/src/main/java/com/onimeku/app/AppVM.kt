@@ -490,6 +490,36 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             }
             if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
             downloading[k] = 0
+            // Unduhan paralel multi-pintu (debug.60): daftarkan direktori
+            // tangga kualitas ini dari SEMUA pintu, lalu panaskan segmennya
+            // ke cache unduhan dengan pekerja paralel lintas pintu
+            // (GudangDl). Sesudah itu antrean Media3 berjalan seperti
+            // biasa: segmen yang sudah tercache dilewatinya, sisa yang
+            // gagal tetap diambil Media3 lewat kolam pintu yang sama di
+            // tumpukan DownloadManager, dan status/progres unduhan tetap
+            // dimiliki DownloadManager. Subtitle en/id tidak berubah.
+            com.onimeku.app.data.DoorPoolRegistry.register(
+                app,
+                dl?.doors.orEmpty().map { d ->
+                    when (s.settings.quality) {
+                        "1080p" -> d.q1080
+                        "480p" -> d.q480
+                        else -> d.q720
+                    }
+                },
+            )
+            try {
+                com.onimeku.app.data.GudangDl.prefetchSegments(app, ladder, s.settings.wifi) { pct ->
+                    if (downloading.containsKey(k)) downloading[k] = pct
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) { /* pemanasan gagal total: Media3 mengambil semua segmen sendiri */ }
+            if (!downloading.containsKey(k)) {
+                // User membatalkan unduhan saat pemanasan segmen berjalan.
+                autoQueued.remove(k)
+                return
+            }
             Downloads.enqueue(app, id, ep, ladder, null) {
                 autoQueued.remove(k)
                 downloading.remove(k)
