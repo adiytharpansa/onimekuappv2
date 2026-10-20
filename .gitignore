@@ -27,3 +27,9 @@ keystore.properties
 
 # Downloaded build outputs
 build-output/
+
+# Lokal agen (jangan commit): kunci aplikasi Worker + state wrangler
+server/.appkey
+server/.wrangler/
+server/wrangler.local.toml
+server/cfdeploy.py
