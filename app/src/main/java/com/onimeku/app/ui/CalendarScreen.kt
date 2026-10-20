@@ -51,7 +51,7 @@ private val Tnum = TextStyle(fontFeatureSettings = "tnum")
 private val NextBg = Color(0xFF211620)
 private val NextBorder = Color(0xFF5A1426)
 private val DotIdle = Color(0xFF3A3E56)
-private val TimeInk = Color(0xFFCFD2E6)
+internal val TimeInk = Color(0xFFCFD2E6)
 private val RAIL = 24.dp
 private val TIME_W = 40.dp
 private val DOT_Y = 16.dp

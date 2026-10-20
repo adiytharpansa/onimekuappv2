@@ -1226,20 +1226,14 @@ fun SearchScreen(vm: AppVM) {
     var st by remember { mutableStateOf("") }
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { fr.requestFocus() }
-    val voice = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
-        val txt = r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (r.resultCode == android.app.Activity.RESULT_OK && !txt.isNullOrBlank()) { q = txt; vm.addHist(txt) }
-    }
-    fun startVoice() {
-        try {
-            voice.launch(
-                android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, if (I18n.lang == "id") "id-ID" else Locale.getDefault().toLanguageTag())
-                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, I18n.t("voice_prompt", "Say an anime title or genre")),
-            )
-        } catch (e: Exception) { vm.toast(I18n.t("voice_na", "Voice search isn't available on this device")) }
-    }
+    val voiceCtx = androidx.compose.ui.platform.LocalContext.current
+    val voiceOk = remember { android.speech.SpeechRecognizer.isRecognitionAvailable(voiceCtx) }
+    var showVoice by remember { mutableStateOf(false) }
+    if (showVoice) VoiceSearchSheet(
+        onApply = { txt -> q = txt; vm.addHist(txt); showVoice = false },
+        onType = { showVoice = false; fr.requestFocus() },
+        onDismiss = { showVoice = false },
+    )
     val any = gs.isNotEmpty() || yr.isNotEmpty() || st.isNotEmpty()
 
     @Composable fun group(label: String, content: @Composable RowScope.() -> Unit) {
@@ -1299,7 +1293,7 @@ fun SearchScreen(vm: AppVM) {
                 decorationBox = { inner -> if (q.isEmpty()) Text(I18n.t("search_hint2", "Search anime or genre"), color = NavOff); inner() })
             if (q.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Close, "Clear", Modifier.size(18.dp), tint = InkSoft)
-            } else Box(Modifier.size(40.dp).clip(CircleShape).clickable { startVoice() }, contentAlignment = Alignment.Center) {
+            } else if (voiceOk) Box(Modifier.size(48.dp).clip(CircleShape).clickable { showVoice = true }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Mic, I18n.t("voice_search", "Voice search"), Modifier.size(22.dp), tint = InkSoft)
             }
         }
