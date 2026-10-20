@@ -376,15 +376,35 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 
 }
 
+/**
+ * ID stabil untuk trek subtitle samping (side-load) yang dibangun dari
+ * payload API. Media3 menyalin ID ini ke Format trek (terverifikasi di
+ * sumber media3 1.5.0: SingleSampleMediaSource dan jalur ekstraksi
+ * DefaultMediaSourceFactory sama-sama memakai SubtitleConfiguration.id),
+ * sehingga trek samping bisa dibedakan dari grup teks bawaan manifest
+ * HLS. Grup manifest gudang menunjuk berkas .vtt MENTAH sebagai URI
+ * rendition — bukan media playlist — jadi parser HLS Media3 menolaknya
+ * ("Input does not start with the #EXTM3U header") dan grup itu tidak
+ * akan pernah menghasilkan cue; memilihnya = CC tidak tampil.
+ */
+private const val LOCAL_SUB_ID_PREFIX = "onimeku-local-sub:"
+
+private fun isLocalSubtitleGroup(g: androidx.media3.common.Tracks.Group): Boolean {
+    if (g.type != androidx.media3.common.C.TRACK_TYPE_TEXT) return false
+    val id = runCatching { g.mediaTrackGroup.getFormat(0).id }.getOrNull() ?: return false
+    return id.startsWith(LOCAL_SUB_ID_PREFIX)
+}
+
 private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.SubtitleConfiguration> =
-    playback.subtitles.filter { it.url.isNotBlank() }.map { s ->
+    playback.subtitles.filter { it.url.isNotBlank() }.mapIndexed { idx, s ->
         val mime = when {
             s.url.contains(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
             s.url.contains(".ass") || s.url.contains(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
             else -> androidx.media3.common.MimeTypes.TEXT_VTT
         }
         MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
-            .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase()).build()
+            .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase())
+            .setId(LOCAL_SUB_ID_PREFIX + idx).build()
     }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -543,6 +563,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val subTracks = remember(playback) { playback.subtitles.filter { it.url.isNotBlank() } }
     var subIdx by remember(r) { mutableIntStateOf(-1) }       // -1 = mati, selain itu indeks di subTracks
     var subReady by remember(r) { mutableStateOf(false) }
+    // debug.60: apakah pilihan subIdx saat ini sudah diterapkan ke trek
+    // samping lokal (bukan ke grup teks manifest yang tak bisa dirender)?
+    var subLocalApplied by remember(r) { mutableStateOf(false) }
     // Trek terjemahan (Indonesia/English) selesai dibuat saat video sudah berjalan: pasang ke item yang sama,
     // lanjut dari posisi terakhir, lalu pilih ulang subtitle sesuai preferensi.
     val subCount = playback.subtitles.count { it.url.isNotBlank() }
@@ -599,9 +622,27 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         // Perbaikan agen (berulang dari v5/v6): konstanta C dipakai sebagai
         // qualifier nama lengkap, tidak disimpan ke val (ilegal di Kotlin).
         val b = player.trackSelectionParameters.buildUpon()
-        val groups = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
-        if (i < 0 || groups.isEmpty()) {
+        val allText = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+        // debug.60 (CC gudang tidak tampil): bila trek samping lokal dari
+        // payload sudah termuat, HANYA grup itu yang boleh dipilih. Grup
+        // teks manifest HLS gudang menunjuk berkas .vtt mentah (bukan
+        // playlist) sehingga tidak pernah menghasilkan cue di Media3 —
+        // memilihnya membuat UI tertulis "Indonesian" tanpa teks apa pun,
+        // dan urutan gabungan sumber menaruh grup manifest lebih dulu.
+        // Jalur non-gudang tanpa trek ber-ID lokal tidak berubah: kolam
+        // cadangannya tetap semua grup teks seperti sebelumnya.
+        val localText = allText.filter { isLocalSubtitleGroup(it) }
+        val groups = if (localText.isNotEmpty()) localText else allText
+        if (i < 0) {
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+            subLocalApplied = false
+        } else if (groups.isEmpty()) {
+            // Trek belum termuat sama sekali: ingat saja pilihannya —
+            // jangan matikan teks; onTracksChanged menerapkannya begitu
+            // trek samping tiba (cabang subLocalApplied).
+            subLocalApplied = false
+            subIdx = i
+            return
         } else {
             // Cocokkan trek menurut bahasa (urutan ke-n untuk bahasa yang sama); cadangan: indeks.
             val want = subTracks.getOrNull(i)
@@ -610,6 +651,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             val g = byLang.getOrNull(nth) ?: groups.getOrNull(i) ?: groups.first()
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0))
+            subLocalApplied = isLocalSubtitleGroup(g)
         }
         player.trackSelectionParameters = b.build()
         subIdx = i
@@ -689,6 +731,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     if ((pref == "id" || pref == "en") && pick >= 0 && SubLang.code(subTracks[pick]) != pref)
                         vm.toast("${SubLang.prefName(pref)} subtitle unavailable · using ${subName(pick)}")
                     applySub(pick)
+                } else if (subReady && subIdx >= 0 && !subLocalApplied && tracks.groups.any { isLocalSubtitleGroup(it) }) {
+                    // debug.60: trek samping lokal tiba SESUDAH grup teks
+                    // manifest (pilihan awal jatuh ke grup manifest yang
+                    // tak bisa dirender) -> terapkan ulang pilihan yang
+                    // sama ke trek lokal yang sehat.
+                    applySub(subIdx)
                 }
             }
             override fun onRenderedFirstFrame() {
