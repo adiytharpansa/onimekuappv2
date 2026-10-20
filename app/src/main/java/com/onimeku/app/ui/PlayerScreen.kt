@@ -865,13 +865,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         return
     }
 
-    val epDur = vm.p.watch.firstOrNull { it.id == r.id }?.dur?.takeIf { it > 0 } ?: 1440
     val epList = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val curIdx = epList.indexOf(r.ep)
     val epListState = rememberLazyListState()
-    // Komentar: kartu ringkas di panel info, sheet penuh saat diketuk.
+    // Komentar inline di panel bawah video (menggantikan daftar Episodes).
     val commentsOn = com.onimeku.app.data.Comments.enabled
-    var commentsOpen by rememberSaveable(r.id) { mutableStateOf(false) }
+    val commentsUi = rememberCommentsUi(r.id)
     LaunchedEffect(r.id) { if (commentsOn) vm.loadComments(r.id) }
     val scope = rememberCoroutineScope()
     val thumbSrc = remember { MutableInteractionSource() }
@@ -1215,10 +1214,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
       }
 
       if (!full || fullA < 0.999f) {
-        // ===== Panel di bawah video: info, navigasi episode, kontrol, daftar episode =====
-        val epStart = if (commentsOn) 3 else 2 // item "info" (+ "comments") + "ephead" mendahului daftar episode
+        // ===== Panel di bawah video: info, navigasi episode, kontrol, komentar =====
         LazyColumn(
-            Modifier.weight(1f).fillMaxWidth(), state = epListState,
+            Modifier.weight(1f).fillMaxWidth().imePadding(), state = epListState,
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
         ) {
             item(key = "info") {
@@ -1263,35 +1261,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                 }
             }
-            if (commentsOn) item(key = "comments") {
-                CommentsPreview(vm, Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) { commentsOpen = true }
-            }
-            item(key = "ephead") {
-                Column(Modifier.padding(top = 12.dp, bottom = 12.dp)) {
-                    SectionTitle(I18n.t("episodes", "Episodes")) {
-                        Text("${epList.size}", fontSize = 13.sp, color = NavOff, modifier = Modifier.padding(end = 10.dp))
-                        if (curIdx > 4) Row(
-                            Modifier.clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
-                                .clickable { scope.launch { epListState.animateScrollToItem(epStart + curIdx) } }.padding(horizontal = 11.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(Icons.Filled.MyLocation, null, Modifier.size(14.dp), tint = RedText)
-                            Text(I18n.t("current", "Current"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
-                        }
-                    }
-                }
-            }
-            items(epList, key = { "pe$it" }) { n ->
-                val k = "${r.id}:$n"
-                EpisodeCard(a, n, seen = k in vm.p.seen, progSec = vm.p.prog[k], current = n == r.ep, durSec = epDur, compact = true,
-                    onOpen = { if (n != r.ep) vm.replaceTop(Route.Player(r.id, n)) }) {
-                    if (n == r.ep) Icon(Icons.Filled.GraphicEq, null, Modifier.padding(end = 6.dp), tint = RedText)
-                }
-            }
+            if (commentsOn) commentsSection(vm, r.id, commentsUi)
         }
       }
     }
-    if (commentsOn && commentsOpen && !full) CommentsSheet(vm, r.id) { commentsOpen = false }
+    if (commentsOn) CommentDeleteDialog(vm, r.id, commentsUi)
     PlayerSettingsSheet(
         page = sheet, full = full,
         quality = quality, autoRes = playingH,
@@ -1480,9 +1454,9 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val idx = nums.indexOf(r.ep)
     val commentsOn = com.onimeku.app.data.Comments.enabled
-    var commentsOpen by rememberSaveable(r.id) { mutableStateOf(false) }
+    val commentsUi = rememberCommentsUi(r.id)
     LaunchedEffect(r.id) { if (commentsOn) vm.loadComments(r.id) }
-    if (commentsOn && commentsOpen) CommentsSheet(vm, r.id) { commentsOpen = false }
+    if (commentsOn) CommentDeleteDialog(vm, r.id, commentsUi)
     Column(Modifier.fillMaxSize().background(Bg)) {
         Box(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
@@ -1511,8 +1485,13 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
             }
         }
-        Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
-            Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
+        androidx.compose.foundation.lazy.LazyColumn(
+            Modifier.weight(1f).fillMaxWidth().imePadding(),
+            contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
+        ) {
+            item(key = "info") {
+            Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
+                Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
             Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
             if (idx > 0 || (idx >= 0 && idx < nums.size - 1)) Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (idx > 0) Btn(I18n.t("previous", "Previous"), BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
@@ -1522,7 +1501,10 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 "Judul ini diputar lewat pemutar resmi sumbernya. Ketuk tombol putar di dalam video.",
                 Modifier.padding(top = 14.dp), fontSize = 12.sp, color = InkSoft,
             )
-            if (commentsOn) CommentsPreview(vm, Modifier.padding(top = 18.dp)) { commentsOpen = true }
+
+                }
+            }
+            if (commentsOn) commentsSection(vm, r.id, commentsUi)
         }
     }
 }

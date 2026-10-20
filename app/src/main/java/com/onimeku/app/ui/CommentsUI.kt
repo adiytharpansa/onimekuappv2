@@ -1,6 +1,5 @@
 package com.onimeku.app.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,34 +8,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,12 +38,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.onimeku.app.AppVM
@@ -59,177 +55,193 @@ import com.onimeku.app.Route
 import com.onimeku.app.data.CommentRow
 
 /**
- * Komentar di halaman pemutar. Dua bagian:
- *  - [CommentsPreview]: kartu ringkas di bawah sinopsis (judul, jumlah, komentar terbaru).
- *    Tidak mendorong daftar episode jauh ke bawah, berapa pun jumlah komentarnya.
- *  - [CommentsSheet]: bottom sheet penuh (daftar + kolom tulis menempel di bawah, naik saat keyboard muncul).
+ * Komentar inline di panel bawah video (menggantikan daftar Episodes).
+ * Susunan: pemisah -> judul + jumlah -> kolom tulis -> daftar -> "Lihat semua".
+ * Dipakai lewat [commentsSection] di dalam LazyColumn; state diangkat ke [CommentsUi]
+ * karena item LazyColumn tidak boleh menyimpan state yang harus bertahan saat digulir.
  */
 
 private const val MAX_LEN = 1000
+private const val PREVIEW_COUNT = 5
+
+@Stable
+class CommentsUi(
+    val text: MutableState<String>,
+    val expanded: MutableState<Boolean>,
+    val pendingDelete: MutableState<CommentRow?>,
+)
 
 @Composable
-private fun Avatar(name: String, mine: Boolean, size: androidx.compose.ui.unit.Dp = 36.dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(if (mine) Red else Solid), contentAlignment = Alignment.Center) {
+fun rememberCommentsUi(animeId: String): CommentsUi {
+    val text = rememberSaveable(animeId) { mutableStateOf("") }
+    val expanded = rememberSaveable(animeId) { mutableStateOf(false) }
+    val pending = remember(animeId) { mutableStateOf<CommentRow?>(null) }
+    return remember(text, expanded, pending) { CommentsUi(text, expanded, pending) }
+}
+
+@Composable
+private fun Avatar(name: String, highlight: Boolean, size: Dp = 36.dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(if (highlight) Red else Solid), contentAlignment = Alignment.Center) {
         Text(name.ifBlank { "U" }.take(1).uppercase(), fontSize = (size.value * 0.4f).sp, fontWeight = FontWeight.Bold)
     }
 }
 
-/** Kartu pratinjau komentar: ketuk di mana saja untuk membuka sheet. */
-@Composable
-fun CommentsPreview(vm: AppVM, modifier: Modifier = Modifier, onOpen: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    val latest = vm.comments.firstOrNull()
-    Column(
-        modifier.fillMaxWidth().clip(shape).background(Bg2).border(BorderStroke(1.dp, Line), shape)
-            .clickable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(I18n.t("comments", "Comments"), fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            if (vm.comments.isNotEmpty()) Text(
-                "${vm.comments.size}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = InkSoft,
-                modifier = Modifier.clip(CircleShape).background(Solid).padding(horizontal = 8.dp, vertical = 2.dp),
-            )
-            Spacer(Modifier.weight(1f))
-            Text(I18n.t("comments_open", "Open"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = RedText)
-        }
-        Spacer(Modifier.height(10.dp))
-        when {
-            vm.commentsBusy && latest == null -> CommentSkeleton(1)
-            latest != null -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Avatar(latest.author, latest.user_id == vm.s.account?.userId, 28.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(latest.author.ifBlank { "User" }, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = InkSoft, maxLines = 1)
-                    Text(latest.body, Modifier.padding(top = 1.dp), fontSize = 13.sp, color = InkSoft, lineHeight = 18.sp,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
+    // ---- Judul ----
+    item(key = "c_head") {
+        Column(Modifier.padding(top = 22.dp)) {
+            Box(Modifier.padding(horizontal = Gutter)) { HLine() }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 18.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(I18n.t("comments", "Comments"), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                if (vm.comments.isNotEmpty()) Text(
+                    "${vm.comments.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = InkSoft,
+                    modifier = Modifier.clip(CircleShape).background(Solid).padding(horizontal = 8.dp, vertical = 2.dp),
+                )
             }
-            else -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(18.dp), tint = NavOff)
-                Text(I18n.t("comment_empty", "No comments yet. Be the first."), fontSize = 13.sp, color = NavOff)
+        }
+    }
+
+    // ---- Kolom tulis ----
+    item(key = "c_compose") { CommentComposer(vm, animeId, ui) }
+
+    // ---- Daftar ----
+    val list = vm.comments
+    when {
+        vm.commentsBusy && list.isEmpty() -> item(key = "c_busy") {
+            CommentSkeleton(3, Modifier.padding(horizontal = Gutter, vertical = 14.dp))
+        }
+        list.isEmpty() -> item(key = "c_empty") {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(32.dp), tint = NavOff)
+                Text(I18n.t("comment_empty_t", "No comments yet"), Modifier.padding(top = 10.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(I18n.t("comment_empty_s", "Be the first to share what you think."), Modifier.padding(top = 3.dp),
+                    fontSize = 13.sp, color = NavOff, textAlign = TextAlign.Center)
+            }
+        }
+        else -> {
+            val shown = if (ui.expanded.value) list else list.take(PREVIEW_COUNT)
+            items(shown, key = { "comment:${it.id}" }) { c ->
+                val mine = c.user_id == vm.s.account?.userId
+                CommentItem(c, mine) { ui.pendingDelete.value = c }
+            }
+            if (list.size > PREVIEW_COUNT) item(key = "c_more") {
+                val open = ui.expanded.value
+                Box(
+                    Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 10.dp).height(42.dp)
+                        .clip(CircleShape).border(1.dp, Line, CircleShape).clickable { ui.expanded.value = !open },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (open) I18n.t("comments_less", "Show less") else "${I18n.t("comments_all", "View all comments")} (${list.size})",
+                        fontSize = 13.sp, fontWeight = FontWeight.Medium, color = InkSoft,
+                    )
+                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CommentsSheet(vm: AppVM, animeId: String, onDismiss: () -> Unit) {
-    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val listState = rememberLazyListState()
-    val loggedIn = vm.s.account != null
-    var text by rememberSaveable(animeId) { mutableStateOf("") }
-    var pendingDelete by remember { mutableStateOf<CommentRow?>(null) }
-    val sheetH = (LocalConfiguration.current.screenHeightDp * 0.82f).dp
-
-    // Komentar baru muncul di atas: gulir ke atas agar langsung terlihat.
-    val topId = vm.comments.firstOrNull()?.id
-    LaunchedEffect(topId) { if (topId != null) listState.animateScrollToItem(0) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss, sheetState = state,
-        containerColor = Bg2, contentColor = Color.White,
+private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
+    val acc = vm.s.account
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 14.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(Modifier.fillMaxWidth().height(sheetH).imePadding()) {
-            // ---- Header ----
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(I18n.t("comments", "Comments"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                if (vm.comments.isNotEmpty()) Text("  ${vm.comments.size}", fontSize = 14.sp, color = NavOff)
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, "Close", Modifier.size(22.dp), tint = Color.White)
-                }
+        if (acc == null) {
+            Avatar("?", false)
+            Row(
+                Modifier.weight(1f).height(42.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
+                    .clickable { vm.go(Route.Auth(false)) }.padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Outlined.Lock, null, Modifier.size(16.dp), tint = NavOff)
+                Text(I18n.t("sign_in_to_comment", "Sign in to comment"), fontSize = 14.sp, color = NavOff)
             }
-            HLine()
-
-            // ---- Daftar ----
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    vm.commentsBusy && vm.comments.isEmpty() ->
-                        CommentSkeleton(4, Modifier.padding(horizontal = 20.dp, vertical = 18.dp))
-                    vm.comments.isEmpty() -> Column(
-                        Modifier.fillMaxSize().padding(horizontal = 32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(36.dp), tint = NavOff)
-                        Text(I18n.t("comment_empty", "No comments yet. Be the first."), Modifier.padding(top = 12.dp),
-                            fontSize = 14.sp, color = NavOff)
-                    }
-                    else -> LazyColumn(state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
-                        items(vm.comments, key = { "comment:${it.id}" }) { c ->
-                            val mine = c.user_id == vm.s.account?.userId
-                            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Avatar(c.author, mine)
-                                Column(Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(c.author.ifBlank { "User" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                                            color = if (mine) RedText else Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false))
-                                        Text(commentTime(c.created_at), fontSize = 11.sp, color = NavOff, maxLines = 1)
-                                    }
-                                    Text(c.body, Modifier.padding(top = 3.dp), fontSize = 14.sp, color = InkSoft, lineHeight = 20.sp)
-                                }
-                                if (mine) Box(
-                                    Modifier.size(32.dp).clip(CircleShape).clickable { pendingDelete = c },
-                                    contentAlignment = Alignment.Center,
-                                ) { Icon(Icons.Outlined.DeleteOutline, I18n.t("comment_delete", "Delete"), Modifier.size(18.dp), tint = NavOff) }
-                            }
-                        }
-                    }
-                }
+            return@Row
+        }
+        var text by ui.text
+        var focused by remember { mutableStateOf(false) }
+        val focus = LocalFocusManager.current
+        val canSend = text.isNotBlank()
+        Avatar(vm.p.name, true)
+        Row(
+            Modifier.weight(1f).heightIn(min = 42.dp).clip(RoundedCornerShape(21.dp)).background(Bg2)
+                .border(1.dp, if (focused) RedText else Line, RoundedCornerShape(21.dp)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f).padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 8.dp)) {
+                BasicTextField(
+                    text, { if (it.length <= MAX_LEN) text = it },
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+                    maxLines = 4,
+                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp),
+                    cursorBrush = SolidColor(RedText),
+                    decorationBox = { inner ->
+                        if (text.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = 14.sp)
+                        inner()
+                    },
+                )
             }
-
-            // ---- Kolom tulis (menempel di bawah) ----
-            HLine()
-            Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                if (loggedIn) {
-                    val canSend = text.isNotBlank()
-                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(
-                            Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(Bg)
-                                .border(1.dp, Line, RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            BasicTextField(
-                                text, { if (it.length <= MAX_LEN) text = it },
-                                modifier = Modifier.fillMaxWidth(), maxLines = 4,
-                                textStyle = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp),
-                                cursorBrush = SolidColor(Red),
-                                decorationBox = { inner ->
-                                    if (text.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = 14.sp)
-                                    inner()
-                                },
-                            )
-                        }
-                        Box(
-                            Modifier.size(44.dp).clip(CircleShape).background(if (canSend) Red else Solid)
-                                .clickable(enabled = canSend) { vm.postComment(animeId, text); text = "" },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, I18n.t("comment_post", "Post"), Modifier.size(20.dp),
-                                tint = if (canSend) Color.White else NavOff)
-                        }
-                    }
-                } else {
-                    Btn(I18n.t("sign_in_to_comment", "Sign in to comment"), BtnStyle.Solid, modifier = Modifier.fillMaxWidth(), height = 46.dp) {
-                        onDismiss(); vm.go(Route.Auth(false))
-                    }
-                }
-            }
+            if (canSend) Box(
+                Modifier.padding(end = 5.dp).size(32.dp).clip(CircleShape).background(Red)
+                    .clickable { vm.postComment(animeId, text); text = ""; focus.clearFocus() },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.AutoMirrored.Filled.Send, I18n.t("comment_post", "Post"), Modifier.size(16.dp), tint = Color.White) }
         }
     }
+}
 
-    pendingDelete?.let { c ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text(I18n.t("comment_delete_q", "Delete this comment?")) },
-            confirmButton = {
-                TextButton(onClick = { vm.deleteComment(animeId, c.id); pendingDelete = null }) {
-                    Text(I18n.t("comment_delete", "Delete"), color = RedText)
-                }
-            },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text(I18n.t("cancel", "Cancel")) } },
-        )
+@Composable
+private fun CommentItem(c: CommentRow, mine: Boolean, onDelete: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Avatar(c.author, mine)
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text(
+                    c.author.ifBlank { "User" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, color = if (mine) RedText else Color.White,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (mine) Text(
+                    I18n.t("comment_you", "You"), fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = RedText,
+                    modifier = Modifier.clip(CircleShape).background(Color(0x26E8566F)).padding(horizontal = 7.dp, vertical = 1.dp),
+                )
+                Text(commentTime(c.created_at), fontSize = 12.sp, color = NavOff, maxLines = 1)
+                Spacer(Modifier.weight(1f))
+                if (mine) Box(
+                    Modifier.size(28.dp).clip(CircleShape).clickable(onClick = onDelete),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Outlined.DeleteOutline, I18n.t("comment_delete", "Delete"), Modifier.size(17.dp), tint = NavOff) }
+            }
+            Text(c.body, Modifier.padding(top = 4.dp), fontSize = 14.sp, color = InkSoft, lineHeight = 21.sp)
+        }
     }
+}
+
+/** Dialog konfirmasi hapus; letakkan di luar LazyColumn. */
+@Composable
+fun CommentDeleteDialog(vm: AppVM, animeId: String, ui: CommentsUi) {
+    val c = ui.pendingDelete.value ?: return
+    AlertDialog(
+        onDismissRequest = { ui.pendingDelete.value = null },
+        title = { Text(I18n.t("comment_delete_q", "Delete this comment?")) },
+        confirmButton = {
+            TextButton(onClick = { vm.deleteComment(animeId, c.id); ui.pendingDelete.value = null }) {
+                Text(I18n.t("comment_delete", "Delete"), color = RedText)
+            }
+        },
+        dismissButton = { TextButton(onClick = { ui.pendingDelete.value = null }) { Text(I18n.t("cancel", "Cancel")) } },
+    )
 }
 
 /** Waktu relatif untuk <24 jam ("5 mnt", "3 jam"), selebihnya tanggal dalam zona waktu perangkat ("19 Okt 14:05"). */
