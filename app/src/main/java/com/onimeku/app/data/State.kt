@@ -24,6 +24,8 @@ data class Profile(
     val watch: List<Watch> = emptyList(),
     val base: String? = null,
     val remind: List<String> = emptyList(),
+    // Pengingat per EPISODE dari Kalender: "id|ep|airingAtDetik". Lokal saja, tidak disinkronkan.
+    val remindEp: List<String> = emptyList(),
     // Detik menonton per hari ("yyyy-MM-dd" -> detik), untuk statistik Profil. Lokal saja, tidak disinkronkan.
     val days: Map<String, Int> = emptyMap(),
 )

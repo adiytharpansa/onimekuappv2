@@ -17,6 +17,9 @@ import java.util.concurrent.TimeUnit
 /** Reminder mingguan lewat WorkManager: tetap jalan walau app ditutup atau HP restart. */
 object Reminders {
     private const val TAG = "reminder"
+    private const val TAG_EP = "reminder_ep"
+    /** Menit sebelum jam tayang notifikasi per-episode dikirim. */
+    const val LEAD_MIN = 15
 
     private fun delayMs(day: Int, time: String): Long {
         val now = LocalDateTime.now()
@@ -37,6 +40,23 @@ object Reminders {
             .setInputData(workDataOf("pi" to pi, "id" to id))
             .addTag(TAG).build()
         WorkManager.getInstance(ctx).enqueueUniqueWork("remind:$pi:$id", ExistingWorkPolicy.REPLACE, req)
+    }
+
+    /** Pengingat TEPAT untuk satu episode (jam tayang asli dari jadwal). WorkManager bisa terlambat beberapa menit saat Doze. */
+    fun scheduleEpisode(ctx: Context, pi: Int, id: String, title: String, ep: Int, airingAtSec: Long) {
+        val now = System.currentTimeMillis()
+        val airMs = airingAtSec * 1000
+        if (airMs <= now) return
+        val lead = if (airMs - LEAD_MIN * 60_000L > now) LEAD_MIN else 0
+        val req = OneTimeWorkRequestBuilder<EpisodeReminderWorker>()
+            .setInitialDelay(airMs - lead * 60_000L - now, TimeUnit.MILLISECONDS)
+            .setInputData(workDataOf("pi" to pi, "id" to id, "ep" to ep, "title" to title, "lead" to lead))
+            .addTag(TAG_EP).build()
+        WorkManager.getInstance(ctx).enqueueUniqueWork("remind-ep:$pi:$id:$ep", ExistingWorkPolicy.REPLACE, req)
+    }
+
+    fun cancelEpisode(ctx: Context, pi: Int, id: String, ep: Int) {
+        WorkManager.getInstance(ctx).cancelUniqueWork("remind-ep:$pi:$id:$ep")
     }
 
     fun cancel(ctx: Context, pi: Int, id: String) {
@@ -72,6 +92,25 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         // Katalog kosong di proses worker: kirim detail yang baru diambil agar
         // jadwal minggu depan benar-benar dibuat (sebelumnya diam-diam batal).
         Reminders.schedule(applicationContext, pi, id, c)
+        return Result.success()
+    }
+}
+
+/** Notifikasi satu episode: dikirim sesuai jadwal; dibatalkan diam-diam bila pengingat/notifikasi sudah dimatikan. */
+class EpisodeReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result {
+        val pi = inputData.getInt("pi", 0)
+        val id = inputData.getString("id") ?: return Result.success()
+        val ep = inputData.getInt("ep", 0)
+        val title = inputData.getString("title") ?: return Result.success()
+        val lead = inputData.getInt("lead", 0)
+        val st = Store(applicationContext).load()
+        val still = st.settings.alerts && st.profiles.getOrNull(pi)?.remindEp?.any { it.startsWith("$id|$ep|") } == true
+        if (!still) return Result.success()
+        I18n.lang = st.settings.lang
+        val body = if (lead > 0) I18n.t("cal_notif_soon", "Episode %1\$d airs in %2\$d minutes").format(ep, lead)
+        else I18n.t("cal_notif_now", "Episode %d is out now").format(ep)
+        Notifier.show(applicationContext, title, body)
         return Result.success()
     }
 }

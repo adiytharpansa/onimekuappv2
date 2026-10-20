@@ -602,86 +602,12 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, pageOffset: () -> F
 }
 
 // ------------------------------------------------------------------ CALENDAR
-@Composable
-fun CalendarScreen(vm: AppVM) {
-    val zone = remember { java.time.ZoneId.systemDefault() }
-    val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
-    val selDate = days[vm.calDay]
-    LaunchedEffect(Unit) { vm.loadSchedule() }
-    // Detik "sekarang" diperbarui tiap menit: episode yang baru lewat jam tayangnya otomatis hilang.
-    val nowSec by produceState(System.currentTimeMillis() / 1000) {
-        while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() / 1000 }
-    }
-    val sched = vm.schedule
-    val byAnilist = remember(Catalog.all) {
-        Catalog.unique.filter { it.anilistId != null }.groupBy { it.anilistId!! }.mapValues { (_, v) -> v.maxByOrNull { it.ep } ?: v.first() }
-    }
-    // Hanya episode yang BELUM tayang, pada tanggal terpilih, yang ada di katalog aplikasi.
-    val upcoming = remember(sched, byAnilist, selDate, nowSec) {
-        sched.orEmpty().filter { it.airingAt > nowSec }
-            .mapNotNull { s -> byAnilist[s.anilistId]?.let { a -> Triple(a, s, java.time.Instant.ofEpochSecond(s.airingAt).atZone(zone)) } }
-            .filter { it.third.toLocalDate() == selDate }
-            .sortedBy { it.second.airingAt }
-    }
-    val fmt = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
-    Page {
-        RootTitle(I18n.t("calendar_t", "Release Calendar"), I18n.t("calendar_sub", "Episodes airing this week."))
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            days.forEachIndexed { k, d ->
-                val sel = k == vm.calDay
-                val chipBg by androidx.compose.animation.animateColorAsState(if (sel) Red else Bg2, tween(220), label = "dayBg")
-                val chipBd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, tween(220), label = "dayBd")
-                Column(
-                    Modifier.weight(1f).pressable { vm.calDay = k }.clip(RoundedCornerShape(16.dp)).background(chipBg)
-                        .border(1.dp, chipBd, RoundedCornerShape(16.dp)).padding(vertical = 11.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, uiLocale()).uppercase(),
-                        fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp, color = if (sel) Color(0xCCFFFFFF) else NavOff)
-                    Text("${d.dayOfMonth}", Modifier.padding(top = 3.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Box(Modifier.padding(top = 5.dp).size(5.dp).clip(CircleShape).background(if (k == 0) (if (sel) Color.White else RedText) else Color.Transparent))
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        when {
-            sched == null && vm.scheduleFailed -> EmptyBox(
-                I18n.t("schedule_fail_t", "Couldn't load schedule"),
-                I18n.t("schedule_fail_b", "Check your connection and try again."),
-            ) { TextButton(onClick = { vm.loadSchedule(force = true) }) { Text(I18n.t("retry", "Retry")) } }
-            sched == null || Catalog.all.isEmpty() -> SkeletonRows(5)
-            else -> key(vm.calDay) { Column(Modifier.fadeSlideIn()) {
-                if (upcoming.isEmpty()) {
-                    EmptyBox(I18n.t("nothing_airing_t", "Nothing airing"), I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."))
-                } else {
-                    SectionHead(I18n.t("sec_new_eps", "New Episode Releases"))
-                    upcoming.forEach { (a, s, dt) ->
-                        val mins = ((s.airingAt - nowSec) / 60).coerceAtLeast(0)
-                        val eta = if (selDate == LocalDate.now() && mins < 24 * 60) " · " + (if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m") else ""
-                        ItemRow(
-                            a, thumbLabel = dt.format(fmt), title = a.title,
-                            sub = "Episode ${s.ep} · ${a.genres.firstOrNull() ?: "Anime"}$eta",
-                            onOpen = { vm.go(Route.Detail(a.id)) },
-                        ) { if (showBell(a, vm)) RemindBell(a, vm) }
-                    }
-                }
-            } }
-        }
-    }
-}
+
 
 /** Lonceng pengingat hanya untuk judul yang BELUM tayang; judul yang sudah rilis tidak punya lonceng (kecuali pengingat lamanya masih aktif, agar bisa dimatikan). */
-private fun showBell(a: Anime, vm: AppVM) = a.apiStatus == "NOT_YET_RELEASED" || a.id in vm.p.remind
 
 @Composable
-private fun RemindBell(a: Anime, vm: AppVM) {
-    val ensure = LocalEnsureNotif.current
-    val on = a.id in vm.p.remind
-    IconChip(
-        if (on) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone,
-        if (on) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), on,
-    ) { vm.toggleRemind(a.id, ensure) }
-}
+
 
 @Composable
 fun ItemRow(
@@ -1232,7 +1158,7 @@ fun DetailScreen(vm: AppVM, id: String) {
 }
 
 /** Waktu komentar dari server (UTC ISO) ditampilkan dalam zona waktu perangkat, mis. "19 Okt 14:05". */
-private fun uiLocale(): Locale = if (I18n.lang == "id") Locale.forLanguageTag("id") else Locale.ENGLISH
+internal fun uiLocale(): Locale = if (I18n.lang == "id") Locale.forLanguageTag("id") else Locale.ENGLISH
 
 private fun commentTime(iso: String): String = runCatching {
     java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())

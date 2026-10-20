@@ -136,14 +136,16 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         private set
     var scheduleFailed by mutableStateOf(false)
         private set
-    private var scheduleAt = 0L
+    /** Epoch ms terakhir jadwal berhasil dimuat (0 = belum). */
+    var scheduleUpdatedAt by mutableStateOf(0L)
+        private set
 
     /** Muat jadwal; lewati bila data masih segar (<15 mnt) kecuali [force]. */
     fun loadSchedule(force: Boolean = false) {
-        if (!force && schedule != null && System.currentTimeMillis() - scheduleAt < 15 * 60_000L) return
+        if (!force && schedule != null && System.currentTimeMillis() - scheduleUpdatedAt < 15 * 60_000L) return
         viewModelScope.launch {
             try {
-                schedule = ApiClient.fetchSchedule(); scheduleAt = System.currentTimeMillis(); scheduleFailed = false
+                schedule = ApiClient.fetchSchedule(); scheduleUpdatedAt = System.currentTimeMillis(); scheduleFailed = false
             } catch (e: Exception) {
                 if (schedule == null) scheduleFailed = true
             }
@@ -396,6 +398,31 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             val soon = c.apiStatus == "NOT_YET_RELEASED"
             toast(if (soon) "We will notify you when it is out" else "We will remind you")
             ensure { g -> if (g) Notifier.show(app, "Reminder set", if (soon) "We’ll notify you when ${c.title} is released" else "${c.title} airs at ${c.time}") }
+        }
+    }
+
+    /**
+     * Pengingat per EPISODE dari Kalender: dijadwalkan tepat sebelum jam tayang
+     * (lihat Reminders.scheduleEpisode). Terpisah dari pengingat mingguan per
+     * judul ([toggleRemind]) agar tidak ada notifikasi ganda.
+     */
+    fun toggleRemindEpisode(id: String, ep: Int, airingAt: Long, ensure: ((Boolean) -> Unit) -> Unit) {
+        val title = Catalog.byId[id]?.title ?: return
+        val pref = "$id|$ep|"
+        val on = p.remindEp.any { it.startsWith(pref) }
+        val now = System.currentTimeMillis() / 1000
+        updP { pr ->
+            // Sekalian buang entri lama yang sudah lewat >1 jam.
+            val kept = pr.remindEp.filter { e -> !e.startsWith(pref) && (e.substringAfterLast('|').toLongOrNull() ?: 0L) > now - 3600 }
+            pr.copy(remindEp = if (on) kept else kept + "$pref$airingAt")
+        }
+        if (on) {
+            Reminders.cancelEpisode(app, s.pi, id, ep)
+            toast(I18n.t("cal_toast_off", "Reminder removed"))
+        } else {
+            Reminders.scheduleEpisode(app, s.pi, id, title, ep, airingAt)
+            toast(I18n.t("cal_toast_on", "Reminder on. We’ll notify you %d minutes before.").format(Reminders.LEAD_MIN))
+            ensure { }
         }
     }
 
