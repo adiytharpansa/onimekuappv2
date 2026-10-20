@@ -462,7 +462,26 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         // dan menggagalkan putar walau server+jaringan sehat — instalasi
         // segar tidak pernah mengalaminya. Cache bersama hanya dipakai
         // untuk memutar UNDUHAN (offline); streaming murni dari jaringan.
-        val playFactory = if (offline) cacheFactory else androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
+        // Balapan pintu gudang (debug.60): untuk putar gudang daring,
+        // sumber data dibungkus DoorRaceDataSource — muatan awal dan
+        // muatan yang lambat/gantung dibalap ke 2-3 pintu bersamaan
+        // (pemenang tercepat dipakai, pemenang dicatat sebagai pintu
+        // terakhir-berhasil). Putar luring tetap cacheFactory murni;
+        // jalur non-gudang tidak berubah sama sekali.
+        val raceFactory = if (!offline && playback.source == "gudang" && playback.doors.size >= 2) {
+            val ordered = com.onimeku.app.data.GudangStore.orderedDoors(ctx, playback.doors)
+            val startName = ordered.firstOrNull { it.url == streamUrl }?.name
+                ?: ordered.firstOrNull()?.name
+            val session = com.onimeku.app.data.DoorRaceSession(ordered, startName) { name ->
+                com.onimeku.app.data.GudangStore.saveDoor(ctx, name)
+                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} balapan pintu dimenangkan $name")
+            }
+            com.onimeku.app.data.DoorRaceDataSource.Factory(
+                androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory), session)
+        } else {
+            null
+        }
+        val playFactory = if (offline) cacheFactory else raceFactory ?: androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
         val sourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playFactory)
             // 5 percobaan ulang per segmen (bawaan 3) sebelum dianggap galat fatal.
             .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(5))
