@@ -885,8 +885,6 @@ fun DetailScreen(vm: AppVM, id: String) {
     val epNums = if (newestFirst) baseEps.reversed() else baseEps
     val sim = Catalog.similar(id)
     val resume = vm.p.last?.takeIf { it.id == id }
-    var commentText by remember(id) { mutableStateOf("") }
-    LaunchedEffect(id) { if (com.onimeku.app.data.Comments.enabled) vm.loadComments(id) }
     // Katalog daftar berbentuk lite: perkaya judul ini dari endpoint
     // detail (sinopsis penuh + nomor episode asli) sekali per sesi.
     LaunchedEffect(id) { vm.loadDetail(id) }
@@ -1065,62 +1063,6 @@ fun DetailScreen(vm: AppVM, id: String) {
                     }
                 }
             }
-            // ==== Komentar: backend Supabase (tabel comments).
-            // Tamu bisa membaca; menulis wajib masuk. Hanya dirender bila backend akun aktif. ====
-            if (com.onimeku.app.data.Comments.enabled) {
-                item(key = "comments_head") {
-                    Column(Modifier.padding(top = 28.dp)) {
-                        SectionTitle("${I18n.t("comments", "Comments")} (${vm.comments.size})")
-                        if (vm.s.account != null) {
-                            Row(Modifier.padding(horizontal = Gutter).padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Box(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Bg2).border(1.dp, Line, RoundedCornerShape(16.dp))
-                                    .padding(horizontal = 14.dp, vertical = 13.dp)) {
-                                    androidx.compose.foundation.text.BasicTextField(
-                                        commentText, { if (it.length <= 1000) commentText = it },
-                                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp),
-                                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Red),
-                                        decorationBox = { inner -> if (commentText.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = 14.sp); inner() },
-                                    )
-                                }
-                                Btn(I18n.t("comment_post", "Post"), BtnStyle.Play, height = 46.dp) {
-                                    vm.postComment(id, commentText); commentText = ""
-                                }
-                            }
-                        } else {
-                            Box(Modifier.padding(horizontal = Gutter).padding(top = 14.dp)) {
-                                Chip(I18n.t("sign_in_to_comment", "Sign in to comment")) { vm.go(Route.Auth(false)) }
-                            }
-                        }
-                    }
-                }
-                if (vm.commentsBusy && vm.comments.isEmpty()) {
-                    item(key = "comments_busy") { CommentSkeleton(3, Modifier.padding(horizontal = Gutter, vertical = 16.dp)) }
-                } else if (vm.comments.isEmpty()) {
-                    item(key = "comments_empty") {
-                        Text(I18n.t("comment_empty", "No comments yet. Be the first."), color = NavOff, fontSize = 14.sp,
-                            modifier = Modifier.padding(horizontal = Gutter, vertical = 16.dp))
-                    }
-                }
-                items(vm.comments, key = { "comment:${it.id}" }) { c ->
-                    val mine = c.user_id == vm.s.account?.userId
-                    Row(Modifier.padding(horizontal = Gutter).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(36.dp).clip(CircleShape).background(if (mine) Red else Solid), contentAlignment = Alignment.Center) {
-                            Text(c.author.ifBlank { "U" }.take(1).uppercase(), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(c.author.ifBlank { "User" }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (mine) RedText else Color.White)
-                                Spacer(Modifier.weight(1f))
-                                Text(commentTime(c.created_at), fontSize = 11.sp, color = NavOff)
-                            }
-                            Text(c.body, fontSize = 14.sp, color = InkSoft, lineHeight = 20.sp, modifier = Modifier.padding(top = 3.dp))
-                            if (mine) Text(I18n.t("comment_delete", "Delete"), fontSize = 12.sp, color = NavOff,
-                                modifier = Modifier.padding(top = 6.dp).clickable { vm.deleteComment(id, c.id) })
-                        }
-                    }
-                }
-            }
         }
         markEp?.let { n ->
             val seenNow = "$id:$n" in vm.p.seen
@@ -1151,11 +1093,6 @@ fun DetailScreen(vm: AppVM, id: String) {
 
 /** Waktu komentar dari server (UTC ISO) ditampilkan dalam zona waktu perangkat, mis. "19 Okt 14:05". */
 internal fun uiLocale(): Locale = if (I18n.lang == "id") Locale.forLanguageTag("id") else Locale.ENGLISH
-
-private fun commentTime(iso: String): String = runCatching {
-    java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())
-        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm", uiLocale()))
-}.getOrElse { if (iso.length >= 16) iso.substring(0, 10) + " " + iso.substring(11, 16) else "" }
 
 @Composable
 fun SeeAllScreen(vm: AppVM, key: String) {

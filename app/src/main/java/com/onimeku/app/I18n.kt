@@ -218,6 +218,11 @@ object I18n {
         "comment_post" to "Kirim",
         "comment_empty" to "Belum ada komentar. Jadilah yang pertama.",
         "comment_delete" to "Hapus",
+        "comment_delete_q" to "Hapus komentar ini?",
+        "comments_open" to "Buka",
+        "time_now" to "Baru saja",
+        "time_min" to "mnt",
+        "time_hour" to "jam",
         // Pemutar
         "loading_stream" to "Memuat stream…",
         "loading_stream2" to "Mencari sumber terbaik…",

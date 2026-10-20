@@ -504,7 +504,9 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     // ---- Komentar per judul ----
     var comments by mutableStateOf<List<com.onimeku.app.data.CommentRow>>(emptyList()); private set
     var commentsBusy by mutableStateOf(false); private set
+    private var commentsFor = ""
     fun loadComments(id: String) {
+        if (commentsFor != id) { comments = emptyList(); commentsFor = id }
         viewModelScope.launch {
             commentsBusy = true
             comments = com.onimeku.app.data.Comments.list(id, s.account)

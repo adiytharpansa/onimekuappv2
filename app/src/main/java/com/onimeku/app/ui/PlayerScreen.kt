@@ -51,6 +51,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import android.content.pm.ActivityInfo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -868,6 +869,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val epList = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val curIdx = epList.indexOf(r.ep)
     val epListState = rememberLazyListState()
+    // Komentar: kartu ringkas di panel info, sheet penuh saat diketuk.
+    val commentsOn = com.onimeku.app.data.Comments.enabled
+    var commentsOpen by rememberSaveable(r.id) { mutableStateOf(false) }
+    LaunchedEffect(r.id) { if (commentsOn) vm.loadComments(r.id) }
     val scope = rememberCoroutineScope()
     val thumbSrc = remember { MutableInteractionSource() }
 
@@ -1211,7 +1216,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
 
       if (!full || fullA < 0.999f) {
         // ===== Panel di bawah video: info, navigasi episode, kontrol, daftar episode =====
-        val epStart = 2 // item "info" + "ephead" mendahului daftar episode
+        val epStart = if (commentsOn) 3 else 2 // item "info" (+ "comments") + "ephead" mendahului daftar episode
         LazyColumn(
             Modifier.weight(1f).fillMaxWidth(), state = epListState,
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
@@ -1258,6 +1263,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                 }
             }
+            if (commentsOn) item(key = "comments") {
+                CommentsPreview(vm, Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) { commentsOpen = true }
+            }
             item(key = "ephead") {
                 Column(Modifier.padding(top = 12.dp, bottom = 12.dp)) {
                     SectionTitle(I18n.t("episodes", "Episodes")) {
@@ -1283,6 +1291,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
       }
     }
+    if (commentsOn && commentsOpen && !full) CommentsSheet(vm, r.id) { commentsOpen = false }
     PlayerSettingsSheet(
         page = sheet, full = full,
         quality = quality, autoRes = playingH,
@@ -1470,6 +1479,10 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
     val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
     val idx = nums.indexOf(r.ep)
+    val commentsOn = com.onimeku.app.data.Comments.enabled
+    var commentsOpen by rememberSaveable(r.id) { mutableStateOf(false) }
+    LaunchedEffect(r.id) { if (commentsOn) vm.loadComments(r.id) }
+    if (commentsOn && commentsOpen) CommentsSheet(vm, r.id) { commentsOpen = false }
     Column(Modifier.fillMaxSize().background(Bg)) {
         Box(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding()) {
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
@@ -1509,6 +1522,7 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 "Judul ini diputar lewat pemutar resmi sumbernya. Ketuk tombol putar di dalam video.",
                 Modifier.padding(top = 14.dp), fontSize = 12.sp, color = InkSoft,
             )
+            if (commentsOn) CommentsPreview(vm, Modifier.padding(top = 18.dp)) { commentsOpen = true }
         }
     }
 }
