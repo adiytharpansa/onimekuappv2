@@ -411,12 +411,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
         val url = pb?.streamUrl
         if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
+            autoQueued.remove(k)
             if (!silent) toast("This title can't be downloaded")
             return
         }
         if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
         downloading[k] = 0
         Downloads.enqueue(app, id, ep, url, pb.referer) {
+            autoQueued.remove(k)
             downloading.remove(k)
             upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
             if (!silent) toast("Download failed to start: Episode $ep")
@@ -524,7 +526,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) { false }
         if (!unmetered) { autoQueued.remove(k); return } // coba lagi saat tersambung Wi-Fi
         val free = try { android.os.StatFs(app.filesDir.path).availableBytes } catch (e: Exception) { Long.MAX_VALUE }
-        if (free < 1024L * 1024 * 1024) return
+        if (free < 1024L * 1024 * 1024) { autoQueued.remove(k); return }
         viewModelScope.launch { startDownload(id, next, silent = true) }
     }
 

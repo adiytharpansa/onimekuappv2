@@ -148,6 +148,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        // Activity dibuat ulang (mode gelap/font berubah) TIDAK boleh
+        // menjalankan ulang deep link dari intent lama.
+        if (savedInstanceState != null) return
         // Kait tes otomatis (emulator CI): buka pemutar langsung ke satu
         // episode lewat intent agar putar bisa diverifikasi ujung-ke-ujung
         // tanpa mengetuk UI. Tidak berpengaruh pada pemakaian normal.

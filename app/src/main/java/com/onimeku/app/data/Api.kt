@@ -319,7 +319,9 @@ data class PosterResp(
 private fun ApiAnime.toAnime(): Anime {
     val latest = latestEpisode ?: episodeNumbers.maxOrNull() ?: 0
     val total = totalEpisodes ?: 0
-    val odt = runCatching { OffsetDateTime.parse(updatedAt) }.getOrNull()
+    val odt = runCatching {
+        OffsetDateTime.parse(updatedAt).atZoneSameInstant(java.time.ZoneId.systemDefault())
+    }.getOrNull()
     val cleanSyn = (synopsis ?: "")
         .substringBefore("(Source:").trim()
         .ifBlank { "No synopsis available yet." }

@@ -101,7 +101,7 @@ class Store(ctx: Context) {
 
     fun save(s: AppState) {
         val sec = secure
-        if (sec == null) { sp.edit().putString("state", json.encodeToString(s)).apply(); return }
+        if (sec == null) { sp.edit().putString("state", json.encodeToString(s.copy(account = null))).apply(); return }
         // Tulis token hanya saat berubah (enkripsi Keystore tidak murah; save() dipanggil tiap simpan progres).
         if (!accWritten || s.account != lastAcc) {
             val e = sec.edit()

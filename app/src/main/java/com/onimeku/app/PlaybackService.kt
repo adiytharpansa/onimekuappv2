@@ -10,7 +10,8 @@ import androidx.media3.session.MediaSessionService
  * menyerahkannya ke pengendali (notifikasi sistem) yang terhubung.
  */
 class PlaybackService : MediaSessionService() {
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = current
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+        if (controllerInfo.packageName == packageName || controllerInfo.isTrusted) current else null
 
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
         // Pengguna menggeser aplikasi dari recents: hentikan, jangan memutar tanpa UI.

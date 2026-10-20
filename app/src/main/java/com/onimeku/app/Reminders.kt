@@ -44,6 +44,9 @@ object Reminders {
     }
 
     fun rescheduleAll(ctx: Context, s: AppState) {
+        // Katalog belum termuat (mis. dibuka luring tanpa cache):
+        // jangan batalkan apa pun — pengingat yang ada harus utuh.
+        if (Catalog.all.isEmpty()) return
         WorkManager.getInstance(ctx).cancelAllWorkByTag(TAG)
         if (!s.settings.alerts) return
         s.profiles.forEachIndexed { pi, p -> p.remind.forEach { schedule(ctx, pi, it) } }

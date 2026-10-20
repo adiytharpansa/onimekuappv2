@@ -69,7 +69,7 @@ object Catalog {
     private val byScore = compareByDescending<Anime> { it.score ?: -1.0 }.thenBy { it.title.lowercase() }
 
     private fun relLabel(iso: String?): String {
-        val d = runCatching { OffsetDateTime.parse(iso).toLocalDate() }.getOrNull() ?: return "Today"
+        val d = runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }.getOrNull() ?: return "Today"
         val days = ChronoUnit.DAYS.between(d, LocalDate.now())
         return when {
             days <= 0L -> "Today"
@@ -106,7 +106,7 @@ object Catalog {
     }
 
     /** Judul ternormalisasi (huruf+angka saja; tahun tetap ikut sehingga remake beda tahun tidak ikut tergabung). */
-    internal fun titleKey(a: Anime): String = a.title.lowercase().filter { it.isLetterOrDigit() }
+    internal fun titleKey(a: Anime): String = a.title.lowercase().filter { it.isLetterOrDigit() }.ifEmpty { a.id }
 
     /** Kunci franchise: judul tanpa "Season N", "Part N", sub-judul setelah ":" dan angka akhir. */
     internal fun franchiseKey(title: String): String =
