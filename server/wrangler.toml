@@ -1,0 +1,10 @@
+name = "onimeku-translate"
+main = "translate-worker.js"
+compatibility_date = "2026-10-01"
+
+[ai]
+binding = "AI"
+
+[[kv_namespaces]]
+binding = "SUBS"
+id = "GANTI_DENGAN_ID_KV"

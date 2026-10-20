@@ -192,7 +192,7 @@ private fun EngineRow(value: String, onChange: (String) -> Unit) {
     var t by remember { mutableStateOf(value) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp)) {
         Text(I18n.t("sub_engine_t", "Translation server (optional)"), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-        Text(I18n.t("sub_engine_d", "Your own endpoint for higher-quality translation. Leave empty to translate on this device."), fontSize = 12.5.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp))
+        Text(I18n.t("sub_engine_d", "Your own endpoint for higher-quality translation. Leave empty to use the built-in server, or this device if it is unavailable."), fontSize = 12.5.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp))
         BasicTextField(
             t, { t = it; onChange(it.trim()) }, singleLine = true,
             textStyle = TextStyle(color = Color.White, fontSize = 14.sp), cursorBrush = SolidColor(Red),

@@ -243,16 +243,23 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 ready = ready.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, ready.subtitles))
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
+            // Terjemahan dimulai SEKARANG dan ditunggu paling lama 3 dtk sebelum video mulai: bila sudah ada di
+            // server bersama / cache perangkat, hasilnya tiba nyaris seketika sehingga subtitle Indonesia sudah
+            // terpasang sejak detik pertama (tanpa muat ulang di tengah episode). Bila lebih lama, video tetap
+            // mulai dan trek ditambahkan begitu jadi (lihat LaunchedEffect(subCount) di PlayerReady).
+            val subsNow = ready.subtitles
+            val trOpts = SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl)
+            val trJob = if (subsNow.isNotEmpty()) async { SubTranslate.fill(ctx, r.id, r.ep, subsNow, trOpts) } else null
+            val early = trJob?.let { j -> kotlinx.coroutines.withTimeoutOrNull(3_000) { j.await() } }
+            if (early != null && early.size != subsNow.size) ready = ready.copy(subtitles = early)
             pb = ready
             // Uji mandiri jalur stream: GET polos meniru langkah
             // pemutar (master -> varian -> segmen 1) lalu unggah log.
             if (com.onimeku.app.BuildConfig.DEBUG) launch { diagStreamProbe(r, ready) }
-            // Lengkapi pilihan subtitle Indonesia + English: trek yang kurang diterjemahkan di perangkat,
-            // lalu ditambahkan ke pemutar yang sedang berjalan (lihat LaunchedEffect(subCount) di PlayerReady).
-            if (ready.subtitles.isNotEmpty()) {
-                val withTr = SubTranslate.fill(ctx, r.id, r.ep, ready.subtitles,
-                    SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl))
-                if (withTr.size != ready.subtitles.size) pb = ready.copy(subtitles = withTr)
+            // Terjemahan yang belum selesai dalam 3 dtk: tunggu di latar, lalu tambahkan ke pemutar yang sedang berjalan.
+            if (trJob != null && early == null) {
+                val withTr = trJob.await()
+                if (withTr.size != subsNow.size) pb = ready.copy(subtitles = withTr)
             }
         }
     }

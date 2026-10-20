@@ -205,8 +205,10 @@ object SubTranslate {
         val ranges = group(cues)
         val texts = ranges.map { r -> r.joinToString(" ") { cues[it].text } }
         var tl: List<String>? = null
-        if (o.engineUrl.isNotBlank()) {
-            tl = try { viaEngine(o.engineUrl, texts, src, tgt) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+        // Urutan: server pilihan pengguna (Pengaturan) -> server bersama bawaan (cache + AI gratis) -> ML Kit di HP.
+        val engine = o.engineUrl.ifBlank { com.onimeku.app.BuildConfig.TR_URL }
+        if (engine.isNotBlank()) {
+            tl = try { viaEngine(engine, texts, names(cues), src, tgt) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
         }
         if (tl == null) tl = viaMlKit(texts, names(cues), src, tgt)
         if (tl.size != ranges.size) return null
@@ -263,15 +265,23 @@ object SubTranslate {
         }
     }
 
-    /** Server sendiri: POST {"source","target","lines":[...]} -> {"lines":[...]} (jumlah baris sama). */
-    private fun viaEngine(url: String, texts: List<String>, src: String, tgt: String): List<String>? {
+    /**
+     * Server terjemahan: POST {"source","target","lines":[...],"names":[...]} -> {"lines":[...]} (jumlah baris sama).
+     * Server bersama menyimpan hasil per isi teks, jadi episode yang sudah pernah diterjemahkan pengguna lain tiba seketika.
+     * Gagal di tengah (mis. jatah AI harian habis -> 503) -> null, pemanggil jatuh ke ML Kit.
+     */
+    private fun viaEngine(url: String, texts: List<String>, names: List<String>, src: String, tgt: String): List<String>? {
         val client = Net.client.newBuilder().callTimeout(90, TimeUnit.SECONDS).readTimeout(90, TimeUnit.SECONDS).build()
+        val key = com.onimeku.app.BuildConfig.TR_KEY
+        val shared = url == com.onimeku.app.BuildConfig.TR_URL  // kunci aplikasi hanya dikirim ke server bawaan
         val out = ArrayList<String>()
-        for (chunk in texts.chunked(40)) {
-            val body = JSONObject().put("source", src).put("target", tgt).put("lines", JSONArray(chunk)).toString()
+        for (chunk in texts.chunked(30)) {
+            val body = JSONObject().put("source", src).put("target", tgt).put("lines", JSONArray(chunk))
+                .put("names", JSONArray(names.take(40))).toString()
                 .toRequestBody("application/json".toMediaType())
-            val req = Request.Builder().url(url).post(body).build()
-            client.newCall(req).execute().use { resp ->
+            val rb = Request.Builder().url(url).post(body)
+            if (shared && key.isNotBlank()) rb.header("x-onimeku-key", key)
+            client.newCall(rb.build()).execute().use { resp ->
                 if (!resp.isSuccessful) return null
                 val arr = JSONObject(resp.body?.string() ?: return null).optJSONArray("lines") ?: return null
                 if (arr.length() != chunk.size) return null
