@@ -222,12 +222,21 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // var tertangkap closure + diubah isinya tidak bisa smart-cast.
             var ready: com.onimeku.app.data.Playback = res
             if (ready.subtitles.isNotEmpty()) {
-                // Unduh semua trek PARALEL dengan batas waktu total 4 dtk dan
+                // Unduh semua trek PARALEL dengan batas waktu total dan
                 // pakai ulang berkas yang sudah ada. Sebelumnya berurutan
                 // (timeout 10+15 dtk per trek) sehingga start video bisa
                 // tertahan puluhan detik hanya karena server subtitle lambat.
+                // Perbaikan debug.61: batas total 4 dtk yang lama membuang
+                // SEMUA trek sekaligus bila terlampaui (subtitles=[]) —
+                // untuk putar GUDANG itu fatal diam-diam: berkas .vtt kecil
+                // dari pintu CDN bisa lambat dingin di jaringan seluler.
+                // Gudang kini: anggaran 15 dtk, dan trek yang gagal/lambat
+                // TIDAK dibuang — URL pintu aslinya dipertahankan agar
+                // pemutar mengambilnya sendiri (SingleSample lewat pintu
+                // yang sama); kegagalannya dicatat ke CrashLog.
+                val isGudangPb = ready.source == "gudang"
                 val dir = java.io.File(ctx.cacheDir, "subs").apply { mkdirs() }
-                val loaded = kotlinx.coroutines.withTimeoutOrNull(4_000) {
+                val loaded = kotlinx.coroutines.withTimeoutOrNull(if (isGudangPb) 15_000 else 4_000) {
                     kotlinx.coroutines.coroutineScope {
                         ready.subtitles.mapIndexed { i, s ->
                             async(kotlinx.coroutines.Dispatchers.IO) {
@@ -240,20 +249,34 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                                             .header("Referer", s.referer ?: ready.referer ?: "")
                                             .header("User-Agent", com.onimeku.app.data.Net.UA).build()
                                         com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
-                                            if (!resp.isSuccessful) return@async null
-                                            val bytes = resp.body?.bytes() ?: return@async null
+                                            if (!resp.isSuccessful) return@async if (isGudangPb) s else null
+                                            val bytes = resp.body?.bytes() ?: return@async if (isGudangPb) s else null
                                             f.writeBytes(bytes)
                                         }
                                     }
                                     s.copy(url = android.net.Uri.fromFile(f).toString())
                                 } catch (e: Exception) {
-                                    null
+                                    if (isGudangPb) {
+                                        com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek ${s.lang} gagal (${e.javaClass.simpleName}), pakai URL pintu")
+                                        s
+                                    } else {
+                                        null
+                                    }
                                 }
                             }
                         }.awaitAll().filterNotNull()
                     }
-                } ?: emptyList()
-                ready = ready.copy(subtitles = loaded)
+                }
+                ready = when {
+                    loaded != null -> ready.copy(subtitles = loaded)
+                    isGudangPb -> {
+                        // Anggaran habis sebelum semua trek selesai: JANGAN
+                        // kosongkan daftar — pertahankan URL pintu asli.
+                        com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek gudang melewati anggaran, pakai URL pintu")
+                        ready
+                    }
+                    else -> ready.copy(subtitles = emptyList())
+                }
                 ready = ready.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, ready.subtitles))
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
@@ -485,6 +508,22 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         val sourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playFactory)
             // 5 percobaan ulang per segmen (bawaan 3) sebelum dianggap galat fatal.
             .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(5))
+        // Perbaikan debug.61 (CC gudang tetap kosong di .59/.60): di Media3
+        // 1.5.0 DefaultMediaSourceFactory MEMASANG parseSubtitlesDuring-
+        // Extraction=true secara bawaan, jadi trek subtitle samping TIDAK
+        // lewat SingleSampleMediaSource (jalur yang menjadi dasar fix
+        // ae3c36d) melainkan ProgressiveMediaSource+SubtitleExtractor yang
+        // digabung ke sumber HLS dengan suppressPrepareError(true) — muatan
+        // teks yang terganggu menjadi grup teks KOSONG tanpa galat apa pun:
+        // pengaturan tertulis "Indonesian", cue nol selamanya. Khusus
+        // putar gudang, paksa jalur SingleSample yang teruji: satu berkas
+        // subtitle = satu trek, dimuat utuh, ID konfigurasi diteruskan ke
+        // Format trek persis seperti asumsi isLocalSubtitleGroup. Jalur
+        // non-gudang tidak disentuh (pabriknya tetap bawaan).
+        if (playback.source == "gudang") {
+            @Suppress("DEPRECATION")
+            sourceFactory.experimentalParseSubtitlesDuringExtraction(false)
+        }
         val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(ctx)
             .setEnableDecoderFallback(true) // dekoder utama gagal -> coba dekoder lain, bukan error
         ExoPlayer.Builder(ctx, renderers)
@@ -652,6 +691,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         // cadangannya tetap semua grup teks seperti sebelumnya.
         val localText = allText.filter { isLocalSubtitleGroup(it) }
         val groups = if (localText.isNotEmpty()) localText else allText
+        // Perbaikan debug.61: untuk putar GUDANG dengan trek payload,
+        // JANGAN PERNAH jatuh ke grup teks manifest (URI .vtt mentah yang
+        // tidak bisa dirender Media3) hanya karena trek samping belum
+        // tiba — ingat pilihannya; onTracksChanged menerapkannya begitu
+        // trek samping muncul (cabang subLocalApplied). Di .59/.60 jalan
+        // pintas inilah yang mengunci pilihan ke grup kosong.
+        if (i >= 0 && playback.source == "gudang" && subTracks.isNotEmpty() && localText.isEmpty()) {
+            subLocalApplied = false
+            subIdx = i
+            com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} applySub($i) ditunda: trek samping belum tiba")
+            return
+        }
         if (i < 0) {
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
             subLocalApplied = false
@@ -671,6 +722,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
                 .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0))
             subLocalApplied = isLocalSubtitleGroup(g)
+            if (playback.source == "gudang") {
+                com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} applySub($i) -> ${if (subLocalApplied) "trek samping" else "grup MANIFEST"} lang=${g.mediaTrackGroup.getFormat(0).language}")
+            }
         }
         player.trackSelectionParameters = b.build()
         subIdx = i
