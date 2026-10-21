@@ -113,7 +113,17 @@ data class Playback(
     // Posisi outro (detik) bila API menyediakannya; tombol Skip outro hanya muncul jika outroStart ada.
     val outroStart: Int? = null,
     val outroEnd: Int? = null,
-)
+) {
+    /**
+     * Punya minimal satu alamat yang bisa diputar (aliran langsung,
+     * aliran proksi, embed, atau pintu gudang ber-URL). Dipakai sejak
+     * debug.63 untuk menolak Playback "sukses tapi kosong" dari
+     * respons terdegradasi — lihat ApiClient.fetchPlayback.
+     */
+    val hasStream: Boolean
+        get() = !streamUrl.isNullOrBlank() || !streamProxyUrl.isNullOrBlank() ||
+            !embedUrl.isNullOrBlank() || doors.any { it.url.isNotBlank() }
+}
 
 @Serializable
 private data class PlaybackResp(
@@ -305,26 +315,47 @@ object ApiClient {
         val k = "$id:$ep"
         if (prefetched[k]?.let { System.currentTimeMillis() - it.at < PREFETCH_TTL_MS } == true) return
         val pb = try { fetchPlaybackNet(id, ep) } catch (e: Exception) { null } ?: return
+        // debug.63: jangan simpan Playback tanpa aliran — prefetch yang
+        // menangkap momen hulu terdegradasi akan meracuni putar
+        // berikutnya selama sisa TTL (10 mnt).
+        if (!pb.hasStream) return
         prefetched[k] = Prefetched(System.currentTimeMillis(), pb)
     }
 
     /**
      * [fresh] = true mengabaikan hasil prefetch (mis. untuk unduhan, yang
-     * butuh URL segar). Satu percobaan ulang cepat menutup gangguan sesaat
-     * tanpa membuat pengguna menunggu 3 kali seperti katalog.
+     * butuh URL segar).
+     *
+     * debug.63 — ketahanan terhadap hulu/fasad goyah (regresi lapangan
+     * debug.62: Chainsaw Man ep1 "Stream unavailable" total padahal
+     * unduhan lokal episode itu ada dan sehat): versi lama menerima
+     * hasil prefetch maupun jaringan APA ADANYA, jadi Playback yang
+     * tiba tanpa satu pun alamat aliran (respons terdegradasi sesaat)
+     * lolos sebagai "sukses" dan pemutar menyerah tanpa pernah
+     * mencoba cadangan unduhan. Kini Playback tanpa aliran dianggap
+     * GAGAL: hit prefetch semacam itu dibuang, jaringan dicoba sampai
+     * 3x dengan jeda tumbuh (0 / 600 mdt / 1,5 dtk), dan null
+     * dikembalikan bila tak ada yang layak — pemanggil (pemutar) lalu
+     * memakai cadangan unduhan lokalnya. Jalur sehat tidak berubah:
+     * keberhasilan pertama langsung dikembalikan tanpa jeda.
      */
     suspend fun fetchPlayback(id: String, ep: Int, fresh: Boolean = false): Playback? {
         val k = "$id:$ep"
         val hit = prefetched.remove(k)
-        if (!fresh && hit != null && System.currentTimeMillis() - hit.at < PREFETCH_TTL_MS) return hit.pb
-        return try {
-            fetchPlaybackNet(id, ep)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            kotlinx.coroutines.delay(400)
-            fetchPlaybackNet(id, ep)
+        if (!fresh && hit != null && System.currentTimeMillis() - hit.at < PREFETCH_TTL_MS && hit.pb.hasStream) return hit.pb
+        val waits = longArrayOf(0L, 600L, 1_500L)
+        for (w in waits) {
+            if (w > 0) kotlinx.coroutines.delay(w)
+            val got = try {
+                fetchPlaybackNet(id, ep)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            if (got != null && got.hasStream) return got
         }
+        return null
     }
 
     private suspend fun fetchPlaybackNet(id: String, ep: Int): Playback? {

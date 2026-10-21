@@ -248,6 +248,29 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         // di main thread TEPAT saat animasi masuk (380 ms) berjalan -> patah. Tahan penyerahan [pb] sampai animasi selesai.
         val t0 = android.os.SystemClock.uptimeMillis()
         suspend fun settle() { val w = 380L - (android.os.SystemClock.uptimeMillis() - t0); if (w > 0) delay(w) }
+        // Cadangan unduhan lokal (debug.63): Playback putar-dari-unduhan
+        // bila episode ini sudah terunduh PENUH, null bila tidak ada.
+        // Dipakai SEMUA jalan gagal bootstrap — versi lama hanya
+        // memeriksanya saat fetchPlayback mengembalikan null; respons
+        // yang datang tetapi tanpa alamat aliran (cabang kosong di
+        // bawah) langsung menyerah "Stream unavailable" tanpa pernah
+        // melihat unduhan (regresi lapangan debug.62, Chainsaw Man
+        // ep1: episode terunduh sehat, layar galat total). Subtitle
+        // luring gudang (en/id) yang ikut terunduh dipasangkan;
+        // daftar kosongnya dipulihkan efek pemulihan trek sesudah
+        // putar terpasang (efek itu tidak pernah menahan bootstrap).
+        suspend fun loadOffline(sebab: String): com.onimeku.app.data.Playback? {
+            val dl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.onimeku.app.data.Downloads.states(ctx)[com.onimeku.app.data.Downloads.key(r.id, r.ep)]
+            }
+            if (dl == null || dl.state != androidx.media3.exoplayer.offline.Download.STATE_COMPLETED) return null
+            val offSubs = com.onimeku.app.data.GudangStore.offlineSubs(ctx, r.id, r.ep)
+            com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} $sebab -> putar unduhan, subs luring=${offSubs.size}")
+            return com.onimeku.app.data.Playback(
+                streamUrl = dl.request.uri.toString(), episode = r.ep,
+                subtitles = offSubs,
+            )
+        }
         // Batas waktu TOTAL memuat data putar (debug.30, dilonggarkan
         // debug.37): endpoint hulu kadang lambat/flaky (terukur 4,6 dtk
         // dan sesekali 503 untuk Bleach ep1) dan timeout baca per
@@ -260,32 +283,33 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep) } catch (e: Exception) { null }
         }
         if (res == null) {
-            // API tak terjangkau (offline): bila episode ini sudah terunduh
-            // penuh, putar dari cache unduhan — unduhan harus benar-benar
-            // bisa diputar tanpa jaringan.
-            val dl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.onimeku.app.data.Downloads.states(ctx)[com.onimeku.app.data.Downloads.key(r.id, r.ep)]
-            }
-            if (dl != null && dl.state == androidx.media3.exoplayer.offline.Download.STATE_COMPLETED) {
+            // API tak terjangkau (offline): bila episode ini sudah
+            // terunduh penuh, putar dari cache unduhan — unduhan harus
+            // benar-benar bisa diputar tanpa jaringan.
+            val off = loadOffline("API tak terjangkau")
+            if (off != null) {
                 pbOffline = true
                 settle()
-                // Subtitle luring gudang (en/id) yang ikut terunduh
-                // dipasangkan untuk putar offline.
-                val offSubs = com.onimeku.app.data.GudangStore.offlineSubs(ctx, r.id, r.ep)
-                // debug.62: cabang ini dulu diam — sesi putar luring
-                // dengan daftar subtitle kosong ("Not available") tidak
-                // meninggalkan jejak apa pun di log. Catat selalu;
-                // daftar kosong dipulihkan oleh efek pemulihan di bawah.
-                com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} API tak terjangkau -> putar unduhan, subs luring=${offSubs.size}")
-                pb = com.onimeku.app.data.Playback(
-                    streamUrl = dl.request.uri.toString(), episode = r.ep,
-                    subtitles = offSubs,
-                )
+                pb = off
             } else {
                 pbFailed = true
             }
-        } else if (res.streamUrl.isNullOrBlank() && res.streamProxyUrl.isNullOrBlank() && res.embedUrl.isNullOrBlank()) {
-            pbFailed = true
+        } else if (!res.hasStream) {
+            // debug.63: respons DATANG tetapi tanpa satu pun alamat
+            // yang bisa diputar (degradasi sesaat hulu/fasad — bentuk
+            // kegagalan sesi debug.62). Dulu cabang ini langsung
+            // pbFailed: cadangan unduhan tidak pernah diperiksa dan
+            // episode yang terunduh sehat ikut tak bisa diputar.
+            // Kini sama seperti jalur offline: unduhan penuh menang;
+            // galat jujur hanya bila unduhan pun tidak ada.
+            val off = loadOffline("respons tanpa aliran")
+            if (off != null) {
+                pbOffline = true
+                settle()
+                pb = off
+            } else {
+                pbFailed = true
+            }
         } else {
             // Subtitle diunduh ke penyimpanan lokal lebih dulu (dengan Referer
             // per-trek dari API), lalu diputar dari file. Trek subtitle yang
@@ -334,6 +358,14 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     // non-gudang tidak berubah sama sekali.
     var subRecoverTried by remember(r) { mutableStateOf(false) }
     LaunchedEffect(pb, subRecoverTried) {
+        // Isolasi bootstrap (debug.63): efek ini murni pekerjaan
+        // subtitle SESUDAH putar terpasang. Ia tidak berjalan selama
+        // bootstrap belum menghasilkan Playback (pb null) atau saat
+        // bootstrap menyerah (pbFailed), dan tidak pernah menulis
+        // attempt/pbFailed/pbOffline — jadi tidak bisa menunda,
+        // membatalkan, atau menggagalkan pemasangan putar maupun
+        // cadangan unduhan di efek bootstrap.
+        if (pbFailed) return@LaunchedEffect
         val cur = pb ?: return@LaunchedEffect
         if (cur.subtitles.isNotEmpty() || subRecoverTried) return@LaunchedEffect
         subRecoverTried = true
