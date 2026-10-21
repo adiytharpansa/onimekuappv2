@@ -155,6 +155,73 @@ fun PlayerScreen(vm: AppVM, r: Route.Player) {
     PlayerContent(vm, r)
 }
 
+/**
+ * Unduh trek subtitle [ready] ke berkas lokal (semua trek PARALEL
+ * dengan batas waktu total, pakai ulang berkas yang sudah ada), lalu
+ * pasang terjemahan yang sudah tersimpan. Dulu blok ini hanya hidup
+ * inline di jalur putar utama; sejak debug.62 ia fungsi bersama —
+ * jalur utama dan efek pemulihan trek memakai perilaku yang sama
+ * persis.
+ *
+ * Batas total: gudang 15 dtk, lain 4 dtk. Perbaikan debug.61: batas
+ * 4 dtk yang lama membuang SEMUA trek sekaligus bila terlampaui —
+ * untuk putar GUDANG trek yang gagal/lambat TIDAK dibuang: URL pintu
+ * aslinya dipertahankan agar pemutar mengambilnya sendiri
+ * (SingleSample lewat pintu yang sama); kegagalan dicatat CrashLog.
+ */
+private suspend fun localizeSubtitles(
+    ctx: Context,
+    r: Route.Player,
+    ready: com.onimeku.app.data.Playback,
+): com.onimeku.app.data.Playback {
+    if (ready.subtitles.isEmpty()) return ready
+    val isGudangPb = ready.source == "gudang"
+    val dir = java.io.File(ctx.cacheDir, "subs").apply { mkdirs() }
+    val loaded = kotlinx.coroutines.withTimeoutOrNull(if (isGudangPb) 15_000 else 4_000) {
+        kotlinx.coroutines.coroutineScope {
+            ready.subtitles.mapIndexed { i, s ->
+                async(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val ext = listOf(".vtt", ".srt", ".ass", ".ssa").firstOrNull { s.url.contains(it) } ?: ".vtt"
+                        val fname = "${r.id}_${r.ep}_${s.lang}_$i$ext".replace(Regex("[^A-Za-z0-9._-]"), "_")
+                        val f = java.io.File(dir, fname)
+                        if (!f.exists() || f.length() == 0L) {
+                            val req = okhttp3.Request.Builder().url(s.url)
+                                .header("Referer", s.referer ?: ready.referer ?: "")
+                                .header("User-Agent", com.onimeku.app.data.Net.UA).build()
+                            com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
+                                if (!resp.isSuccessful) return@async if (isGudangPb) s else null
+                                val bytes = resp.body?.bytes() ?: return@async if (isGudangPb) s else null
+                                f.writeBytes(bytes)
+                            }
+                        }
+                        s.copy(url = android.net.Uri.fromFile(f).toString())
+                    } catch (e: Exception) {
+                        if (isGudangPb) {
+                            com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek ${s.lang} gagal (${e.javaClass.simpleName}), pakai URL pintu")
+                            s
+                        } else {
+                            null
+                        }
+                    }
+                }
+            }.awaitAll().filterNotNull()
+        }
+    }
+    var out = when {
+        loaded != null -> ready.copy(subtitles = loaded)
+        isGudangPb -> {
+            // Anggaran habis sebelum semua trek selesai: JANGAN
+            // kosongkan daftar — pertahankan URL pintu asli.
+            com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek gudang melewati anggaran, pakai URL pintu")
+            ready
+        }
+        else -> ready.copy(subtitles = emptyList())
+    }
+    out = out.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, out.subtitles))
+    return out
+}
+
 @Composable
 private fun PlayerContent(vm: AppVM, r: Route.Player) {
     val a = Catalog.byId[r.id] ?: return
@@ -204,9 +271,15 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 settle()
                 // Subtitle luring gudang (en/id) yang ikut terunduh
                 // dipasangkan untuk putar offline.
+                val offSubs = com.onimeku.app.data.GudangStore.offlineSubs(ctx, r.id, r.ep)
+                // debug.62: cabang ini dulu diam — sesi putar luring
+                // dengan daftar subtitle kosong ("Not available") tidak
+                // meninggalkan jejak apa pun di log. Catat selalu;
+                // daftar kosong dipulihkan oleh efek pemulihan di bawah.
+                com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} API tak terjangkau -> putar unduhan, subs luring=${offSubs.size}")
                 pb = com.onimeku.app.data.Playback(
                     streamUrl = dl.request.uri.toString(), episode = r.ep,
-                    subtitles = com.onimeku.app.data.GudangStore.offlineSubs(ctx, r.id, r.ep),
+                    subtitles = offSubs,
                 )
             } else {
                 pbFailed = true
@@ -222,62 +295,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // var tertangkap closure + diubah isinya tidak bisa smart-cast.
             var ready: com.onimeku.app.data.Playback = res
             if (ready.subtitles.isNotEmpty()) {
-                // Unduh semua trek PARALEL dengan batas waktu total dan
-                // pakai ulang berkas yang sudah ada. Sebelumnya berurutan
-                // (timeout 10+15 dtk per trek) sehingga start video bisa
-                // tertahan puluhan detik hanya karena server subtitle lambat.
-                // Perbaikan debug.61: batas total 4 dtk yang lama membuang
-                // SEMUA trek sekaligus bila terlampaui (subtitles=[]) —
-                // untuk putar GUDANG itu fatal diam-diam: berkas .vtt kecil
-                // dari pintu CDN bisa lambat dingin di jaringan seluler.
-                // Gudang kini: anggaran 15 dtk, dan trek yang gagal/lambat
-                // TIDAK dibuang — URL pintu aslinya dipertahankan agar
-                // pemutar mengambilnya sendiri (SingleSample lewat pintu
-                // yang sama); kegagalannya dicatat ke CrashLog.
-                val isGudangPb = ready.source == "gudang"
-                val dir = java.io.File(ctx.cacheDir, "subs").apply { mkdirs() }
-                val loaded = kotlinx.coroutines.withTimeoutOrNull(if (isGudangPb) 15_000 else 4_000) {
-                    kotlinx.coroutines.coroutineScope {
-                        ready.subtitles.mapIndexed { i, s ->
-                            async(kotlinx.coroutines.Dispatchers.IO) {
-                                try {
-                                    val ext = listOf(".vtt", ".srt", ".ass", ".ssa").firstOrNull { s.url.contains(it) } ?: ".vtt"
-                                    val fname = "${r.id}_${r.ep}_${s.lang}_$i$ext".replace(Regex("[^A-Za-z0-9._-]"), "_")
-                                    val f = java.io.File(dir, fname)
-                                    if (!f.exists() || f.length() == 0L) {
-                                        val req = okhttp3.Request.Builder().url(s.url)
-                                            .header("Referer", s.referer ?: ready.referer ?: "")
-                                            .header("User-Agent", com.onimeku.app.data.Net.UA).build()
-                                        com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
-                                            if (!resp.isSuccessful) return@async if (isGudangPb) s else null
-                                            val bytes = resp.body?.bytes() ?: return@async if (isGudangPb) s else null
-                                            f.writeBytes(bytes)
-                                        }
-                                    }
-                                    s.copy(url = android.net.Uri.fromFile(f).toString())
-                                } catch (e: Exception) {
-                                    if (isGudangPb) {
-                                        com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek ${s.lang} gagal (${e.javaClass.simpleName}), pakai URL pintu")
-                                        s
-                                    } else {
-                                        null
-                                    }
-                                }
-                            }
-                        }.awaitAll().filterNotNull()
-                    }
-                }
-                ready = when {
-                    loaded != null -> ready.copy(subtitles = loaded)
-                    isGudangPb -> {
-                        // Anggaran habis sebelum semua trek selesai: JANGAN
-                        // kosongkan daftar — pertahankan URL pintu asli.
-                        com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek gudang melewati anggaran, pakai URL pintu")
-                        ready
-                    }
-                    else -> ready.copy(subtitles = emptyList())
-                }
-                ready = ready.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, ready.subtitles))
+                ready = localizeSubtitles(ctx, r, ready)
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
             // Terjemahan dimulai SEKARANG dan ditunggu paling lama 3 dtk sebelum video mulai: bila sudah ada di
@@ -299,6 +317,41 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 val withTr = trJob.await()
                 if (withTr.size != subsNow.size) pb = ready.copy(subtitles = withTr)
             }
+        }
+    }
+    // Pemulihan trek subtitle (debug.62). Bukti lapangan debug.61:
+    // menu menulis Subtitles "Not available" (subTracks kosong) untuk
+    // episode gudang yang muatan API-nya terbukti memuat en+id —
+    // Playback yang sampai ke pemutar bisa kehilangan subtitlenya di
+    // hulu sesi (API goyah -> jatuh ke putar unduhan yang berkas
+    // subtitle luringnya tak pernah tersimpan), dan di .61 TIDAK ADA
+    // jalan memulihkannya: daftar kosong mengunci seluruh sesi.
+    // Efek ini mencoba ulang mengambil data putar segar beberapa kali
+    // di latar; begitu trek tiba, HANYA subtitlenya yang dipasang ke
+    // Playback berjalan (aliran/pintu tidak berubah — LaunchedEffect
+    // subCount di PlayerReady memasang ulang konfigurasinya ke item
+    // yang sama). Ketat khusus gudang/luring: perilaku putar
+    // non-gudang tidak berubah sama sekali.
+    var subRecoverTried by remember(r) { mutableStateOf(false) }
+    LaunchedEffect(pb, subRecoverTried) {
+        val cur = pb ?: return@LaunchedEffect
+        if (cur.subtitles.isNotEmpty() || subRecoverTried) return@LaunchedEffect
+        subRecoverTried = true
+        val waits = longArrayOf(4_000L, 8_000L, 15_000L, 25_000L)
+        for ((i, w) in waits.withIndex()) {
+            delay(w)
+            val fresh = try { com.onimeku.app.data.ApiClient.fetchPlayback(r.id, r.ep, fresh = true) } catch (e: Exception) { null }
+            if (fresh == null || fresh.subtitles.isEmpty()) {
+                com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} pemulihan trek: percobaan ${i + 1} belum berhasil")
+                continue
+            }
+            val boleh = fresh.source == "gudang" || cur.source == "gudang" || pbOffline
+            if (!boleh) break
+            val prepared = localizeSubtitles(ctx, r, fresh)
+            if (prepared.subtitles.isEmpty()) continue
+            pb = (pb ?: cur).copy(subtitles = prepared.subtitles)
+            com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} trek dipulihkan: ${prepared.subtitles.size} trek (percobaan ${i + 1})")
+            break
         }
     }
     if (pbFailed) {
@@ -1492,7 +1545,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onPage = { sheet = it },
         onReport = {
             sheet = null
-            com.onimeku.app.data.GudangStore.report(ctx, a.anilistId, r.id, r.ep, "Laporan penonton dari pemutar")
+            // debug.62: laporan lama hanya berisi kalimat baku —
+            // catatan CrashLog (termasuk catatan "subs"/"playback")
+            // tidak pernah ikut, jadi laporan penonton tidak bisa
+            // dipakai mendiagnosis dari server. Kini ekor log ikut di
+            // catatan (route memotong 500 karakter) dan log penuh
+            // diunggah ke bak diagnostik yang sama seperti jalur fatal.
+            val tail = try { com.onimeku.app.data.CrashLog.read().takeLast(400) } catch (e: Exception) { "" }
+            com.onimeku.app.data.GudangStore.report(ctx, a.anilistId, r.id, r.ep, "Laporan penonton dari pemutar | $tail")
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("report") }
             vm.toast(I18n.t("report_sent", "Thanks — your report was sent"))
         },
     )
