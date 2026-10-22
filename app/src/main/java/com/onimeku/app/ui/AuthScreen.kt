@@ -69,7 +69,7 @@ private fun AuthField(
     }
 }
 
-/** Halaman Sign in / Sign up (email + kata sandi, plus Google dan Facebook). */
+/** Halaman Sign in / Sign up (email + kata sandi, plus Google dan Discord). */
 @Composable
 fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
     var signUp by rememberSaveable { mutableStateOf(startSignUp) }
@@ -132,7 +132,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
             SocialButton("Google", Modifier.weight(1f), enabled = !vm.authBusy, icon = { GoogleIcon(20.dp) }) { vm.socialSignIn("google") }
-            SocialButton("Facebook", Modifier.weight(1f), enabled = !vm.authBusy, icon = { FacebookIcon(20.dp) }) { vm.socialSignIn("facebook") }
+            SocialButton("Discord", Modifier.weight(1f), enabled = !vm.authBusy, icon = { DiscordIcon(20.dp) }) { vm.socialSignIn("discord") }
         }
 
         Row(Modifier.align(Alignment.CenterHorizontally).padding(top = Sp.S28), verticalAlignment = Alignment.CenterVertically) {

@@ -773,7 +773,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Masuk/daftar dengan Google atau Facebook: buka halaman OAuth di browser; hasilnya kembali lewat finishSocial. */
+    /** Masuk/daftar dengan Google atau Discord: buka halaman OAuth di browser; hasilnya kembali lewat finishSocial. */
     fun socialSignIn(provider: String) {
         if (authBusy) return
         if (!AuthClient.configured) { toast("Accounts are not available in this build yet"); return }
