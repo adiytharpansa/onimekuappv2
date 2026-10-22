@@ -1,3 +1,10 @@
+# v1.0.0-debug.64 (belum dikompilasi): Subtitle tidak muncul saat stream
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` dulu. Semua perubahan di `ui/PlayerScreen.kt`.
+- **Efek pemulihan trek tidak pernah jalan** (debug.62/.63): `subRecoverTried` adalah state sekaligus kunci `LaunchedEffect`; efek menulisnya di baris pertama sehingga Compose membatalkan korutin itu di `delay` pertama dan memulai ulang efek yang langsung keluar. Kini flag biasa (`booleanArrayOf`) dan kunci efek hanya `needSubs`.
+- Pemulihan kini berlaku untuk SEMUA sumber (gerbang `boleh` yang membuang trek segar untuk non-gudang dihapus) dan memakai batas unduh 20 dtk.
+- `localizeSubtitles`: batas waktu kini PER TRACK dan bisa diinterupsi (`runInterruptible`). Dulu satu `withTimeoutOrNull(4 dtk)` membungkus unduhan bloking; scope baru selesai setelah semua unduhan selesai lalu hasilnya dibuang -> subtitle kosong untuk non-gudang, dan video bisa tertahan sampai ~35 dtk. Trek yang gagal dicatat ke CrashLog ("subs").
+- Format subtitle kini dikenali dari ISI berkas (`sniffSub`), bukan dari URL: SRT/ASS dari URL tanpa ekstensi tidak lagi disimpan sebagai `.vtt` (nol cue). Respons 200-OK berisi halaman galat HTML/JSON ditolak, dan berkas cache lama yang rusak/salah ekstensi diperbaiki atau diunduh ulang.
+
 # v15.2 — Ikon huruf O (20 Okt 2026)
 - Ikon aplikasi hanya huruf "O" putih (Inter Display Bold, dikonversi ke outline) di atas latar datar #14161F (`@color/ic_bg`). Dipilih menggantikan varian bergradasi.
 - `drawable/ic_launcher_foreground.xml` (O selebar 44dp, di dalam zona aman 66dp; juga dipakai sebagai ikon monokrom) dan `play-store-icon-512.png` diganti. Latar tetap `@color/ic_bg`.

@@ -155,71 +155,116 @@ fun PlayerScreen(vm: AppVM, r: Route.Player) {
     PlayerContent(vm, r)
 }
 
+private val SUB_EXTS = listOf(".vtt", ".srt", ".ass", ".ssa")
+
 /**
- * Unduh trek subtitle [ready] ke berkas lokal (semua trek PARALEL
- * dengan batas waktu total, pakai ulang berkas yang sudah ada), lalu
- * pasang terjemahan yang sudah tersimpan. Dulu blok ini hanya hidup
- * inline di jalur putar utama; sejak debug.62 ia fungsi bersama —
- * jalur utama dan efek pemulihan trek memakai perilaku yang sama
- * persis.
+ * Tebak format subtitle dari ISI berkas (bukan dari URL). Hasil: ekstensi
+ * yang cocok (".vtt" / ".srt" / ".ass"), "" bila isinya jelas BUKAN subtitle
+ * (halaman galat HTML / JSON dari server teks), null bila tak dikenali.
+ * debug.64: dulu ekstensi hanya ditebak dari URL dan bawaannya ".vtt" —
+ * subtitle SRT/ASS dari URL tanpa ekstensi disimpan sebagai .vtt, diparse
+ * sebagai WebVTT, dan hasilnya nol cue. Halaman galat 200-OK juga ikut
+ * tersimpan dan dipakai ulang tiap putar.
+ */
+private fun sniffSub(head: ByteArray): String? {
+    val s = String(head, Charsets.UTF_8).trimStart('\uFEFF', ' ', '\t', '\r', '\n')
+    return when {
+        s.startsWith("WEBVTT") -> ".vtt"
+        s.startsWith("<!doctype", true) || s.startsWith("<html", true) || s.startsWith("{\"") -> ""
+        s.contains("[Script Info]", true) || s.startsWith("[V4+ Styles]", true) -> ".ass"
+        Regex("""\d{1,2}:\d{2}:\d{2},\d{3}\s*-->""").containsMatchIn(s) -> ".srt"
+        else -> null
+    }
+}
+
+/**
+ * Satu trek: pakai ulang berkas tersimpan bila isinya memang subtitle
+ * (ekstensi diperbaiki sesuai isi), selain itu unduh. null = gagal.
+ * Fungsi BLOKING — dipanggil lewat runInterruptible agar batas waktu
+ * benar-benar memutus panggilan jaringan.
+ */
+private fun fetchOneSub(
+    dir: java.io.File,
+    r: Route.Player,
+    ready: com.onimeku.app.data.Playback,
+    s: com.onimeku.app.data.ApiSubtitle,
+    i: Int,
+): com.onimeku.app.data.ApiSubtitle? {
+    val base = "${r.id}_${r.ep}_${s.lang}_$i".replace(Regex("[^A-Za-z0-9._-]"), "_")
+    SUB_EXTS.map { java.io.File(dir, base + it) }.firstOrNull { it.exists() }?.let { old ->
+        val head = old.inputStream().use { ins -> val b = ByteArray(2048); b.copyOf(maxOf(ins.read(b), 0)) }
+        val kind = sniffSub(head)
+        if (old.length() > 0L && kind != "") {
+            val want = kind ?: ".${old.extension}"
+            val f = if (".${old.extension}" == want) old else java.io.File(dir, base + want).also { old.renameTo(it) }
+            if (f.exists()) return s.copy(url = android.net.Uri.fromFile(f).toString())
+        }
+        old.delete() // berkas rusak / halaman galat tersimpan: unduh ulang
+    }
+    val req = okhttp3.Request.Builder().url(s.url)
+        .header("Referer", s.referer ?: ready.referer ?: "")
+        .header("User-Agent", com.onimeku.app.data.Net.UA).build()
+    val bytes = com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
+        if (!resp.isSuccessful) return null
+        resp.body?.bytes() ?: return null
+    }
+    if (bytes.isEmpty()) return null
+    val kind = sniffSub(bytes.copyOf(minOf(bytes.size, 2048)))
+    if (kind == "") return null // 200 OK tetapi isinya halaman galat
+    val ext = kind ?: SUB_EXTS.firstOrNull { s.url.contains(it) } ?: ".vtt"
+    val f = java.io.File(dir, base + ext)
+    val tmp = java.io.File(dir, "$base$ext.tmp")
+    tmp.writeBytes(bytes)
+    if (!tmp.renameTo(f)) { f.writeBytes(bytes); tmp.delete() }
+    return s.copy(url = android.net.Uri.fromFile(f).toString())
+}
+
+/**
+ * Unduh trek subtitle [ready] ke berkas lokal (semua trek PARALEL, pakai
+ * ulang berkas yang sudah ada), lalu pasang terjemahan yang sudah tersimpan.
+ * Fungsi bersama jalur utama dan efek pemulihan trek.
  *
- * Batas total: gudang 15 dtk, lain 4 dtk. Perbaikan debug.61: batas
- * 4 dtk yang lama membuang SEMUA trek sekaligus bila terlampaui —
- * untuk putar GUDANG trek yang gagal/lambat TIDAK dibuang: URL pintu
- * aslinya dipertahankan agar pemutar mengambilnya sendiri
- * (SingleSample lewat pintu yang sama); kegagalan dicatat CrashLog.
+ * debug.64 — dua cacat lama yang membuat subtitle hilang saat stream:
+ *  1. Batas waktu 4 dtk membungkus SELURUH unduhan dan unduhannya BLOKING
+ *     (execute()) sehingga tak pernah benar-benar terputus: scope baru
+ *     selesai setelah semua unduhan selesai, lalu hasilnya DIBUANG
+ *     (null -> daftar kosong untuk non-gudang). Kini batas per trek,
+ *     bisa diinterupsi, dan trek yang sudah selesai tetap dipakai.
+ *  2. Trek yang gagal/lambat pada putar non-gudang menghilang tanpa
+ *     jejak. Kini dicatat ke CrashLog; efek pemulihan (yang juga sudah
+ *     diperbaiki) mencoba lagi di latar dengan [budgetMs] lebih longgar.
+ * Putar GUDANG tetap mempertahankan URL pintu asli untuk trek yang gagal.
  */
 private suspend fun localizeSubtitles(
     ctx: Context,
     r: Route.Player,
     ready: com.onimeku.app.data.Playback,
+    budgetMs: Long? = null,
 ): com.onimeku.app.data.Playback {
     if (ready.subtitles.isEmpty()) return ready
     val isGudangPb = ready.source == "gudang"
     val dir = java.io.File(ctx.cacheDir, "subs").apply { mkdirs() }
-    val loaded = kotlinx.coroutines.withTimeoutOrNull(if (isGudangPb) 15_000 else 4_000) {
-        kotlinx.coroutines.coroutineScope {
-            ready.subtitles.mapIndexed { i, s ->
-                async(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        val ext = listOf(".vtt", ".srt", ".ass", ".ssa").firstOrNull { s.url.contains(it) } ?: ".vtt"
-                        val fname = "${r.id}_${r.ep}_${s.lang}_$i$ext".replace(Regex("[^A-Za-z0-9._-]"), "_")
-                        val f = java.io.File(dir, fname)
-                        if (!f.exists() || f.length() == 0L) {
-                            val req = okhttp3.Request.Builder().url(s.url)
-                                .header("Referer", s.referer ?: ready.referer ?: "")
-                                .header("User-Agent", com.onimeku.app.data.Net.UA).build()
-                            com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
-                                if (!resp.isSuccessful) return@async if (isGudangPb) s else null
-                                val bytes = resp.body?.bytes() ?: return@async if (isGudangPb) s else null
-                                f.writeBytes(bytes)
-                            }
-                        }
-                        s.copy(url = android.net.Uri.fromFile(f).toString())
-                    } catch (e: Exception) {
-                        if (isGudangPb) {
-                            com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek ${s.lang} gagal (${e.javaClass.simpleName}), pakai URL pintu")
-                            s
-                        } else {
-                            null
-                        }
+    val budget = budgetMs ?: if (isGudangPb) 15_000L else 4_000L
+    val loaded = kotlinx.coroutines.coroutineScope {
+        ready.subtitles.mapIndexed { i, s ->
+            async(kotlinx.coroutines.Dispatchers.IO) {
+                val fallback = if (isGudangPb) s else null
+                val got = try {
+                    kotlinx.coroutines.withTimeoutOrNull(budget) {
+                        kotlinx.coroutines.runInterruptible(kotlinx.coroutines.Dispatchers.IO) { fetchOneSub(dir, r, ready, s, i) }
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek ${s.lang} gagal (${e.javaClass.simpleName})")
+                    null
                 }
-            }.awaitAll().filterNotNull()
-        }
+                if (got == null) com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} trek ${s.lang} tidak terunduh (gagal/lambat/bukan subtitle) -> ${if (fallback != null) "pakai URL pintu" else "dilewati"}")
+                got ?: fallback
+            }
+        }.awaitAll().filterNotNull()
     }
-    var out = when {
-        loaded != null -> ready.copy(subtitles = loaded)
-        isGudangPb -> {
-            // Anggaran habis sebelum semua trek selesai: JANGAN
-            // kosongkan daftar — pertahankan URL pintu asli.
-            com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} unduh trek gudang melewati anggaran, pakai URL pintu")
-            ready
-        }
-        else -> ready.copy(subtitles = emptyList())
-    }
-    out = out.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, out.subtitles))
-    return out
+    return ready.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, loaded))
 }
 
 @Composable
@@ -354,21 +399,25 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     // di latar; begitu trek tiba, HANYA subtitlenya yang dipasang ke
     // Playback berjalan (aliran/pintu tidak berubah — LaunchedEffect
     // subCount di PlayerReady memasang ulang konfigurasinya ke item
-    // yang sama). Ketat khusus gudang/luring: perilaku putar
-    // non-gudang tidak berubah sama sekali.
-    var subRecoverTried by remember(r) { mutableStateOf(false) }
-    LaunchedEffect(pb, subRecoverTried) {
-        // Isolasi bootstrap (debug.63): efek ini murni pekerjaan
-        // subtitle SESUDAH putar terpasang. Ia tidak berjalan selama
-        // bootstrap belum menghasilkan Playback (pb null) atau saat
-        // bootstrap menyerah (pbFailed), dan tidak pernah menulis
-        // attempt/pbFailed/pbOffline — jadi tidak bisa menunda,
-        // membatalkan, atau menggagalkan pemasangan putar maupun
-        // cadangan unduhan di efek bootstrap.
-        if (pbFailed) return@LaunchedEffect
+    // yang sama).
+    // debug.64 — dua cacat efek pemulihan debug.62/.63 (itulah sebab trek
+    // yang hilang tak pernah kembali):
+    //  1. [subRecoverTried] adalah state yang sekaligus KUNCI LaunchedEffect.
+    //     Efek menulisnya jadi true di baris pertama -> kunci berubah ->
+    //     Compose MEMBATALKAN korutin itu (di delay pertama) dan memulai
+    //     ulang efek yang langsung keluar karena flag sudah true. Pemulihan
+    //     tidak pernah sempat jalan. Kini flag biasa (bukan state) dan kunci
+    //     hanya "butuh trek atau tidak".
+    //  2. Trek segar yang berhasil diambil dibuang untuk putar non-gudang
+    //     (gerbang `boleh`). Aliran tidak disentuh sama sekali oleh efek ini,
+    //     jadi gerbang itu dihapus: semua sumber boleh dipulihkan.
+    val subRecoverTried = remember(r) { booleanArrayOf(false) }
+    val needSubs = pb?.subtitles?.isEmpty() == true
+    LaunchedEffect(r, needSubs, pbFailed) {
+        if (pbFailed || !needSubs) return@LaunchedEffect
         val cur = pb ?: return@LaunchedEffect
-        if (cur.subtitles.isNotEmpty() || subRecoverTried) return@LaunchedEffect
-        subRecoverTried = true
+        if (subRecoverTried[0]) return@LaunchedEffect
+        subRecoverTried[0] = true
         val waits = longArrayOf(4_000L, 8_000L, 15_000L, 25_000L)
         for ((i, w) in waits.withIndex()) {
             delay(w)
@@ -377,9 +426,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} pemulihan trek: percobaan ${i + 1} belum berhasil")
                 continue
             }
-            val boleh = fresh.source == "gudang" || cur.source == "gudang" || pbOffline
-            if (!boleh) break
-            val prepared = localizeSubtitles(ctx, r, fresh)
+            val prepared = localizeSubtitles(ctx, r, fresh, budgetMs = 20_000L)
             if (prepared.subtitles.isEmpty()) continue
             pb = (pb ?: cur).copy(subtitles = prepared.subtitles)
             com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} trek dipulihkan: ${prepared.subtitles.size} trek (percobaan ${i + 1})")
