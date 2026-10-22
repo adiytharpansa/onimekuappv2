@@ -1,3 +1,12 @@
+# v1.0.0-debug.72 (belum dikompilasi): Jadwal AniList lebih tangguh
+**Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `data/Api.kt` dan `AppVM.kt`.
+- `fetchSchedule()`: percobaan ulang maks 3x untuk galat jaringan, HTTP 429 (hormati `Retry-After`, 1-10 dtk), dan 5xx; 4xx lain langsung gagal. Respons GraphQL tanpa `data` kini dianggap gagal (sebelumnya JSONException). Duplikat `anilistId:ep` dibuang.
+- Cache disk `cacheDir/schedule_cache.json` (hanya episode yang belum tayang, ditulis atomik). Saat Kalender dibuka, salinan tampil seketika dengan waktu simpan aslinya ("Diperbarui X mnt lalu"), lalu diperbarui bila lebih tua dari 15 mnt atau tarik-segar.
+- Bila jaringan gagal tetapi ada salinan, Kalender tetap menampilkannya; "Couldn't load schedule" hanya muncul bila benar-benar tak ada data.
+- `loadSchedule()`: satu permintaan sekaligus (tidak menumpuk saat dibuka berulang).
+- `CATATAN-ARSITEKTUR.md`: catatan jadwal yang usang (dulu tertulis "mengembalikan kosong") dikoreksi.
+- Rollback cepat: kembalikan `data/Api.kt` dan `AppVM.kt` dari `debug.71`.
+
 # v1.0.0-debug.71 (belum dikompilasi): Standar tata letak
 **Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu, lalu periksa tiap layar di HP: banyak nilai bergeser 1-2dp.
 - `ui/Spacing.kt` (`Sp`, kisi 4dp) dan `ui/Type.kt` (`Ty`, 10 ukuran huruf) baru. Sekitar 550 padding/jarak/Spacer dan 200 `fontSize` di `ui/*.kt` kini memakai token.

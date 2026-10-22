@@ -14,9 +14,12 @@ perantara onimekuappv2-api. Projek Flutter sudah dihapus permanen
     directUrl = URL asli; pageUrl = referer bila berisi /stream/;
     referer dinormalisasi ke akar origin (CDN menolak referer halaman penuh).
   * Subtitle hulu berbentuk {label, lang, url} -> label dipakai bila lang kosong.
-  * Hulu TIDAK punya endpoint jadwal/poster: fetchSchedule() mengembalikan
-    kosong (Kalender jatuh ke turunan hari/jam katalog), resolvePoster() null
-    (poster katalog apa adanya).
+  * Hulu TIDAK punya endpoint jadwal/poster. Jadwal tayang 7 hari diambil
+    langsung dari AniList (graphql.anilist.co) lewat fetchSchedule(): coba
+    ulang 3x (galat jaringan/429/5xx, hormati Retry-After), duplikat dibuang,
+    salinan disimpan di cacheDir/schedule_cache.json dan ditampilkan seketika
+    saat jaringan lambat/gagal. resolvePoster() tetap null (poster katalog
+    apa adanya; penyembuhan poster ada di server).
 - Cache katalog di disk berganti nama: catalog_cache_direct.json.
 
 ## API (Onimeku-API-Terbaru.zip)

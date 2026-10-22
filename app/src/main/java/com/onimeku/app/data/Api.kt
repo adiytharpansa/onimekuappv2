@@ -241,7 +241,8 @@ object ApiClient {
      */
     suspend fun fetchSchedule(): List<ApiScheduleItem> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis() / 1000
-        val out = ArrayList<ApiScheduleItem>()
+        // Kunci anilistId:ep menghapus duplikat bila halaman AniList bergeser antar-permintaan.
+        val out = LinkedHashMap<String, ApiScheduleItem>()
         var page = 1
         while (page <= 8) {
             val query = "query(\$p:Int,\$a:Int,\$b:Int){Page(page:\$p,perPage:50){pageInfo{hasNextPage}" +
@@ -249,23 +250,84 @@ object ApiClient {
             val body = org.json.JSONObject()
                 .put("query", query)
                 .put("variables", org.json.JSONObject().put("p", page).put("a", now).put("b", now + 7 * 86400))
-                .toString().toRequestBody("application/json".toMediaType())
-            val req = okhttp3.Request.Builder().url("https://graphql.anilist.co")
-                .header("Accept", "application/json").post(body).build()
-            val text = Net.client.newCall(req).execute().use { r ->
-                if (!r.isSuccessful) throw java.io.IOException("AniList HTTP ${r.code}")
-                r.body?.string() ?: throw java.io.IOException("respons kosong")
-            }
-            val pg = org.json.JSONObject(text).getJSONObject("data").getJSONObject("Page")
+                .toString()
+            val root = org.json.JSONObject(anilistPost(body))
+            val data = root.optJSONObject("data")
+                ?: throw java.io.IOException("AniList: " + (root.optJSONArray("errors")?.toString()?.take(120) ?: "tanpa data"))
+            val pg = data.getJSONObject("Page")
             val arr = pg.getJSONArray("airingSchedules")
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                out += ApiScheduleItem(anilistId = o.getInt("mediaId"), ep = o.getInt("episode"), airingAt = o.getLong("airingAt"))
+                val item = ApiScheduleItem(anilistId = o.getInt("mediaId"), ep = o.getInt("episode"), airingAt = o.getLong("airingAt"))
+                out["${item.anilistId}:${item.ep}"] = item
             }
             if (!pg.getJSONObject("pageInfo").getBoolean("hasNextPage")) break
             page++
         }
-        out
+        out.values.toList()
+    }
+
+    /**
+     * POST ke AniList dengan percobaan ulang (maks 3x) untuk galat jaringan, HTTP 429, dan 5xx.
+     * 429 menghormati header Retry-After (dibatasi 1-10 dtk); selain itu jeda 1 dtk lalu 2 dtk.
+     * Kode 4xx lain tidak dicoba ulang (IllegalStateException agar lolos dari penangkap IOException).
+     */
+    private suspend fun anilistPost(body: String): String {
+        var last: java.io.IOException? = null
+        for (attempt in 0 until 3) {
+            var waitSec = 1L shl attempt
+            try {
+                val req = okhttp3.Request.Builder().url("https://graphql.anilist.co")
+                    .header("Accept", "application/json")
+                    .post(body.toRequestBody("application/json".toMediaType())).build()
+                val res = Net.client.newCall(req).execute().use { r ->
+                    Triple(r.code, r.body?.string(), r.header("Retry-After")?.toLongOrNull())
+                }
+                val (code, text, retryAfter) = res
+                if (code in 200..299 && text != null) return text
+                if (code != 429 && code < 500) throw IllegalStateException("AniList HTTP $code")
+                if (retryAfter != null) waitSec = retryAfter
+                last = java.io.IOException("AniList HTTP $code")
+            } catch (e: java.io.IOException) {
+                last = e
+            }
+            if (attempt < 2) kotlinx.coroutines.delay(waitSec.coerceIn(1L, 10L) * 1000L)
+        }
+        throw last ?: java.io.IOException("AniList gagal")
+    }
+
+    private fun scheduleCacheFile(ctx: android.content.Context) =
+        java.io.File(ctx.applicationContext.cacheDir, "schedule_cache.json")
+
+    /** Salinan jadwal terakhir di disk (cacheDir). Hanya episode yang belum tayang; null bila tak ada/rusak. */
+    fun readScheduleCache(ctx: android.content.Context): ScheduleCache? = try {
+        val f = scheduleCacheFile(ctx)
+        if (!f.exists()) null else {
+            val root = org.json.JSONObject(f.readText())
+            val arr = root.getJSONArray("items")
+            val now = System.currentTimeMillis() / 1000
+            val items = ArrayList<ApiScheduleItem>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val t = o.getLong("t")
+                if (t > now) items += ApiScheduleItem(anilistId = o.getInt("id"), ep = o.getInt("ep"), airingAt = t)
+            }
+            if (items.isEmpty()) null else ScheduleCache(items, root.getLong("at"))
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Tulis atomik (berkas sementara lalu rename) agar tak ada cache setengah jadi. Gagal diabaikan. */
+    fun writeScheduleCache(ctx: android.content.Context, items: List<ApiScheduleItem>, savedAt: Long) {
+        runCatching {
+            val arr = org.json.JSONArray()
+            items.forEach { arr.put(org.json.JSONObject().put("id", it.anilistId).put("ep", it.ep).put("t", it.airingAt)) }
+            val f = scheduleCacheFile(ctx)
+            val tmp = java.io.File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(org.json.JSONObject().put("at", savedAt).put("items", arr).toString())
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+        }
     }
 
     suspend fun fetchDetail(id: String): Anime? {
@@ -418,6 +480,9 @@ object ApiClient {
         } catch (e: Exception) { /* abaikan */ }
     }
 }
+
+/** Jadwal tersimpan di disk + waktu simpan (epoch ms). */
+class ScheduleCache(val items: List<ApiScheduleItem>, val savedAt: Long)
 
 @Serializable
 data class ApiScheduleItem(

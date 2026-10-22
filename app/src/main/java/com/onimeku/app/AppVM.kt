@@ -144,12 +144,29 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var scheduleUpdatedAt by mutableStateOf(0L)
         private set
 
-    /** Muat jadwal; lewati bila data masih segar (<15 mnt) kecuali [force]. */
+    private var scheduleJob: Job? = null
+
+    /**
+     * Muat jadwal. Urutan: (1) bila belum ada di memori, tampilkan salinan disk (cache) seketika
+     * dengan waktu simpan aslinya; (2) ambil dari AniList bila salinan lebih tua dari 15 mnt atau
+     * [force]; (3) bila jaringan gagal, salinan yang ada tetap tampil (scheduleFailed hanya
+     * menyala bila benar-benar tak ada data). Satu permintaan sekaligus.
+     */
     fun loadSchedule(force: Boolean = false) {
-        if (!force && schedule != null && System.currentTimeMillis() - scheduleUpdatedAt < 15 * 60_000L) return
-        viewModelScope.launch {
+        if (scheduleJob?.isActive == true) return
+        val fresh = { System.currentTimeMillis() - scheduleUpdatedAt < 15 * 60_000L }
+        if (!force && schedule != null && fresh()) return
+        scheduleJob = viewModelScope.launch {
+            if (schedule == null) {
+                val c = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ApiClient.readScheduleCache(app) }
+                if (c != null) { schedule = c.items; scheduleUpdatedAt = c.savedAt }
+            }
+            if (!force && schedule != null && fresh()) return@launch
             try {
-                schedule = ApiClient.fetchSchedule(); scheduleUpdatedAt = System.currentTimeMillis(); scheduleFailed = false
+                val items = ApiClient.fetchSchedule()
+                schedule = items; scheduleUpdatedAt = System.currentTimeMillis(); scheduleFailed = false
+                val at = scheduleUpdatedAt
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ApiClient.writeScheduleCache(app, items, at) }
             } catch (e: Exception) {
                 if (schedule == null) scheduleFailed = true
             }
