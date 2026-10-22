@@ -692,8 +692,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             val itemBuilder = MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
                 .setMediaMetadata(
                     androidx.media3.common.MediaMetadata.Builder()
-                        .setTitle(a.title).setSubtitle("Episode ${r.ep}")
-                        .setArtworkUri(a.poster?.let { android.net.Uri.parse(it) }).build()
+                        .setTitle(a.title)
+                        // Notifikasi/layar kunci menampilkan "artist" sebagai teks kedua.
+                        .setArtist("${I18n.t("episode", "Episode")} ${r.ep}")
+                        .setSubtitle("${I18n.t("episode", "Episode")} ${r.ep}")
+                        // posterFor() sudah menolak poster kosong/blank (mengembalikan null).
+                        .setArtworkUri(com.onimeku.app.data.PosterHealer.posterFor(a)?.let { android.net.Uri.parse(it) })
+                        .build()
                 )
             // Opsi 2: putar gudang daring TIDAK diberi konfigurasi
             // subtitle samping — subtitle datang dari grup teks bawaan
@@ -1296,6 +1301,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // Tombol Next/Prev di notifikasi & layar kunci (sesi media dipegang PlayerHolder).
     LaunchedEffect(player, hasPrev, hasNext) {
         PlayerHolder.setNav(token, EpisodeNav(hasPrev, hasNext, { stepNow(-1) }, { stepNow(1) }))
+    }
+    // Android 13+: minta izin notifikasi sekali saat pemutaran pertama supaya notifikasi media muncul.
+    val ensureNotif = LocalEnsureNotif.current
+    LaunchedEffect(Unit) {
+        if (!vm.s.settings.notifAsked) {
+            vm.setSettings { it.copy(notifAsked = true) }
+            ensureNotif { }   // di bawah Android 13 langsung selesai tanpa dialog
+        }
     }
     DisposableEffect(player) {
         val rcv = object : android.content.BroadcastReceiver() {

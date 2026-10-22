@@ -806,7 +806,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     /** Kembalikan pengaturan ke bawaan; bahasa antarmuka, petunjuk gestur, dan dubbing per judul dipertahankan. */
     fun resetSettings() {
-        setSettings { Settings(lang = it.lang, gestureHintSeen = it.gestureHintSeen, dubByTitle = it.dubByTitle) }
+        setSettings { Settings(lang = it.lang, gestureHintSeen = it.gestureHintSeen, dubByTitle = it.dubByTitle, notifAsked = it.notifAsked) }
         toast(I18n.t("settings_reset_done", "Settings reset"))
     }
 

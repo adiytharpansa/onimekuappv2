@@ -310,7 +310,7 @@ fun SubScreen(vm: AppVM, key: String) {
                     // Lompat otomatis hanya bekerja bila tombol lewati intro aktif (lihat SkipLogic.autoSkipTarget).
                     SwitchRow(I18n.t("auto_skip_t", "Auto-skip intro"), I18n.t("auto_skip_d", "Jump past the opening automatically when the episode has intro markers."), set.autoSkipIntro, enabled = set.skipIntro) { v -> vm.setSettings { it.copy(autoSkipIntro = v) } }
                     HLine()
-                    SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
+                    SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app. It stops if you swipe the app away from recents."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
                     HLine()
                     SwitchRow(I18n.t("pip_t", "Picture-in-picture"), I18n.t("pip_d", "Keep watching in a small window when you press Home while a video is playing."), set.autoPip) { v -> vm.setSettings { it.copy(autoPip = v) } }
                     HLine()

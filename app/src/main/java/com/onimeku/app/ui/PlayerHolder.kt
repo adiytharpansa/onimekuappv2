@@ -1,7 +1,9 @@
 package com.onimeku.app.ui
 
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
@@ -13,6 +15,7 @@ import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionToken
+import com.onimeku.app.MainActivity
 import com.onimeku.app.PlaybackService
 import com.onimeku.app.data.CrashLog
 
@@ -31,13 +34,15 @@ internal class EpisodeNav(
 /**
  * Pembungkus untuk MediaSession: satu item media saja tidak menampilkan tombol Next/Prev di notifikasi,
  * jadi perintahnya diiklankan di sini dan dialihkan ke navigasi episode aplikasi.
+ * [nav] bisa diganti tanpa membuat pembungkus baru selama ketersediaan tombolnya tidak berubah.
  */
-private class EpisodeNavPlayer(player: Player, private val nav: EpisodeNav) : ForwardingPlayer(player) {
+private class EpisodeNavPlayer(player: Player, @Volatile var nav: EpisodeNav) : ForwardingPlayer(player) {
     override fun getAvailableCommands(): Player.Commands {
+        val n = nav
         val b = super.getAvailableCommands().buildUpon()
-        if (nav.hasPrev) b.addAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+        if (n.hasPrev) b.addAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
         else b.removeAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-        if (nav.hasNext) b.addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+        if (n.hasNext) b.addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
         else b.removeAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
         return b.build()
     }
@@ -45,10 +50,16 @@ private class EpisodeNavPlayer(player: Player, private val nav: EpisodeNav) : Fo
     override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
     override fun hasPreviousMediaItem(): Boolean = nav.hasPrev
     override fun hasNextMediaItem(): Boolean = nav.hasNext
-    override fun seekToPrevious() { if (nav.hasPrev) nav.onPrev() }
-    override fun seekToNext() { if (nav.hasNext) nav.onNext() }
-    override fun seekToPreviousMediaItem() { if (nav.hasPrev) nav.onPrev() }
-    override fun seekToNextMediaItem() { if (nav.hasNext) nav.onNext() }
+
+    override fun seekToPrevious() {
+        // Konvensi pemutar lain: lewat 3 dtk -> ulang episode ini; selebihnya ke episode sebelumnya.
+        if (wrappedPlayer.currentPosition > 3_000L) { wrappedPlayer.seekTo(0L); return }
+        val n = nav
+        if (n.hasPrev) n.onPrev()
+    }
+    override fun seekToNext() { val n = nav; if (n.hasNext) n.onNext() }
+    override fun seekToPreviousMediaItem() { val n = nav; if (n.hasPrev) n.onPrev() }
+    override fun seekToNextMediaItem() { val n = nav; if (n.hasNext) n.onNext() }
 }
 
 /**
@@ -67,6 +78,7 @@ internal object PlayerHolder {
     private var session: MediaSession? = null
     private var owner: Any? = null
     private var releaseController: (() -> Unit)? = null
+    private var navPlayer: EpisodeNavPlayer? = null
 
     fun acquire(ctx: Context, who: Any): ExoPlayer {
         owner = who
@@ -81,7 +93,15 @@ internal object PlayerHolder {
     fun setNav(who: Any, nav: EpisodeNav) {
         if (owner !== who) return
         val p = exo ?: return
-        session?.setPlayer(EpisodeNavPlayer(p, nav))
+        val cur = navPlayer
+        if (cur != null && cur.nav.hasPrev == nav.hasPrev && cur.nav.hasNext == nav.hasNext) {
+            // Tombol yang tampil tidak berubah: cukup ganti aksinya, tanpa memposting ulang notifikasi.
+            cur.nav = nav
+            return
+        }
+        val w = EpisodeNavPlayer(p, nav)
+        navPlayer = w
+        session?.setPlayer(w)
     }
 
     fun release(who: Any) {
@@ -122,8 +142,18 @@ internal object PlayerHolder {
             }
         })
         // Sesi media + layanan latar: notifikasi, kontrol layar kunci, tombol headset.
-        val s = MediaSession.Builder(app, EpisodeNavPlayer(p, EpisodeNav.NONE))
-            .setId("onimeku-${System.nanoTime()}").build()
+        val w = EpisodeNavPlayer(p, EpisodeNav.NONE)
+        navPlayer = w
+        // Ketuk notifikasi / layar kunci -> bawa aplikasi ke depan (MainActivity singleTask).
+        val open = PendingIntent.getActivity(
+            app, 0,
+            Intent(app, MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val s = MediaSession.Builder(app, w)
+            .setId("onimeku-${System.nanoTime()}")
+            .setSessionActivity(open)
+            .build()
         session = s
         PlaybackService.current = s
         val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
@@ -146,7 +176,9 @@ internal object PlayerHolder {
             .setPreferredTextLanguage(null)
             .clearVideoSizeConstraints()
             .build()
-        session?.setPlayer(EpisodeNavPlayer(p, EpisodeNav.NONE))
+        // Kosongkan AKSI episode lama (composable-nya sudah dibongkar) tetapi pertahankan tombol yang tampil,
+        // supaya notifikasi tidak berkedip; setNav() pemilik baru menyusul pada pass komposisi yang sama.
+        navPlayer?.let { it.nav = EpisodeNav(it.nav.hasPrev, it.nav.hasNext, {}, {}) }
     }
 
     private fun destroy() {
@@ -156,6 +188,7 @@ internal object PlayerHolder {
         if (s != null && PlaybackService.current === s) PlaybackService.current = null
         s?.release()
         session = null
+        navPlayer = null
         exo?.release()
         exo = null
     }

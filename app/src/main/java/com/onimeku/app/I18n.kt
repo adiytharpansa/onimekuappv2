@@ -409,7 +409,7 @@ object I18n {
         "pip_t" to "Picture-in-picture",
         "pip_d" to "Tetap menonton di jendela kecil saat kamu menekan Home ketika video diputar.",
         "bg_play_t" to "Putar di latar belakang",
-        "bg_play_d" to "Audio tetap berjalan dengan kontrol layar kunci saat kamu keluar aplikasi.",
+        "bg_play_d" to "Audio tetap berjalan dengan kontrol layar kunci saat kamu keluar aplikasi. Berhenti bila aplikasi digeser dari recents.",
         "grp_data" to "Data dan notifikasi",
         "wifi_only_t" to "Streaming hanya via Wi-Fi",
         "wifi_only_d" to "Hindari pemakaian data seluler.",

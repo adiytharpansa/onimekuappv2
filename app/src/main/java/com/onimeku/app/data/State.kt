@@ -78,6 +78,8 @@ data class Settings(
     val autoPip: Boolean = true,
     // Unduh otomatis episode berikutnya saat Wi-Fi (jaringan tak terukur) ketika episode berjalan >60%.
     val autoDlNext: Boolean = false,
+    // Izin notifikasi (Android 13+) sudah pernah ditanyakan saat pemutaran pertama; jangan tanya lagi tiap episode.
+    val notifAsked: Boolean = false,
 )
 
 @Serializable
