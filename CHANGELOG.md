@@ -1,3 +1,13 @@
+# Penyempurnaan halaman pemutar (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/PlayerScreen.kt`, `I18n.kt`.
+- **Bug: subtitle menempel di bilah seek / tampak redup saat video dijeda.** Subtitle hanya diangkat bila `showUi` aktif, padahal kontrol juga tampil saat dijeda, buffering, atau galat. Subtitle jadi tertimpa lapisan gradien gelap kontrol. Kini angkat mengikuti keadaan kontrol sebenarnya (`ctlShown`).
+- **Tinggi angkat subtitle kini dalam dp** (80dp portrait, 96dp layar penuh) dan diubah ke fraksi dari tinggi tampilan nyata; dulu fraksi tetap 0,22 sehingga terlalu rendah di video portrait yang pendek.
+- **Daftar episode di portrait dikembalikan** sebagai deretan geser di bawah tombol aksi: episode aktif merah, sudah ditonton redup + centang, tersimpan offline bertitik, menggulir otomatis ke episode aktif, penghitung "n / total".
+- **Sinopsis:** tombol "Selengkapnya/Sembunyikan" muncul hanya bila teks terpotong (dulu terpotong "..." tanpa petunjuk, harus menebak mengetuknya).
+- **Tombol Download menunjukkan keadaan:** "Saving 45%" saat berjalan (ketuk = batal), "Saved" + centang saat tersimpan.
+- Teks bagikan kini dilokalisasi.
+- Rollback cepat: kembalikan `ui/PlayerScreen.kt` dan `I18n.kt` dari versi sebelumnya.
+
 # Penyempurnaan layar Profil (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/ProfileScreens.kt`, `ui/AppIcons.kt`, `AppVM.kt`, `data/Stats.kt`, `data/State.kt`, `data/Sync.kt`, `I18n.kt`, berkas baru `data/ProfileRules.kt`, tes `ProfileRulesTest.kt`, `StatsTest.kt`.
 - **Bug sinkronisasi: profil yang dihapus muncul lagi.** Merge berbasis union per nama, jadi profil yang dihapus di perangkat ini dikembalikan dari server saat login/pull. Kini `AppState.goneProfiles` mencatat nama profil yang dihapus/diganti nama, dan `Sync.merge(..., gone)` tidak menghidupkannya kembali.

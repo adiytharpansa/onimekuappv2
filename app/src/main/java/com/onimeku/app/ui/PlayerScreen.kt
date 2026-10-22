@@ -61,6 +61,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
@@ -123,8 +124,11 @@ private fun onWifi(ctx: Context): Boolean {
 @Composable
 private fun VideoSurface(
     player: Player, modifier: Modifier, subScale: Float = 1f, subBg: Boolean = false, resizeMode: Int = 0,
-    subColor: Int = android.graphics.Color.WHITE, subSystem: Boolean = false, subLift: Boolean = false,
+    subColor: Int = android.graphics.Color.WHITE, subSystem: Boolean = false, subLift: Boolean = false, liftDp: Int = 80,
 ) {
+    // Tinggi tampilan (px) dipakai mengubah tinggi angkat (dp) menjadi fraksi yang diminta SubtitleView.
+    var hPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
     AndroidView(
         factory = { c -> PlayerView(c).also { it.player = player; it.useController = false } },
         update = { pv ->
@@ -144,10 +148,11 @@ private fun VideoSurface(
                     ))
                 }
                 // Saat kontrol tampil, subtitle naik di atas bilah seek (seperti YouTube) agar tidak tertutup.
-                sv.setBottomPaddingFraction(if (subLift) 0.22f else androidx.media3.ui.SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION)
+                val base = androidx.media3.ui.SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION
+                sv.setBottomPaddingFraction(if (subLift && hPx > 0) maxOf(base, (liftDp * density / hPx).coerceAtMost(0.45f)) else base)
             }
         },
-        modifier = modifier,
+        modifier = modifier.onSizeChanged { hPx = it.height },
         // Pemutar dipakai bersama lintas episode: lepaskan PlayerView lama agar listener-nya tidak menumpuk.
         onRelease = { pv -> runCatching { pv.player = null } },
     )
@@ -1346,7 +1351,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                 },
         ) {
-            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, if (fillMode) 4 else 0, subColorInt, subSys, subLift = showUi)
+            // Kontrol juga tampil saat dijeda/buffering/galat (bukan hanya showUi); subtitle harus naik di semua keadaan itu.
+            val ctlShown = !locked && (showUi || !wantPlay || failed || buffering)
+            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, if (fillMode) 4 else 0, subColorInt, subSys, subLift = ctlShown, liftDp = if (full) 96 else 80)
             // Sampul anime menutupi layar hitam sampai bingkai video pertama tampil.
             if (!rendered && !failed) {
                 RealImage(a, Modifier.fillMaxSize())
@@ -1419,7 +1426,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         .padding(horizontal = Sp.S12, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = RedText)
                 }
             }
-            val uiVisible = !locked && (showUi || !wantPlay || failed || buffering)
+            val uiVisible = ctlShown
             val uiA by animateFloatAsState(if (uiVisible) 1f else 0f, tween(200), label = "controlsAlpha")
             if (uiA > 0.01f) Box(Modifier.matchParentSize().graphicsLayer { alpha = uiA }) {
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0xB3080910), 0.32f to Color(0x33080910), 0.6f to Color(0x33080910), 1f to Color(0xD9080910))))
@@ -1602,19 +1609,50 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         val onList = r.id in vm.p.myList
                         ActionTile(Icons.Filled.Add, if (onList) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
                             Modifier.weight(1f), on = onList, iconOn = Icons.Filled.Check) { vm.toggleML(r.id) }
-                        if (!offline) ActionTile(AppIcons.Download, I18n.t("download", "Download"), Modifier.weight(1f)) { vm.download(r.id, r.ep) }
+                        if (!offline) {
+                            val dk = "${r.id}:${r.ep}"
+                            val pct = vm.downloading[dk]
+                            val saved = pct == null && vm.hasDl(r.id, r.ep)
+                            ActionTile(if (saved) AppIcons.Check else AppIcons.Download,
+                                when { pct != null -> I18n.t("dl_saving", "Saving %d%%").format(pct); saved -> I18n.t("dl_done", "Saved"); else -> I18n.t("download", "Download") },
+                                Modifier.weight(1f), on = saved || pct != null) { vm.download(r.id, r.ep) }
+                        }
                         ActionTile(AppIcons.Share, I18n.t("share", "Share"), Modifier.weight(1f)) {
                             val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/${r.id}")
+                                putExtra(android.content.Intent.EXTRA_TEXT, I18n.t("share_text", "Watch %s on Onimeku: %s").format(a.title, "onimeku://anime/${r.id}"))
                             }
                             ctx.startActivity(android.content.Intent.createChooser(send, I18n.t("share", "Share")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                         }
                     }
+                }
+            }
+            if (epList.size > 1) item(key = "eps") {
+                val rowState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(curIdx - 2, 0))
+                Column(Modifier.padding(top = Sp.S20)) {
+                    Row(Modifier.padding(horizontal = Gutter), verticalAlignment = Alignment.CenterVertically) {
+                        Text(I18n.t("episodes", "Episodes"), Modifier.weight(1f), fontSize = Ty.Subtitle, fontWeight = FontWeight.Bold)
+                        Text("${curIdx + 1} / ${epList.size}", fontSize = Ty.Small, color = NavOff)
+                    }
+                    androidx.compose.foundation.lazy.LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = Gutter),
+                        horizontalArrangement = Arrangement.spacedBy(Sp.S8), modifier = Modifier.padding(top = Sp.S8)) {
+                        items(epList, key = { "ep$it" }) { n ->
+                            EpisodeChip(n, isCur = n == r.ep, seen = "${r.id}:$n" in vm.p.seen, saved = vm.hasDl(r.id, n)) { if (n != r.ep) goEp(n) }
+                        }
+                    }
+                }
+            }
+            item(key = "about") {
+                Column(Modifier.padding(horizontal = Gutter)) {
                     if (a.synopsis.isNotBlank()) {
                         var more by remember(r.id) { mutableStateOf(false) }
+                        var clipped by remember(r.id) { mutableStateOf(false) }
                         Text(a.synopsis, Modifier.padding(top = Sp.S16).clickable { more = !more }, fontSize = Ty.Small, color = InkSoft, lineHeight = 19.sp,
-                            maxLines = if (more) 24 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            maxLines = if (more) 24 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            onTextLayout = { if (!more) clipped = it.hasVisualOverflow })
+                        if (clipped || more) Text(if (more) I18n.t("syn_less", "Show less") else I18n.t("syn_more", "Show more"),
+                            Modifier.heightIn(min = 48.dp).clickable { more = !more }.wrapContentHeight(Alignment.CenterVertically),
+                            fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = RedText)
                     }
                     if (!vm.s.settings.gestureHintSeen) Row(Modifier.padding(top = Sp.S16).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = Sp.S12, vertical = Sp.S2),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
@@ -1937,5 +1975,22 @@ private fun BoxScope.UpNextCard(
         }
         Chip(I18n.t("play_now", "Play now")) { onPlayNow() }
         if (autoplay && !autoCancel) Chip(I18n.t("cancel", "Cancel")) { onCancel() }
+    }
+}
+
+/** Kotak nomor episode untuk deretan geser di bawah video: episode aktif merah, sudah ditonton redup + centang, tersimpan offline bertitik. */
+@Composable
+private fun EpisodeChip(n: Int, isCur: Boolean, seen: Boolean, saved: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        Modifier.size(width = 56.dp, height = 48.dp).clip(shape)
+            .background(if (isCur) Red else Bg2).border(1.dp, if (isCur) Red else Line, shape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("$n", fontSize = Ty.Body, fontWeight = if (isCur) FontWeight.Bold else FontWeight.Medium,
+            color = if (isCur) Color.White else if (seen) NavOff else Color.White, maxLines = 1)
+        if (seen && !isCur) Icon(Icons.Filled.CheckCircle, null, Modifier.align(Alignment.TopEnd).padding(Sp.S4).size(12.dp), tint = Color(0xFF3DDC97))
+        if (saved) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Sp.S4).size(5.dp).clip(CircleShape).background(if (isCur) Color.White else RedText))
     }
 }
