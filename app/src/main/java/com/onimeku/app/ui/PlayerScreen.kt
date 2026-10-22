@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.SpeakerNotes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -1585,7 +1586,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         role = androidx.compose.ui.semantics.Role.Button,
                         onClickLabel = I18n.t("dub_pick", "Choose dubbing"),
                     ) { sheet = "audio"; uiTick++ }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Audiotrack, "${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(audioIdx) { audioLabels[0] }}", Modifier.size(20.dp), tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.SpeakerNotes, "${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(audioIdx) { audioLabels[0] }}", Modifier.size(20.dp), tint = Color.White)
                     }
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { sheet = "main"; uiTick++ }, contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Settings, "Settings", Modifier.size(20.dp), tint = Color.White)
@@ -1630,7 +1631,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         }
                         Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
                             if (buffering) {
-                                CircularProgressIndicator(Modifier.size(52.dp), color = Color.White, trackColor = Color(0x33FFFFFF), strokeWidth = 3.5.dp)
+                                BufferingRing(ringSize = 52.dp, stroke = 3.5.dp)
                             } else {
                                 Box(Modifier.fillMaxSize().clip(CircleShape).pressable { player.playWhenReady = !player.playWhenReady; uiTick++ }, contentAlignment = Alignment.Center) {
                                     MorphIcon(wantPlay, Icons.Filled.Pause, Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", 56.dp, Color.White)
@@ -1712,7 +1713,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
                         if (offline) Tag("OFFLINE", Color(0x33FFFFFF), Color.White, small = true)
                         // Pemilih dubbing: pil bahasa rata kanan sebaris dengan badge episode; satu ketuk langsung ganti dubbing.
-                        if (audioLabels.isNotEmpty()) {
+                        if (DubLogic.showPicker(audioKeys)) {
                             DubSwitcher(audioLabels, audioKeys, audioIdx, Modifier.weight(1f)) { n ->
                                 applyAudio(n); vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}")
                             }

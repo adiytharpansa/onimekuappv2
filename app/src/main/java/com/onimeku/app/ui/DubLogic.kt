@@ -70,6 +70,14 @@ internal object DubLogic {
         return m
     }
 
+    private val GENERIC = Regex("^(audio\\s*track|audio|track|stream|sound|default)?[\\s_#-]*\\d*$", RegexOption.IGNORE_CASE)
+
+    /** Label bawaan stream yang tak bermakna bagi pengguna ("Track 1", "Audio 2", "Stream", ...). Label kosong juga dianggap generik. */
+    fun isGenericLabel(label: String?): Boolean = label.orEmpty().trim().let { it.isEmpty() || GENERIC.matches(it) }
+
+    /** Chip/ikon dubbing tampil bila ada >1 trek, atau satu trek yang bahasanya dikenal (ditampilkan tanpa pilihan). */
+    fun showPicker(keys: List<String>): Boolean = keys.size > 1 || keys.singleOrNull()?.isNotEmpty() == true
+
     /** Label kembar diberi nomor ("English", "English 2") supaya baris pilihan tidak membingungkan. */
     fun uniqueLabels(labels: List<String>): List<String> {
         val seen = HashMap<String, Int>()

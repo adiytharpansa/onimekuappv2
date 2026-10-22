@@ -51,6 +51,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -277,11 +279,37 @@ fun TopLoadingBar(active: Boolean, modifier: Modifier = Modifier) {
 
 // ------------------------------------------------------------------ Layar muat pemutar
 
+/**
+ * Cincin loading merek: busur merah berputar yang panjangnya "bernapas" (pendek <-> panjang), ekor memudar halus,
+ * di atas jalur tipis transparan; masuk dengan fade 220 ms agar buffering singkat tidak berkedip kasar.
+ * Dipakai di pemutar (buffering) dan layar muat stream, menggantikan spinner Material putih polos.
+ */
+@Composable
+fun BufferingRing(modifier: Modifier = Modifier, ringSize: Dp = 52.dp, stroke: Dp = 3.5.dp) {
+    val t = rememberInfiniteTransition(label = "bufRing")
+    val rot by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "bufRot")
+    val sweep by t.animateFloat(70f, 270f, infiniteRepeatable(tween(850, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bufSweep")
+    val fade = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { fade.animateTo(1f, tween(220)) }
+    Canvas(modifier.size(ringSize).graphicsLayer { alpha = fade.value }) {
+        val sw = stroke.toPx()
+        drawCircle(Color(0x26FFFFFF), radius = (size.minDimension - sw) / 2f, style = Stroke(width = sw))
+        val f = (sweep / 360f).coerceIn(0.05f, 1f)
+        rotate(rot) {
+            drawArc(
+                Brush.sweepGradient(0f to Color.Transparent, f to RedText, 1f to RedText),
+                startAngle = 0f, sweepAngle = sweep, useCenter = false,
+                topLeft = Offset(sw / 2f, sw / 2f), size = Size(size.width - sw, size.height - sw),
+                style = Stroke(width = sw, cap = StrokeCap.Round),
+            )
+        }
+    }
+}
+
 /** Muat stream: logo berdenyut di dalam cincin berputar + pesan tahapan yang bergantian. */
 @Composable
 fun StreamLoading() {
     val t = rememberInfiniteTransition(label = "streamLoad")
-    val rot by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "streamRot")
     val pulse by t.animateFloat(0.9f, 1.08f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "streamPulse")
     var stage by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(2400); stage = (stage + 1) % 3 } }
@@ -292,13 +320,7 @@ fun StreamLoading() {
     )
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize().graphicsLayer { rotationZ = rot }) {
-                drawArc(
-                    Brush.sweepGradient(listOf(Color.Transparent, RedText)),
-                    startAngle = 0f, sweepAngle = 280f, useCenter = false,
-                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
-                )
-            }
+            BufferingRing(Modifier.fillMaxSize(), ringSize = 68.dp, stroke = 3.dp)
             Box(Modifier.graphicsLayer { scaleX = pulse; scaleY = pulse }) { Logo(30.dp) }
         }
         AnimatedContent(targetState = stage, transitionSpec = { fadeIn(tween(320)) togetherWith fadeOut(tween(200)) }, label = "streamStage") { s ->

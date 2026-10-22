@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.SpeakerNotes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -323,7 +324,7 @@ internal fun PlayerSettingsSheet(
                             SheetRowItem(Icons.Filled.Tune, I18n.t("quality", "Quality"), qLabel(quality)) { onPage("quality") }
                             SheetRowItem(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), if (subTracks.isNotEmpty()) subLabel else I18n.t("subs_na", "Not available")) { if (subTracks.isNotEmpty()) onPage("subs") }
                             SheetRowItem(Icons.Filled.Speed, I18n.t("speed", "Playback speed"), if (speed == 1f) I18n.t("normal", "Normal") else "${spdLabel(speed)}×") { onPage("speed") }
-                            if (audioLabels.size > 1) SheetRowItem(Icons.Filled.Audiotrack, I18n.t("dubbing", "Dubbing"), audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
+                            if (audioLabels.size > 1) SheetRowItem(Icons.AutoMirrored.Filled.SpeakerNotes, I18n.t("dubbing", "Dubbing"), audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
                             SheetRowItem(Icons.Filled.SkipNext, I18n.t("autoplay_next", "Autoplay next"), if (autoplay) "On" else "Off") { onAutoplay(!autoplay) }
                             SheetRowItem(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep timer"), when (sleepMin) { 0 -> I18n.t("ctl_off", "Off"); -1 -> I18n.t("sleep_end", "End of episode"); else -> "$sleepMin min" }) { onPage("sleep") }
                             SheetRowItem(Icons.Filled.PictureInPictureAlt, "Picture-in-picture", "") { onPip() }
@@ -372,8 +373,8 @@ internal fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) 
 /** Nama dubbing yang ramah dibaca: label trek bila bermakna, kalau tidak nama bahasa dari kodenya ("ja" -> Japanese / Jepang). */
 internal fun dubName(f: androidx.media3.common.Format, i: Int): String {
     val label = f.label?.trim().orEmpty()
-    if (label.length > 3) return label
-    val code = DubLogic.normalize(f.language).ifEmpty { DubLogic.normalize(label) }
+    if (label.length > 3 && !DubLogic.isGenericLabel(label)) return label
+    val code = DubLogic.normalize(f.language).ifEmpty { if (DubLogic.isGenericLabel(label)) "" else DubLogic.normalize(label) }
     if (code.isNotEmpty()) dubLangName(code)?.let { return it }
     // Trek pertama tanpa bahasa umumnya audio asli stream; lebih jelas daripada "Track 1".
     return if (i == 0) I18n.t("dub_original", "Original") else "Track ${i + 1}"
@@ -387,7 +388,7 @@ internal fun dubLangName(code: String): String? {
 
 /** Kunci stabil sebuah trek audio, dipakai mengingat pilihan dubbing antar episode. */
 internal fun audioKey(f: androidx.media3.common.Format): String {
-    return DubLogic.normalize(f.language).ifEmpty { DubLogic.normalize(f.label) }
+    return DubLogic.normalize(f.language).ifEmpty { if (DubLogic.isGenericLabel(f.label)) "" else DubLogic.normalize(f.label) }
 }
 
 /** Bendera kecil untuk kode bahasa trek audio; null bila tak dikenal (chip/baris memakai ikon not musik). */

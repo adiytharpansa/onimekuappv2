@@ -18,6 +18,21 @@ class DubLogicTest {
         assertEquals("", DubLogic.normalize("  "))
     }
 
+    @Test fun genericLabelsAreDetected() {
+        for (g in listOf("Track 1", "track 2", "Audio 1", "Audio Track 3", "Stream", "default", "  ", ""))
+            org.junit.Assert.assertTrue(g, DubLogic.isGenericLabel(g))
+        for (n in listOf("English", "Japanese", "Bahasa Indonesia", "Japanese - Stereo", "Dub ID"))
+            org.junit.Assert.assertFalse(n, DubLogic.isGenericLabel(n))
+        org.junit.Assert.assertTrue(DubLogic.isGenericLabel(null))
+    }
+
+    @Test fun pickerShownOnlyWhenUseful() {
+        org.junit.Assert.assertFalse(DubLogic.showPicker(emptyList()))
+        org.junit.Assert.assertFalse(DubLogic.showPicker(listOf("")))      // satu trek tak dikenal ("Track 1")
+        org.junit.Assert.assertTrue(DubLogic.showPicker(listOf("ja")))     // satu trek dikenal: tampil tanpa pilihan
+        org.junit.Assert.assertTrue(DubLogic.showPicker(listOf("", "")))   // beberapa trek
+    }
+
     @Test fun pickPrefersTitleThenGlobal() {
         val keys = listOf("ja", "en", "id")
         assertEquals(2, DubLogic.pick(keys, "id", "ja"))      // judul menang atas global
