@@ -674,10 +674,39 @@ fun ItemRow(
 // ------------------------------------------------------------------ MY LIST / DOWNLOADS
 @Composable
 fun MyListScreen(vm: AppVM) {
-    val l = vm.p.myList.mapNotNull { Catalog.byId[it] }
+    val saved = vm.p.myList.mapNotNull { Catalog.byId[it] }
+    var sort by rememberSaveable { mutableStateOf(com.onimeku.app.data.MyListView.Sort.RECENT) }
+    var filter by rememberSaveable { mutableStateOf(com.onimeku.app.data.MyListView.Filter.ALL) }
+    val started = remember(vm.p.prog, vm.p.seen) { com.onimeku.app.data.MyListView.startedIds(vm.p) }
+    val l = remember(saved, sort, filter, started) { com.onimeku.app.data.MyListView.apply(saved, sort, filter, started) }
+    // Daftar tersimpan tapi katalog belum termuat: jangan tampilkan "kosong" (menyesatkan), tampilkan memuat.
+    val waitingCatalog = vm.p.myList.isNotEmpty() && saved.isEmpty()
     AnimeGrid(l, vm) {
         RootTitle(I18n.t("tab_mylist", "My List"))
-        if (l.isEmpty()) {
+        if (waitingCatalog) {
+            if (Catalog.loading) SkeletonRows(4)
+            else EmptyBox(I18n.t("mylist_unavail_t", "Your titles aren't available right now"), I18n.t("mylist_unavail_b", "Your saved list is safe. Check your connection and reopen the app."))
+        } else if (saved.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(top = Sp.S4, bottom = Sp.S12).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.CenterVertically) {
+                com.onimeku.app.data.MyListView.Filter.values().forEach { f ->
+                    Chip(when (f) {
+                        com.onimeku.app.data.MyListView.Filter.ALL -> I18n.t("ml_f_all", "All")
+                        com.onimeku.app.data.MyListView.Filter.AIRING -> I18n.t("st_airing", "Airing")
+                        com.onimeku.app.data.MyListView.Filter.COMPLETED -> I18n.t("st_completed", "Completed")
+                        com.onimeku.app.data.MyListView.Filter.NOT_STARTED -> I18n.t("ml_f_new", "Not started")
+                    }, on = filter == f) { filter = f }
+                }
+                Box(Modifier.width(1.dp).height(18.dp).background(Line))
+                val sorts = com.onimeku.app.data.MyListView.Sort.values()
+                Chip(when (sort) {
+                    com.onimeku.app.data.MyListView.Sort.RECENT -> I18n.t("ml_s_recent", "Sort: Recent")
+                    com.onimeku.app.data.MyListView.Sort.TITLE -> I18n.t("ml_s_title", "Sort: A–Z")
+                    com.onimeku.app.data.MyListView.Sort.RATING -> I18n.t("ml_s_rating", "Sort: Rating")
+                }, on = sort != com.onimeku.app.data.MyListView.Sort.RECENT) { sort = sorts[(sort.ordinal + 1) % sorts.size] }
+            }
+        }
+        if (saved.isEmpty() && !waitingCatalog) {
             // Ajakan di tengah (tanpa kartu berbingkai) + rekomendasi supaya layar tidak kosong.
             Column(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = Sp.S28), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
@@ -721,7 +750,7 @@ fun MyListScreen(vm: AppVM) {
                                         .background(if (on) Red else Color(0xCC14161F)).border(1.dp, if (on) Red else Color(0x66FFFFFF), CircleShape)
                                         .clickable { vm.toggleML(t.id) },
                                     contentAlignment = Alignment.Center,
-                                ) { Icon(if (on) AppIcons.Check else AppIcons.Plus, if (on) "Added" else "My List", Modifier.size(16.dp), tint = Color.White) }
+                                ) { Icon(if (on) AppIcons.Check else AppIcons.Plus, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"), Modifier.size(16.dp), tint = Color.White) }
                             }
                             Text(t.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Caption, lineHeight = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
@@ -729,7 +758,15 @@ fun MyListScreen(vm: AppVM) {
                 }
             }
         }
-        else Text("${l.size} ${I18n.t("n_saved", "saved")}", color = InkSoft, modifier = Modifier.padding(top = Sp.S4, bottom = Sp.S4))
+        else if (saved.isNotEmpty()) {
+            Text(
+                if (l.size == saved.size) "${l.size} ${I18n.t("n_saved", "saved")}" else "${l.size} / ${saved.size} ${I18n.t("n_saved", "saved")}",
+                color = InkSoft, fontSize = Ty.Small, modifier = Modifier.padding(bottom = Sp.S4),
+            )
+            if (l.isEmpty()) EmptyBox(I18n.t("ml_none_t", "No titles match"), I18n.t("ml_none_b", "Try another filter to see the rest of your list.")) {
+                Chip(I18n.t("ml_f_all", "All")) { filter = com.onimeku.app.data.MyListView.Filter.ALL }
+            }
+        }
     }
 }
 

@@ -1,3 +1,11 @@
+# Penyempurnaan layar My List (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/Screens.kt`, `AppVM.kt`, `I18n.kt`, berkas baru `data/MyListView.kt` + tes `MyListViewTest.kt`.
+- **Bug: "Your list is empty" muncul palsu saat katalog belum termuat.** Daftar dipetakan lewat katalog, jadi sebelum katalog tiba (atau saat offline) pengguna yang punya daftar melihat layar kosong. Kini tampil indikator memuat, atau pesan "judulmu belum bisa ditampilkan" bila katalog gagal; daftar tersimpan tidak disentuh.
+- **Filter:** Semua / Tayang / Tamat / Belum ditonton (tidak ada progres/riwayat untuk judul itu).
+- **Urut:** Terbaru (default) -> A-Z -> Rating; ketuk chip untuk bergilir. Jumlah menampilkan "x / total" saat difilter, dan ada keadaan "tidak ada yang cocok" dengan tombol reset.
+- Toast tambah/hapus dan deskripsi tombol kini dilokalisasi.
+- Rollback cepat: kembalikan `ui/Screens.kt`, `AppVM.kt`, `I18n.kt`; hapus `MyListView.kt` dan `MyListViewTest.kt`.
+
 # Penyempurnaan layar Kalender (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/CalendarScreen.kt`, `I18n.kt`.
 - **Bug: tanggal "hari ini" membeku.** Daftar 7 hari dihitung sekali saat layar dibuat; lewat tengah malam chip tanggal dan penanda hari ini salah. Kini mengikuti jam; saat hari berganti pilihan kembali ke hari ini dan jadwal dimuat ulang.

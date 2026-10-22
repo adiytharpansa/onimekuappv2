@@ -410,7 +410,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun toggleML(id: String) {
         val on = id in p.myList
         updP { it.copy(myList = if (on) it.myList - id else listOf(id) + it.myList) }
-        toast(if (on) "Removed from My List" else "Added to My List")
+        toast(if (on) I18n.t("ml_removed", "Removed from My List") else I18n.t("ml_added", "Added to My List"))
     }
 
     fun toggleRemind(id: String, ensure: ((Boolean) -> Unit) -> Unit) {
