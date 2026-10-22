@@ -1,3 +1,17 @@
+# v1.0.0-debug.74 (belum dikompilasi): Pemutar — pemilik ExoPlayer di luar Compose + sembilan perbaikan
+**Belum dikompilasi/dijalankan** (tanpa Android SDK di lingkungan penyusun). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/PlayerScreen.kt`, berkas baru `ui/PlayerHolder.kt`, `ui/PlayerLogic.kt`, `data/LogRedact.kt`, tes `PlayerChainTest.kt`, serta `data/State.kt`, `data/CrashLog.kt`, `ui/ProfileScreens.kt`, `I18n.kt`.
+1. **Pemilik pemutar di luar composition.** `PlayerHolder` memegang satu ExoPlayer + MediaSession lintas episode / pintu gudang / retry; `PlayerReady` meminjam lewat token dan menyetel `MediaSource` per episode (OkHttp + Referer/UA + cache/gudang tetap per episode). Pindah episode tidak lagi membongkar pemutar (tanpa layar hitam + buffering ulang). Pengambilalihan aman: pemilik lama diabaikan (`isOwner`), pemutar dilepas hanya saat pemilik terakhir pergi. `key(r, ...)` di `PlayerContent` memastikan `PlayerReady` dibangun ulang per episode. `PlayerView` dilepas dari pemutar bersama lewat `onRelease`. Pemasangan ulang subtitle memakai pabrik sumber episode yang sama (bukan pabrik bawaan pemutar).
+2. **Next/Prev di notifikasi & layar kunci** lewat `ForwardingPlayer` (`EpisodeNavPlayer`) yang mengiklankan `COMMAND_SEEK_TO_NEXT/PREVIOUS` dan meneruskannya ke `step()`.
+3. **Progres lebih aman:** disimpan juga saat `ON_STOP`, saat dijeda, dan SEBELUM pindah episode (`goEp`); pemilik lama tidak menyimpan posisi episode baru.
+4. **Recompose per detik dipersempit:** `PlayerReady` tidak lagi membaca `pos`/`buffered` di scope-nya; waktu, bilah seek, chip skip, dan kartu "Selanjutnya" dipecah menjadi composable anak yang membaca posisi lewat lambda. (Bilah seek sendiri sudah teranimasi linear 1 dtk; polling tidak dipercepat.)
+5. **i18n:** toast subtitle tidak tersedia, koneksi lambat, Fill/Fit, "Subtitles: …", "Speed", "Next episode" di layar galat, dan "dtk" di kartu Selanjutnya kini lewat `I18n.t`.
+6. **Lewati intro:** tombol cadangan "Lewati 85 dtk" (episode >= 10 mnt, detik 20-240) bila API tanpa penanda intro; opsi baru `autoSkipIntro` (Profil > Playback, bawaan mati) melompati intro sekali per episode bila penanda ada.
+7. **Resume presisi:** seek awal `EXACT`, lalu `CLOSEST_SYNC` setelah READY pertama (ketuk dua kali tetap cepat).
+8. **Log:** query URL (token) disamarkan di `CrashLog` saat ditulis dan dibaca (`LogRedact`). Catatan: unggah log di rilis hanya terjadi atas aksi pengguna (Laporkan masalah / Send diagnostics).
+9. **Tes + logika murni:** rantai cadangan (`PlaybackChain`), galat sesaat, pengawas macet (`StallPolicy`), navigasi episode (`EpisodeMath`), skip (`SkipLogic`), dan `LogRedact` diekstrak dan diuji (`PlayerChainTest`).
+- Perubahan perilaku: episode berikutnya (autoplay / kartu Selanjutnya) kini hanya dari daftar episode tersedia; dulu bisa lompat ke nomor+1 yang belum tayang.
+- Rollback cepat: kembalikan `ui/PlayerScreen.kt`, `data/State.kt`, `data/CrashLog.kt`, `ui/ProfileScreens.kt`, `I18n.kt` dari `debug.73` dan hapus berkas baru di atas.
+
 # v1.0.0-debug.72 (belum dikompilasi): Jadwal AniList lebih tangguh
 **Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `data/Api.kt` dan `AppVM.kt`.
 - `fetchSchedule()`: percobaan ulang maks 3x untuk galat jaringan, HTTP 429 (hormati `Retry-After`, 1-10 dtk), dan 5xx; 4xx lain langsung gagal. Respons GraphQL tanpa `data` kini dianggap gagal (sebelumnya JSONException). Duplikat `anilistId:ep` dibuang.

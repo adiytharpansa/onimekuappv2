@@ -46,7 +46,7 @@ object CrashLog {
 
     fun note(tag: String, msg: String) {
         val f = file ?: return
-        queue.add("${java.time.Instant.now()} [$tag] $msg\n")
+        queue.add("${java.time.Instant.now()} [$tag] ${LogRedact.urls(msg)}\n")
         // CRASH ditulis sinkron (proses akan mati); catatan lain di thread latar.
         if (tag == "CRASH") flush(f) else io.execute { flush(f) }
     }
@@ -55,6 +55,6 @@ object CrashLog {
         file?.let { flush(it) }
         val head = "Onimeku ${com.onimeku.app.BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}\n\n"
         val f = file
-        return head + (if (f != null && f.exists()) f.readText().takeLast(20_000) else "(no entries)")
+        return head + (if (f != null && f.exists()) LogRedact.urls(f.readText().takeLast(20_000)) else "(no entries)")
     }
 }

@@ -294,5 +294,15 @@ object I18n {
         "welcome_get_started" to "Mulai",
         "email" to "Email",
         "password" to "Kata sandi",
+        // Pemutar
+        "sub_unavail" to "Subtitle %1\$s tidak tersedia · memakai %2\$s",
+        "slow_switched" to "Koneksi lambat · beralih ke %1\$dp",
+        "hud_fill" to "Penuh",
+        "hud_fit" to "Pas",
+        "intro_skipped" to "Intro dilewati",
+        "skip_fallback" to "Lewati %1\$d dtk",
+        "sec_short" to "dtk",
+        "auto_skip_t" to "Lewati intro otomatis",
+        "auto_skip_d" to "Langsung melompati lagu pembuka bila episode punya penanda intro.",
     )
 }

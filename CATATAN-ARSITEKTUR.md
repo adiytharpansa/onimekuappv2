@@ -27,3 +27,9 @@ Ekstrak dari proyek my-anime-app (Next.js di Cloudflare Workers):
 src/app/api (route anime/proxy/img/dll), src/lib (store.ts = katalog
 Turso-utama/D1-cadangan), src/providers, wrangler.jsonc, package.json.
 Inilah API yang sekarang dipakai aplikasi secara langsung.
+
+
+## Pemutar (debug.74)
+- `ui/PlayerHolder.kt`: satu ExoPlayer + MediaSession di luar composition. `acquire(ctx, token)` dipanggil di `PlayerReady` (dalam `remember(r, streamUrl)`), `release(token)` di `onDispose`. Composable episode baru memanggil `acquire` SEBELUM yang lama dibuang, jadi semua efek/listener lama wajib memeriksa `PlayerHolder.isOwner(token)` sebelum menyimpan progres atau mengubah keadaan.
+- `PlayerReady` membuat `MediaSource` per episode lewat `DefaultMediaSourceFactory` (data source OkHttp/Referer/cache/gudang) dan memasangnya dengan `setMediaSource`; pabrik yang sama disimpan di `srcFactory` untuk pemasangan ulang subtitle. Jangan memanggil `player.setMediaItem` langsung: pemutar bersama tidak punya pabrik sumber bawaan yang sesuai.
+- Logika murni yang diuji unit ada di `ui/PlayerLogic.kt` (rantai cadangan, galat sesaat, pengawas macet, hitungan episode, skip) dan `data/LogRedact.kt`.

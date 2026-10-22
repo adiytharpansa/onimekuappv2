@@ -136,6 +136,8 @@ private fun VideoSurface(player: Player, modifier: Modifier, subScale: Float = 1
             }
         },
         modifier = modifier,
+        // Pemutar dipakai bersama lintas episode: lepaskan PlayerView lama agar listener-nya tidak menumpuk.
+        onRelease = { pv -> runCatching { pv.player = null } },
     )
 }
 
@@ -483,7 +485,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
         return
     }
 
-    key(useDirect, mainRetry, doorIdx) {
+    key(r, useDirect, mainRetry, doorIdx) {
         PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline,
             onDoorSuccess = if (doors.isNotEmpty()) {
                 { doors.getOrNull(doorIdx)?.let { com.onimeku.app.data.GudangStore.saveDoor(ctx, it.name) } }
@@ -492,32 +494,23 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             },
             onFatalError = {
             if (com.onimeku.app.BuildConfig.DEBUG) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("fatal") }
-            if (doors.isNotEmpty()) {
-                // Gudang: pindah ke pintu berikutnya DARI DETIK YANG
-                // SAMA (posisi sudah disimpan PlayerReady ke
-                // vm.resumeMs sebelum memanggil ini), maksimal satu
-                // putaran penuh pintu; sesudahnya gagal jujur.
-                if (doorIdx < doors.lastIndex) {
-                    doorIdx++
+            // Rantai cadangan (logika murni di PlaybackChain, diuji unit): gudang -> pintu berikutnya DARI DETIK YANG SAMA
+            // (posisi sudah disimpan ke vm.resumeMs di atas), maksimal satu putaran; selain gudang -> ulang jalur utama
+            // sekali -> URL langsung -> habis (galat jujur + coba lagi, bukan halaman embed yang mungkin mati).
+            when (val next = PlaybackChain.onFatal(doors.size, doorIdx, useDirect, mainRetry, !playback.directUrl.isNullOrBlank())) {
+                is ChainStep.NextDoor -> {
+                    doorIdx = next.idx
                     com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} pintu gudang gagal, pindah ke ${doors[doorIdx].name}")
-                } else {
-                    chainDead = true
-                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} semua pintu gudang habis")
                 }
-            } else if (!useDirect && mainRetry == 0) {
-                // Jalur utama (proksi) dicoba sekali lagi dulu: kegagalan sesaat
-                // di jaringan seluler tidak boleh langsung menjatuhkan ke jalur
-                // langsung/embed yang memang lebih rapuh di HP.
-                mainRetry = 1
-                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} jalur utama gagal, mencoba ulang sekali")
-            } else if (!useDirect && !playback.directUrl.isNullOrBlank()) {
-                useDirect = true
-            } else {
-                // Rantai habis (sama seperti fail() di web): tampilkan
-                // kegagalan apa adanya + tombol coba lagi yang mengambil
-                // ulang data putar, BUKAN halaman embed yang mungkin mati.
-                chainDead = true
-                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} rantai putar habis (proksi+gagal langsung)")
+                ChainStep.RetryMain -> {
+                    mainRetry = 1
+                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} jalur utama gagal, mencoba ulang sekali")
+                }
+                ChainStep.UseDirect -> useDirect = true
+                ChainStep.Dead -> {
+                    chainDead = true
+                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} " + if (doors.isNotEmpty()) "semua pintu gudang habis" else "rantai putar habis (proksi+gagal langsung)")
+                }
             }
         })
     }
@@ -558,7 +551,14 @@ private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onDoorSuccess: (() -> Unit)? = null, onFatalError: () -> Unit = {}) {
+    // Pemilik pemutar: ExoPlayer + MediaSession hidup di PlayerHolder (di luar composition) dan dipakai ulang
+    // antar-episode / pintu / retry; PlayerReady hanya "meminjam" lewat token ini.
+    val token = remember { Any() }
+    // Pabrik sumber media episode ini (OkHttp + Referer/UA + cache/gudang): dipakai juga saat subtitle dipasang ulang di bawah,
+    // karena pemutar bersama tidak lagi membawa pabrik sumber sendiri.
+    val srcFactory = remember { arrayOfNulls<androidx.media3.exoplayer.source.MediaSource.Factory>(1) }
     val player = remember(r, streamUrl) {
+        val exo = PlayerHolder.acquire(ctx, token)
         // Transport OkHttp BERSAMA (Net): pool koneksi + cookie dipakai ulang
         // antar-episode; UA peramban + Referer dari API (CDN menolak klien
         // tanpa pola ini).
@@ -595,15 +595,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
             )
             .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        // Start cepat + tahan jaringan seluler goyah: mulai putar setelah 1,5 dtk
-        // terbuffer (bawaan 2,5), pulih dari rebuffer di 5 dtk (debug.64; dulu 4 — kini
-        // jeda macet lebih jarang berulang), buffer maju hingga 60 dtk (min 30), sisakan 20 dtk ke belakang agar seek mundur/ketuk
-        // dua kali -10 dtk tidak mengunduh ulang segmen.
-        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
-            .setBufferDurationsMs(30_000, 60_000, 1_500, 5_000)
-            .setBackBuffer(20_000, true)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
         // Perbaikan debug.25: STREAMING tidak lagi membaca cache bersama.
         // Entri cache era lama (playlist/segmen rusak yang tersimpan di
         // bawah kunci URL/konten yang stabil) dibaca pemutar lebih dulu
@@ -638,36 +629,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         // — subtitle gudang kini trek teks bawaan manifest HLS, tidak
         // ada lagi trek samping yang perlu dipaksa lewat SingleSample;
         // pabrik sumber dibiarkan pada bawaan Media3.
-        val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(ctx)
-            .setEnableDecoderFallback(true) // dekoder utama gagal -> coba dekoder lain, bukan error
-        ExoPlayer.Builder(ctx, renderers)
-            .setMediaSourceFactory(sourceFactory)
-            .setLoadControl(loadControl)
-            // Fokus audio: jeda saat ada panggilan/aplikasi lain, lanjut otomatis setelahnya; jeda saat headset/Bluetooth dicabut.
-            .setAudioAttributes(
-                androidx.media3.common.AudioAttributes.Builder()
-                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
-                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE).build(),
-                true,
-            )
-            .setHandleAudioBecomingNoisy(true)
-            .build().apply {
-            // Telemetri pemutar: catat transisi keadaan, galat
-            // pemutar, dan galat muat per-URL ke CrashLog (diunggah otomatis).
-            addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-                override fun onPlaybackStateChanged(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, state: Int) {
-                    com.onimeku.app.data.CrashLog.note("exo-state", "state=$state")
-                }
-                override fun onPlayerError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, error: androidx.media3.common.PlaybackException) {
-                    com.onimeku.app.data.CrashLog.note("exo-error", "${error.errorCodeName}: ${error.message} | cause=${error.cause}")
-                }
-                override fun onLoadError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo, mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData, error: java.io.IOException, wasCanceled: Boolean) {
-                    com.onimeku.app.data.CrashLog.note("exo-load", "${loadEventInfo.dataSpec.uri} -> ${error.javaClass.simpleName}: ${error.message}")
-                }
-            })
+        srcFactory[0] = sourceFactory
+        exo.apply {
             com.onimeku.app.data.CrashLog.note("player", "PlayerReady dibuat ep${r.ep} url=${streamUrl.take(60)}")
-            // Seek ke keyframe terdekat: ketuk dua kali/geser bilah jauh lebih cepat.
-            setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+            // Seek resume dibaca EXACT (diset PlayerHolder.reset); dilonggarkan ke CLOSEST_SYNC saat pertama READY (lihat listener).
             quality.removeSuffix("p").toIntOrNull()?.let { h ->
                 trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, h).build()
             }
@@ -701,7 +666,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             // Kunci cache unduhan HANYA untuk putar offline (lihat
             // playFactory): item streaming tidak menyentuh cache bersama.
             if (offline) itemBuilder.setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
-            setMediaItem(itemBuilder.build())
+            setMediaSource(sourceFactory.createMediaSource(itemBuilder.build()))
             val resumeFb = vm.resumeMs?.takeIf { it.first == "${r.id}:${r.ep}" && it.second > 0 }?.second
             vm.resumeMs = null
             seekTo(resumeFb ?: ((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L))
@@ -759,7 +724,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             if (cur != null) {
                 val pos = player.currentPosition
                 val play = player.playWhenReady
-                player.setMediaItem(cur.buildUpon().setSubtitleConfigurations(subConfigs(playback)).build(), pos)
+                val item = cur.buildUpon().setSubtitleConfigurations(subConfigs(playback)).build()
+                val sf = srcFactory[0]
+                if (sf != null) player.setMediaSource(sf.createMediaSource(item), pos) else player.setMediaItem(item, pos)
                 player.prepare()
                 player.playWhenReady = play
                 subReady = false
@@ -780,7 +747,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var fullByRot by remember { mutableStateOf(false) }      // fullscreen karena HP diputar (bukan tombol)
     // Tawaran melanjutkan: episode yang pernah ditonton >=30 dtk mulai dari posisi tersimpan, dengan opsi "Mulai dari awal" 7 dtk.
     val resumeStart = remember(r) { vm.p.prog["${r.id}:${r.ep}"] ?: 0 }
-    var resumeChip by remember(r) { mutableStateOf(resumeStart >= 30) }
+    var resumeChip by remember(r) { mutableStateOf(EpisodeMath.offerResume(resumeStart)) }
     LaunchedEffect(r) { if (resumeChip) { delay(7000); resumeChip = false } }
     var epPanel by remember { mutableStateOf(false) }        // daftar episode di mode layar penuh
     var barKind by remember { mutableIntStateOf(0) }         // bilah vertikal: 1 = kecerahan, 2 = volume
@@ -890,6 +857,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         val stalls = ArrayDeque<Long>()
         var wasReady = false
         var hinted = false
+        var seekRelaxed = false
         var lastSeekAt = 0L
         var netRetry = 0
         var disposed = false
@@ -898,10 +866,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) lastSeekAt = System.currentTimeMillis()
             }
             override fun onPlaybackStateChanged(state: Int) {
+                if (!PlayerHolder.isOwner(token)) return
                 buffering = state == Player.STATE_BUFFERING
                 // Saran kualitas: 3x macet dalam 90 dtk (di luar seek) -> tawarkan turunkan kualitas, sekali per sesi.
                 val now = System.currentTimeMillis()
                 if (state == Player.STATE_READY) wasReady = true
+                // Resume sudah presisi (EXACT); seek berikutnya (ketuk dua kali / geser) kembali cepat ke keyframe terdekat.
+                if (state == Player.STATE_READY && !seekRelaxed) { seekRelaxed = true; player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC) }
                 if (state == Player.STATE_BUFFERING && wasReady && now - lastSeekAt > 3_000) {
                     stalls.addLast(now)
                     while (stalls.isNotEmpty() && now - stalls.first() > 90_000) stalls.removeFirst()
@@ -910,7 +881,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (state == Player.STATE_READY) { failed = false; netRetry = 0 }
                 if (state == Player.STATE_ENDED) {
                     vm.saveProg(r.id, r.ep, durNow, durNow)
-                    val nxt = a.available.firstOrNull { it > r.ep } ?: if (r.ep < a.eps) r.ep + 1 else null
+                    val nxt = EpisodeMath.next(a.available, a.eps, r.ep)
                     if (sleepNow == -1) { player.pause(); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")) }
                     else if (vm.s.settings.autoplay && !autoCancelNow && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
                 }
@@ -932,7 +903,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     val pick = SubLang.pick(subTracks, pref, vm.s.settings.lang)
                     // Bahasa pilihan tidak tersedia di episode ini -> beri tahu, lalu pakai bahasa cadangan.
                     if ((pref == "id" || pref == "en") && pick >= 0 && SubLang.code(subTracks[pick]) != pref)
-                        vm.toast("${SubLang.prefName(pref)} subtitle unavailable · using ${subName(pick)}")
+                        vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
                     applySub(pick)
                 } else if (subReady && subIdx >= 0 && !subLocalApplied && tracks.groups.any { isLocalSubtitleGroup(it) }) {
                     // debug.60: trek samping lokal tiba SESUDAH grup teks
@@ -952,18 +923,20 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (size.width > 0 && size.height > 0) vidRatio = size.width * size.pixelWidthHeightRatio / size.height
                 if (size.height > 0) playingH = size.height
             }
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                wantPlay = playWhenReady; vm.playing = playWhenReady
+                // Dijeda: simpan posisi sekarang (di latar proses bisa dimatikan sistem sebelum polling 10 dtk berikutnya).
+                if (!playWhenReady && PlayerHolder.isOwner(token) && player.playbackState != Player.STATE_IDLE && player.currentPosition > 0)
+                    vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
+            }
             override fun onPlayerError(error: PlaybackException) {
+                if (!PlayerHolder.isOwner(token)) return
                 // Galat jaringan sesaat saat sudah memutar: coba lanjutkan di tempat (maks 3x) sebelum menjatuhkan ke jalur cadangan.
                 // debug.64: dulu hanya CONNECTION_FAILED/TIMEOUT. Segmen yang gagal dengan 5xx/429, galat IO tak spesifik
                 // (koneksi putus di tengah baca), dan TIMEOUT umum juga sesaat -> ikut dicoba ulang di tempat. 4xx lain
                 // (403/404: token/segmen mati) tetap langsung ke rantai cadangan.
                 val httpCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
-                val transient = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
-                    error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT ||
-                    (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS && httpCode != null && (httpCode >= 500 || httpCode == 429))
+                val transient = PlaybackChain.isTransient(error.errorCode, httpCode)
                 if (transient && wasReady && netRetry < 3) {
                     netRetry++; buffering = true
                     com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} galat sesaat ${error.errorCodeName}${httpCode?.let { " http=$it" } ?: ""}, coba lagi #$netRetry")
@@ -984,9 +957,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onDispose {
             disposed = true
             player.removeListener(l)
-            vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
-            player.release()
-            vm.playing = false
+            // Pemutar dipakai bersama: bila episode/pintu berikutnya sudah mengambil alih, jangan menyimpan posisi
+            // episode baru sebagai milik episode lama (progres lama sudah disimpan di goEp / ENDED).
+            val mine = PlayerHolder.isOwner(token)
+            if (mine) vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
+            PlayerHolder.release(token)
+            if (mine) vm.playing = false
         }
     }
 
@@ -999,13 +975,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (!buffering || !rendered) return@LaunchedEffect
         var tries = 0
         while (tries < 3) {
-            delay(if (tries == 0) 12_000L else 15_000L)
+            delay(StallPolicy.delayMs(tries))
             if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@LaunchedEffect
             tries++
             val lower = heights.filter { it < playingH }.maxOrNull()
-            if (tries >= 2 && lower != null) {
+            if (StallPolicy.shouldLower(tries, lower)) {
                 applyQuality("${lower}p")
-                vm.toast("Slow connection · switched to ${lower}p")
+                vm.toast(I18n.t("slow_switched", "Slow connection · switched to %1\$dp").format(lower))
             }
             com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} macet >${if (tries == 1) 12 else 12 + 15 * (tries - 1)}s, pulihkan #$tries (tinggi=$playingH, turun=${lower ?: 0})")
             player.seekTo(player.currentPosition)
@@ -1013,19 +989,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
 
-    // MediaSession + layanan latar: notifikasi, kontrol layar kunci, tombol headset.
-    DisposableEffect(player) {
-        val session = androidx.media3.session.MediaSession.Builder(ctx, player)
-            .setId("onimeku-${System.nanoTime()}").build()
-        PlaybackService.current = session
-        val token = androidx.media3.session.SessionToken(ctx, android.content.ComponentName(ctx, PlaybackService::class.java))
-        val ctrl = androidx.media3.session.MediaController.Builder(ctx, token).buildAsync()
-        onDispose {
-            androidx.media3.session.MediaController.releaseFuture(ctrl)
-            if (PlaybackService.current === session) PlaybackService.current = null
-            session.release()
-        }
-    }
+    // MediaSession + layanan latar kini dimiliki PlayerHolder (hidup selama pemutar dipakai, lintas episode).
 
     // Timer tidur.
     LaunchedEffect(sleepMin) {
@@ -1038,14 +1002,26 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // Polling posisi 1 dtk dan HANYA menulis state saat detiknya berubah
     // (sebelumnya tiap 500 ms -> seluruh PlayerReady recompose 2x/dtk).
     // Simpan progres tiap 10 dtk (tiap simpan = serialisasi seluruh AppState).
-    val nextEp = remember(r, a) { a.available.firstOrNull { it > r.ep } ?: if (r.ep < a.eps) r.ep + 1 else null }
+    val nextEp = remember(r, a) { EpisodeMath.next(a.available, a.eps, r.ep) }
     LaunchedEffect(player) {
         var n = 0
         var prefetched = false
         var trPre = false
+        var introAutoDone = false
         while (true) {
+            // Pemutar sudah diambil alih episode/pintu berikutnya: berhenti (jangan menyimpan posisi episode lain).
+            if (!PlayerHolder.isOwner(token)) break
             val sec = (player.currentPosition / 1000).toInt()
             if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
+            // Lewati intro otomatis (opsional): sekali per episode, hanya bila API memberi penanda intro.
+            if (!introAutoDone) {
+                val tgt = SkipLogic.autoSkipTarget(sec, playback.introStart, playback.introEnd, vm.s.settings.skipIntro, vm.s.settings.autoSkipIntro)
+                if (tgt != null) {
+                    introAutoDone = true
+                    player.seekTo(tgt * 1000L)
+                    vm.toast(I18n.t("intro_skipped", "Intro skipped"))
+                }
+            }
             val bufSec = (player.bufferedPosition / 1000L).toFloat()
             if (bufSec != buffered) buffered = bufSec
             val d = player.duration
@@ -1078,6 +1054,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, off).build()
             }
             if (e == Lifecycle.Event.ON_STOP) {
+                // Simpan posisi sebelum proses berpeluang dimatikan di latar (polling hanya menyimpan tiap 10 dtk).
+                if (PlayerHolder.isOwner(token) && player.currentPosition > 0) vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
                 // ON_STOP saat masih di PiP = jendela PiP ditutup (X): berhenti seperti YouTube, jangan lanjut berbunyi di latar.
                 // Mengetuk jendela PiP (membuka kembali) tidak memicu ON_STOP, jadi pemutaran lanjut normal.
                 if (vm.inPip || act?.isInPictureInPictureMode == true) player.pause()
@@ -1141,11 +1119,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // Kontrol hilang sendiri 3,5 dtk setelah ketukan terakhir saat video berjalan.
     LaunchedEffect(showUi, uiTick, wantPlay, buffering) { if (showUi && wantPlay && !buffering) { delay(3500); showUi = false } }
 
+    // Pindah episode: simpan posisi episode ini DULU (pemutar bersama langsung dipakai episode baru).
+    fun goEp(n: Int) {
+        vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
+        vm.replaceTop(Route.Player(r.id, n))
+    }
     fun step(d: Int) {
-        val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
-        val i = nums.indexOf(r.ep)
-        val n = if (i >= 0) nums.getOrNull(i + d) else if (r.ep + d in 1..a.eps) r.ep + d else null
-        if (n != null) vm.replaceTop(Route.Player(r.id, n))
+        val n = EpisodeMath.step(a.available, a.eps, r.ep, d)
+        if (n != null) goEp(n)
     }
     val hasPrev = (if (a.available.isNotEmpty()) a.available.firstOrNull() else 1)?.let { r.ep > it } ?: (r.ep > 1)
     val hasNext = (if (a.available.isNotEmpty()) a.available.lastOrNull() else a.eps)?.let { r.ep < it } ?: (r.ep < a.eps)
@@ -1160,6 +1141,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
     // Tombol di jendela PiP (putar/jeda, sebelumnya, berikutnya).
     val stepNow by rememberUpdatedState<(Int) -> Unit>({ d -> step(d) })
+    // Tombol Next/Prev di notifikasi & layar kunci (sesi media dipegang PlayerHolder).
+    LaunchedEffect(player, hasPrev, hasNext) {
+        PlayerHolder.setNav(token, EpisodeNav(hasPrev, hasNext, { stepNow(-1) }, { stepNow(1) }))
+    }
     DisposableEffect(player) {
         val rcv = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
@@ -1181,6 +1166,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         wasPip = vm.inPip
     }
 
+    // Posisi/buffer dibaca lewat lambda DI composable anak: hanya anak itu yang recompose tiap detik, bukan seluruh PlayerReady.
+    val posProvider: () -> Float = { pos }
+    val bufferedProvider: () -> Float = { buffered }
     val subScale = subScaleOf(vm.s.settings.subSize)
     val marks = remember(playback) {
         buildList<Pair<Float, Float>> {
@@ -1308,8 +1296,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                                 if (startDist == 0f) startDist = dd
                                 else {
                                     val z = dd / startDist
-                                    if (z > 1.15f && !fillMode) { fillMode = true; hud = "Fill"; hudTick++ }
-                                    else if (z < 0.87f && fillMode) { fillMode = false; hud = "Fit"; hudTick++ }
+                                    if (z > 1.15f && !fillMode) { fillMode = true; hud = I18n.t("hud_fill", "Fill"); hudTick++ }
+                                    else if (z < 0.87f && fillMode) { fillMode = false; hud = I18n.t("hud_fit", "Fit"); hudTick++ }
                                 }
                             }
                         } while (ev.changes.any { it.pressed })
@@ -1322,36 +1310,19 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 RealImage(a, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Color(0xA6080910)))
             }
-            // Skip intro HANYA bila API memberi posisi intro episode ini (introStart/introEnd, detik).
-            val introEnd = playback.introEnd
-            if (vm.s.settings.skipIntro && introEnd != null && introEnd > 0 && pos >= (playback.introStart ?: 0) && pos < introEnd) {
-                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = Sp.S16, bottom = 66.dp).clip(CircleShape)
-                    .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(introEnd * 1000L) }
-                    .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
-            }
-            val outroStart = playback.outroStart
-            if (vm.s.settings.skipIntro && outroStart != null && outroStart > 0 && pos >= outroStart && (playback.outroEnd ?: dur) > pos) {
-                Text(I18n.t("skip_outro", "Skip outro"), Modifier.align(Alignment.BottomEnd).padding(end = Sp.S16, bottom = 66.dp).clip(CircleShape)
-                    .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(((playback.outroEnd ?: dur) * 1000L)) }
-                    .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
-            }
+            SkipChips(
+                posProvider = posProvider, dur = dur, playback = playback, enabled = vm.s.settings.skipIntro,
+                onSeekSec = { sec -> player.seekTo(sec * 1000L) },
+            )
             hud?.let {
                 Text(it, Modifier.align(Alignment.Center).offset(y = (-58).dp).clip(RoundedCornerShape(14.dp)).background(Color(0xB3000000))
                     .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Body, fontWeight = FontWeight.SemiBold)
             }
-            val remain = dur - pos.toInt()
-            if (nextEp != null && dur > 60 && remain in 1..20 && !failed) {
-                Row(Modifier.align(Alignment.BottomStart).padding(start = Sp.S16, bottom = 66.dp).clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = Sp.S16, end = Sp.S8, top = Sp.S8, bottom = Sp.S8),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                    Column {
-                        Text(I18n.t("up_next", "Up next"), fontSize = Ty.Micro, color = InkSoft)
-                        Text(if (vm.s.settings.autoplay && !autoCancel) "Episode $nextEp · ${remain}s" else "Episode $nextEp", fontSize = Ty.Small, fontWeight = FontWeight.SemiBold)
-                    }
-                    Chip(I18n.t("play_now", "Play now")) { vm.replaceTop(Route.Player(r.id, nextEp)) }
-                    if (vm.s.settings.autoplay && !autoCancel) Chip(I18n.t("cancel", "Cancel")) { autoCancel = true }
-                }
-            }
+            if (nextEp != null) UpNextCard(
+                posProvider = posProvider, dur = dur, nextEp = nextEp, failed = failed,
+                autoplay = vm.s.settings.autoplay, autoCancel = autoCancel,
+                onCancel = { autoCancel = true }, onPlayNow = { goEp(nextEp) },
+            )
             // Layar penuh landscape: kontrol dijauhkan dari notch/kamera & sudut membulat (edge-to-edge membuatnya tertutup).
             val cutPad = if (full) Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)) else Modifier
             if (locked && showUi) {
@@ -1426,11 +1397,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     if (subTracks.isNotEmpty()) Box(Modifier.size(48.dp).clip(CircleShape).clickable {
                         // Tombol CC: hidupkan/matikan subtitle sekali ketuk (seperti YouTube).
                         if (subIdx >= 0) {
-                            applySub(-1); vm.setSettings { it.copy(subLang = "off") }; vm.toast("Subtitles: ${I18n.t("ctl_off", "Off")}")
+                            applySub(-1); vm.setSettings { it.copy(subLang = "off") }; vm.toast("${I18n.t("subtitles", "Subtitles")}: ${I18n.t("ctl_off", "Off")}")
                         } else {
                             val pf = vm.s.settings.subLang.let { if (it == "off") "auto" else it }
                             val n = SubLang.pick(subTracks, pf, vm.s.settings.lang); applySub(n)
-                            vm.setSettings { it.copy(subLang = pf) }; vm.toast("Subtitles: ${subName(n)}")
+                            vm.setSettings { it.copy(subLang = pf) }; vm.toast("${I18n.t("subtitles", "Subtitles")}: ${subName(n)}")
                         }
                         uiTick++
                     }, contentAlignment = Alignment.Center) {
@@ -1498,18 +1469,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 // ---- Bawah: waktu + layar penuh (kanan), bilah seek tipis dengan buffer ----
                 Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = if (full) Sp.S28 else Sp.S16, end = if (full) Sp.S28 else Sp.S16, bottom = if (full) Sp.S12 else 0.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S2), verticalAlignment = Alignment.CenterVertically) {
-                        Text(fmt(pos.toInt()), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text(" / ${if (dur > 0) fmt(dur) else "--:--"}", fontSize = Ty.Small, color = Color(0xB3FFFFFF))
+                        TimeLabel(posProvider, dur)
                         Spacer(Modifier.weight(1f))
-                        Box(Modifier.size(48.dp).clip(CircleShape).clickable { fillMode = !fillMode; hud = if (fillMode) "Fill" else "Fit"; hudTick++; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(48.dp).clip(CircleShape).clickable { fillMode = !fillMode; hud = if (fillMode) I18n.t("hud_fill", "Fill") else I18n.t("hud_fit", "Fit"); hudTick++; uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.AspectRatio, I18n.t("fit_fill", "Fit / fill"), tint = Color.White)
                         }
                         Box(Modifier.size(48.dp).clip(CircleShape).clickable { full = !full; fullByRot = false; uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen", tint = Color.White)
                         }
                     }
-                    YtSeekBar(
-                        pos = pos, dur = dur.toFloat(), buffered = buffered, marks = marks, modifier = Modifier.padding(bottom = Sp.S4),
+                    SeekBarLive(
+                        posProvider = posProvider, dur = dur.toFloat(), bufferedProvider = bufferedProvider, marks = marks, modifier = Modifier.padding(bottom = Sp.S4),
                         onPreview = { dragging = true; pos = it; uiTick++ },
                         onDone = { player.seekTo((it * 1000).toLong()); pos = it; dragging = false; uiTick++ },
                     )
@@ -1533,7 +1503,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         items(epList, key = { "fp$it" }) { n ->
                             val isCur = n == r.ep
                             val seenEp = "${r.id}:$n" in vm.p.seen
-                            Row(Modifier.fillMaxWidth().clickable { epPanel = false; if (!isCur) vm.replaceTop(Route.Player(r.id, n)) }
+                            Row(Modifier.fillMaxWidth().clickable { epPanel = false; if (!isCur) goEp(n) }
                                 .background(if (isCur) Color(0x33E5484D) else Color.Transparent).padding(horizontal = Sp.S16, vertical = Sp.S16),
                                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                                 Text("Episode $n", Modifier.weight(1f), fontSize = Ty.Body, fontWeight = if (isCur) FontWeight.SemiBold else FontWeight.Medium,
@@ -1612,17 +1582,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onSubTrack = { i ->
             applySub(i); sheet = null
             SubLang.code(subTracks[i])?.let { c -> vm.setSettings { it.copy(subLang = c) } }
-            vm.toast("Subtitles: ${subName(i)}")
+            vm.toast("${I18n.t("subtitles", "Subtitles")}: ${subName(i)}")
         },
-        onSubOff = { applySub(-1); sheet = null; vm.setSettings { it.copy(subLang = "off") }; vm.toast("Subtitles: ${I18n.t("ctl_off", "Off")}") },
+        onSubOff = { applySub(-1); sheet = null; vm.setSettings { it.copy(subLang = "off") }; vm.toast("${I18n.t("subtitles", "Subtitles")}: ${I18n.t("ctl_off", "Off")}") },
         onSubAuto = {
             sheet = null; vm.setSettings { it.copy(subLang = "auto") }
-            val n = SubLang.pick(subTracks, "auto", vm.s.settings.lang); applySub(n); vm.toast("Subtitles: Auto · ${subName(n)}")
+            val n = SubLang.pick(subTracks, "auto", vm.s.settings.lang); applySub(n); vm.toast("${I18n.t("subtitles", "Subtitles")}: Auto · ${subName(n)}")
         },
         subSize = vm.s.settings.subSize, subBg = vm.s.settings.subBg,
         onSubSize = { v -> vm.setSettings { it.copy(subSize = v) } },
         onSubBg = { v -> vm.setSettings { it.copy(subBg = v) } },
-        speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("Speed ${spdLabel(v)}×") },
+        speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
         audioLabels = audioLabels, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("Audio: ${audioLabels.getOrElse(n) { "?" }}") },
         sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(when (m) { 0 -> "Sleep timer: Off"; -1 -> "Sleep timer: ${I18n.t("sleep_end", "End of episode")}"; else -> "Sleep timer: $m min" }) },
         onLock = { locked = true; showUi = true; sheet = null },
@@ -1825,7 +1795,7 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             Text(a.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
             if (idx > 0 || (idx >= 0 && idx < nums.size - 1)) Row(Modifier.fillMaxWidth().padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 if (idx > 0) Btn(I18n.t("previous", "Previous"), BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
-                if (idx >= 0 && idx < nums.size - 1) Btn("Next episode", BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx + 1])) }
+                if (idx >= 0 && idx < nums.size - 1) Btn(I18n.t("next_episode", "Next episode"), BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx + 1])) }
             }
             Text(
                 "Judul ini diputar lewat pemutar resmi sumbernya. Ketuk tombol putar di dalam video.",
@@ -1836,5 +1806,75 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             if (commentsOn) commentsSection(vm, r.id, commentsUi)
         }
+    }
+}
+
+
+// ===== Komposabel anak yang membaca posisi sendiri (recompose per detik terbatas di sini) =====
+
+/** Waktu "1:05 / 23:55". */
+@Composable
+private fun TimeLabel(posProvider: () -> Float, dur: Int) {
+    Text(fmt(posProvider().toInt()), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = Color.White)
+    Text(" / ${if (dur > 0) fmt(dur) else "--:--"}", fontSize = Ty.Small, color = Color(0xB3FFFFFF))
+}
+
+/** Bilah seek: posisi & buffer dibaca di sini, bukan di PlayerReady. */
+@Composable
+private fun SeekBarLive(
+    posProvider: () -> Float, dur: Float, bufferedProvider: () -> Float, marks: List<Pair<Float, Float>>, modifier: Modifier,
+    onPreview: (Float) -> Unit, onDone: (Float) -> Unit,
+) {
+    YtSeekBar(pos = posProvider(), dur = dur, buffered = bufferedProvider(), marks = marks, modifier = modifier, onPreview = onPreview, onDone = onDone)
+}
+
+/**
+ * Tombol lewati intro/outro. Penanda dari API dipakai bila ada; bila tidak ada penanda intro, episode penuh
+ * mendapat tombol cadangan "Lewati 85 dtk" pada awal tayangan.
+ */
+@Composable
+private fun BoxScope.SkipChips(
+    posProvider: () -> Float, dur: Int, playback: com.onimeku.app.data.Playback, enabled: Boolean, onSeekSec: (Int) -> Unit,
+) {
+    if (!enabled) return
+    val pos = posProvider()
+    val sec = pos.toInt()
+    val introEnd = playback.introEnd
+    val outroStart = playback.outroStart
+    val hasIntro = introEnd != null && introEnd > 0
+    val chip = Modifier.align(Alignment.BottomEnd).padding(end = Sp.S16, bottom = 66.dp).clip(CircleShape)
+        .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape)
+    if (introEnd != null && introEnd > 0 && pos >= (playback.introStart ?: 0) && pos < introEnd) {
+        Text(I18n.t("skip_intro", "Skip intro"), chip.clickable { onSeekSec(introEnd) }
+            .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
+    }
+    if (outroStart != null && outroStart > 0 && pos >= outroStart && (playback.outroEnd ?: dur) > pos) {
+        Text(I18n.t("skip_outro", "Skip outro"), chip.clickable { onSeekSec(playback.outroEnd ?: dur) }
+            .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
+    }
+    if (SkipLogic.fallbackVisible(sec, hasIntro, true, dur)) {
+        Text(I18n.t("skip_fallback", "Skip %1\$ds").format(SkipLogic.FALLBACK_SEC), chip.clickable { onSeekSec(sec + SkipLogic.FALLBACK_SEC) }
+            .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** Kartu "Selanjutnya" 20 dtk terakhir: hitung mundur autoplay, Putar sekarang, Batal. */
+@Composable
+private fun BoxScope.UpNextCard(
+    posProvider: () -> Float, dur: Int, nextEp: Int, failed: Boolean, autoplay: Boolean, autoCancel: Boolean,
+    onCancel: () -> Unit, onPlayNow: () -> Unit,
+) {
+    val remain = dur - posProvider().toInt()
+    if (!(dur > 60 && remain in 1..20 && !failed)) return
+    Row(Modifier.align(Alignment.BottomStart).padding(start = Sp.S16, bottom = 66.dp).clip(RoundedCornerShape(14.dp))
+        .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = Sp.S16, end = Sp.S8, top = Sp.S8, bottom = Sp.S8),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
+        Column {
+            Text(I18n.t("up_next", "Up next"), fontSize = Ty.Micro, color = InkSoft)
+            Text(if (autoplay && !autoCancel) "Episode $nextEp · ${remain}${I18n.t("sec_short", "s")}" else "Episode $nextEp",
+                fontSize = Ty.Small, fontWeight = FontWeight.SemiBold)
+        }
+        Chip(I18n.t("play_now", "Play now")) { onPlayNow() }
+        if (autoplay && !autoCancel) Chip(I18n.t("cancel", "Cancel")) { onCancel() }
     }
 }

@@ -34,6 +34,8 @@ data class Profile(
 data class Settings(
     val autoplay: Boolean = true,
     val skipIntro: Boolean = true,
+    /** Lompati intro otomatis (sekali per episode) bila API memberi penanda intro. */
+    val autoSkipIntro: Boolean = false,
     val wifi: Boolean = false,
     val alerts: Boolean = true,
     val quality: String = "Auto",
