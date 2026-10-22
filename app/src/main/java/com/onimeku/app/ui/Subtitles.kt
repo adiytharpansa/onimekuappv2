@@ -26,7 +26,6 @@ import com.onimeku.app.data.ApiSubtitle
 sealed interface SubMenuEntry {
     object Auto : SubMenuEntry
     data class Track(val index: Int) : SubMenuEntry
-    object IndonesianPending : SubMenuEntry
     object Off : SubMenuEntry
 }
 
@@ -54,7 +53,7 @@ object SubLang {
 
     /**
      * Susunan baku menu subtitle (satu sumber untuk semua menu): Auto, English, Indonesian, bahasa lain, Off.
-     * Pilihan Indonesian selalu ada; bila trek belum tersedia (terjemahan belum jadi) tampil sebagai [SubMenuEntry.IndonesianPending].
+     * Hanya trek yang benar-benar tersedia yang tampil; bahasa yang tidak ada tidak ditawarkan.
      * Urutan antar trek yang bahasanya sama mengikuti urutan aslinya (stabil).
      */
     fun menu(tracks: List<ApiSubtitle>): List<SubMenuEntry> {
@@ -65,7 +64,7 @@ object SubLang {
         return buildList {
             add(SubMenuEntry.Auto)
             en.forEach { add(SubMenuEntry.Track(it)) }
-            if (id.isEmpty()) add(SubMenuEntry.IndonesianPending) else id.forEach { add(SubMenuEntry.Track(it)) }
+            id.forEach { add(SubMenuEntry.Track(it)) }
             other.forEach { add(SubMenuEntry.Track(it)) }
             add(SubMenuEntry.Off)
         }
@@ -110,7 +109,7 @@ private fun SubOpt(label: String, sub: String?, selected: Boolean, onClick: () -
 @Composable
 fun SubtitleDialog(
     tracks: List<ApiSubtitle>, current: Int, pref: String, appLang: String,
-    onTrack: (Int) -> Unit, onOff: () -> Unit, onAuto: () -> Unit, onIdPending: () -> Unit, onDismiss: () -> Unit,
+    onTrack: (Int) -> Unit, onOff: () -> Unit, onAuto: () -> Unit, onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
         val shape = RoundedCornerShape(22.dp)
@@ -122,7 +121,6 @@ fun SubtitleDialog(
                     when (e) {
                         SubMenuEntry.Auto -> SubOpt("Auto", I18n.t("sub_auto_d", "English / Indonesian, automatically") + (autoSub?.let { " · $it" } ?: ""), pref == "auto") { onAuto() }
                         is SubMenuEntry.Track -> SubOpt(SubLang.display(tracks[e.index], e.index), null, pref != "auto" && current == e.index) { onTrack(e.index) }
-                        SubMenuEntry.IndonesianPending -> SubOpt(SubLang.INDONESIAN_LABEL, null, false) { onIdPending() }
                         SubMenuEntry.Off -> SubOpt(I18n.t("ctl_off", "Off"), null, current < 0) { onOff() }
                     }
                 }

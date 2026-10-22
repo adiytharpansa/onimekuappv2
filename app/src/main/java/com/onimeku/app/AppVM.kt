@@ -361,11 +361,6 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun setTab(r: Route) { val from = tabIndex(tab); val to = tabIndex(r); tabDir = if (from >= 0 && to >= 0) Integer.signum(to - from) else 0; navDir = 0; stack = listOf(r); afterNav(); if (r == Route.Home) refreshIfStale() }
     fun replaceTop(r: Route) { navDir = 0; tabDir = 0; stack = stack.dropLast(1) + r; afterNav() }
     private fun afterNav() { quick = null; if (stack.lastOrNull() !is Route.Player) playerFull = false }
-    init {
-        // Pemanasan model terjemahan + pemangkasan cache subtitle (daftar berkas) tidak perlu menahan main thread.
-        if (s.settings.subTranslate) viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) { com.onimeku.app.ui.SubTranslate.warm(app) }
-    }
-
     fun openSettings() { tabDir = 0; stack = listOf(Route.ProfileTab, Route.Sub("settings")) }
 
     fun toast(m: String) {

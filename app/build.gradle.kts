@@ -14,15 +14,12 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-        // Aplikasi hanya punya bahasa en + id: buang string terjemahan 80+ bahasa dari Compose/Material/ML Kit (APK lebih kecil).
+        // Aplikasi hanya punya bahasa en + id: buang string terjemahan 80+ bahasa dari Compose/Material (APK lebih kecil).
         resourceConfigurations += listOf("en", "id")
         // Kunci publik Supabase untuk Sign in/Sign up (isi di gradle.properties; kosong = fitur akun nonaktif anggun)
         fun prop(n: String) = (project.findProperty(n) as String?)?.replace("\"", "") ?: ""
         buildConfigField("String", "SUPABASE_URL", "\"${prop("ONIMEKU_SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${prop("ONIMEKU_SUPABASE_KEY")}\"")
-        // Server terjemahan subtitle bersama (server/README-translate.md). Kosong = hanya ML Kit di HP.
-        buildConfigField("String", "TR_URL", "\"${prop("ONIMEKU_TR_URL")}\"")
-        buildConfigField("String", "TR_KEY", "\"${prop("ONIMEKU_TR_KEY")}\"")
     }
     // Tanda tangan rilis: aktif hanya bila ONIMEKU_STORE_FILE diberikan (gradle.properties / -P / CI).
     signingConfigs {
@@ -76,7 +73,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
     implementation("androidx.media3:media3-database:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")
-    implementation("com.google.mlkit:translate:17.0.3")
     implementation("androidx.media3:media3-session:1.5.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.0")

@@ -171,7 +171,7 @@ internal fun PlayerSettingsSheet(
     page: String?, full: Boolean,
     quality: String, autoRes: Int, qualityOpts: List<String>, onQuality: (String) -> Unit,
     subTracks: List<com.onimeku.app.data.ApiSubtitle>, subCurrent: Int, subPref: String, subLabel: String,
-    onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit, onSubIdPending: () -> Unit,
+    onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
     subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
     speed: Float, onSpeed: (Float) -> Unit,
     audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit,
@@ -225,9 +225,6 @@ internal fun PlayerSettingsSheet(
                                 when (e) {
                                     SubMenuEntry.Auto -> SheetOption("Auto" + (autoSub ?: ""), subPref == "auto") { onSubAuto() }
                                     is SubMenuEntry.Track -> SheetOption(SubLang.display(subTracks[e.index], e.index), subPref != "auto" && subCurrent == e.index) { onSubTrack(e.index) }
-                                    SubMenuEntry.IndonesianPending -> SheetOption(
-                                        SubLang.INDONESIAN_LABEL + if (SubTranslate.busy) " · " + I18n.t("sub_translating_short", "translating\u2026") + (if (SubTranslate.progress > 0) " ${SubTranslate.progress}%" else "") else "", false,
-                                    ) { onSubIdPending() }
                                     SubMenuEntry.Off -> SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
                                 }
                             }

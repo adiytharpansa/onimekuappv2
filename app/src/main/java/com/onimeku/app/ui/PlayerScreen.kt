@@ -221,7 +221,7 @@ private fun fetchOneSub(
 
 /**
  * Unduh trek subtitle [ready] ke berkas lokal (semua trek PARALEL, pakai
- * ulang berkas yang sudah ada), lalu pasang terjemahan yang sudah tersimpan.
+ * ulang berkas yang sudah ada).
  * Fungsi bersama jalur utama dan efek pemulihan trek.
  *
  * debug.64 — dua cacat lama yang membuat subtitle hilang saat stream:
@@ -264,7 +264,7 @@ private suspend fun localizeSubtitles(
             }
         }.awaitAll().filterNotNull()
     }
-    return ready.copy(subtitles = SubTranslate.cached(ctx, r.id, r.ep, loaded))
+    return ready.copy(subtitles = loaded)
 }
 
 @Composable
@@ -371,28 +371,11 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 ready = localizeSubtitles(ctx, r, ready)
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
-            // Terjemahan dimulai SEKARANG dan ditunggu paling lama 3 dtk sebelum video mulai: bila sudah ada di
-            // server bersama / cache perangkat, hasilnya tiba nyaris seketika sehingga subtitle Indonesia sudah
-            // terpasang sejak detik pertama (tanpa muat ulang di tengah episode). Bila lebih lama, video tetap
-            // mulai dan trek ditambahkan begitu jadi (lihat LaunchedEffect(subCount) di PlayerReady).
-            val subsNow = ready.subtitles
-            val trOpts = SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl)
-            // Opsi 2: trek terjemahan adalah trek SAMPING — untuk putar
-            // gudang tidak dibuat/dipasang lagi (subtitle murni dari
-            // manifest), jadi pekerjaan terjemahan awal dilewati juga.
-            val trJob = if (subsNow.isNotEmpty() && ready.source != "gudang") async { SubTranslate.fill(ctx, r.id, r.ep, subsNow, trOpts) } else null
-            val early = trJob?.let { j -> kotlinx.coroutines.withTimeoutOrNull(3_000) { j.await() } }
-            if (early != null && early.size != subsNow.size) ready = ready.copy(subtitles = early)
             settle()
             pb = ready
             // Uji mandiri jalur stream: GET polos meniru langkah
             // pemutar (master -> varian -> segmen 1) lalu unggah log.
             if (com.onimeku.app.BuildConfig.DEBUG) launch { diagStreamProbe(r, ready) }
-            // Terjemahan yang belum selesai dalam 3 dtk: tunggu di latar, lalu tambahkan ke pemutar yang sedang berjalan.
-            if (trJob != null && early == null) {
-                val withTr = trJob.await()
-                if (withTr.size != subsNow.size) pb = ready.copy(subtitles = withTr)
-            }
         }
     }
     // Pemulihan trek subtitle (debug.62). Bukti lapangan debug.61:
@@ -507,7 +490,6 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             } else {
                 null
             },
-            onSubsTranslated = { list -> pb = pb?.copy(subtitles = list) },
             onFatalError = {
             if (com.onimeku.app.BuildConfig.DEBUG) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { com.onimeku.app.data.ApiClient.uploadDiag("fatal") }
             if (doors.isNotEmpty()) {
@@ -575,7 +557,7 @@ private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onDoorSuccess: (() -> Unit)? = null, onSubsTranslated: (List<com.onimeku.app.data.ApiSubtitle>) -> Unit = {}, onFatalError: () -> Unit = {}) {
+private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onDoorSuccess: (() -> Unit)? = null, onFatalError: () -> Unit = {}) {
     val player = remember(r, streamUrl) {
         // Transport OkHttp BERSAMA (Net): pool koneksi + cookie dipakai ulang
         // antar-episode; UA peramban + Referer dari API (CDN menolak klien
@@ -762,8 +744,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // debug.60: apakah pilihan subIdx saat ini sudah diterapkan ke trek
     // samping lokal (bukan ke grup teks manifest yang tak bisa dirender)?
     var subLocalApplied by remember(r) { mutableStateOf(false) }
-    // Trek terjemahan (Indonesia/English) selesai dibuat saat video sudah berjalan: pasang ke item yang sama,
-    // lanjut dari posisi terakhir, lalu pilih ulang subtitle sesuai preferensi.
+    // Daftar trek subtitle berubah saat video sudah berjalan (mis. efek pemulihan trek): pasang ulang
+    // konfigurasinya ke item yang sama, lanjut dari posisi terakhir, lalu pilih ulang sesuai preferensi.
     val subCount = playback.subtitles.count { it.url.isNotBlank() }
     var builtSubs by remember(player) { mutableIntStateOf(subCount) }
     LaunchedEffect(subCount) {
@@ -781,7 +763,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 player.prepare()
                 player.playWhenReady = play
                 subReady = false
-                vm.toast(I18n.t("sub_added", "Subtitle added (auto-translated)"))
             }
         }
     }
@@ -1073,14 +1054,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (ds != dur) dur = ds
                 // 60 dtk terakhir: ambil data putar episode berikutnya di latar,
                 // supaya autoplay langsung mulai tanpa menunggu API.
-                // Terjemahan subtitle episode berikutnya disiapkan lebih awal (2 menit setelah mulai).
+                // Pemanasan data putar episode berikutnya dimulai lebih awal (2 menit setelah mulai).
                 if (!trPre && nextEp != null && sec >= 120) {
                     trPre = true
-                    launch {
-                        com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp)
-                        SubTranslate.prefetch(ctx, r.id, nextEp,
-                            SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl))
-                    }
+                    launch { com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp) }
                 }
                 if (!prefetched && nextEp != null && vm.s.settings.autoplay && ds - sec in 1..60) {
                     prefetched = true
@@ -1226,7 +1203,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     val commentsOn = com.onimeku.app.data.Comments.enabled
     val commentsUi = rememberCommentsUi(r.id)
     LaunchedEffect(r.id) { if (commentsOn) vm.loadComments(r.id) }
-    val scope = rememberCoroutineScope()
     val thumbSrc = remember { MutableInteractionSource() }
 
     Box(Modifier.fillMaxSize()) {
@@ -1642,18 +1618,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onSubAuto = {
             sheet = null; vm.setSettings { it.copy(subLang = "auto") }
             val n = SubLang.pick(subTracks, "auto", vm.s.settings.lang); applySub(n); vm.toast("Subtitles: Auto · ${subName(n)}")
-        },
-        onSubIdPending = {
-            // Pengguna menekan Indonesian padahal trek belum ada: terjemahkan SEKARANG (abaikan pengaturan otomatis/Wi-Fi),
-            // simpan preferensi, dan begitu selesai pemutar otomatis pindah ke Indonesian (lihat LaunchedEffect(subCount)).
-            sheet = null; vm.setSettings { it.copy(subLang = "id") }
-            vm.toast(I18n.t("sub_id_preparing", "Translating to Indonesian\u2026"))
-            scope.launch {
-                val opts = SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl)
-                val res = SubTranslate.fillIndonesian(ctx, r.id, r.ep, playback.subtitles, opts)
-                if (res.any { SubLang.code(it) == "id" }) onSubsTranslated(res)
-                else vm.toast(I18n.t("sub_id_unavailable", "Couldn't translate subtitles. Check your connection and try again."))
-            }
         },
         subSize = vm.s.settings.subSize, subBg = vm.s.settings.subBg,
         onSubSize = { v -> vm.setSettings { it.copy(subSize = v) } },

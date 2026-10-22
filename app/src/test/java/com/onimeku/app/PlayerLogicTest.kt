@@ -34,23 +34,23 @@ class PlayerLogicTest {
 
     @Test fun subtitleMenuOrderIsAutoEnglishIndonesianOthersOff() {
         val tracks = listOf(sub("ar", "Arabic"), sub("fr", "French"), sub("en", "English"))
-        // Indonesian belum ada -> tetap tampil tepat di bawah English; Off paling bawah
+        // Indonesian belum ada -> tidak ditawarkan sama sekali; Off paling bawah
         assertEquals(
-            listOf(SubMenuEntry.Auto, SubMenuEntry.Track(2), SubMenuEntry.IndonesianPending, SubMenuEntry.Track(0), SubMenuEntry.Track(1), SubMenuEntry.Off),
+            listOf(SubMenuEntry.Auto, SubMenuEntry.Track(2), SubMenuEntry.Track(0), SubMenuEntry.Track(1), SubMenuEntry.Off),
             SubLang.menu(tracks),
         )
     }
 
     @Test fun subtitleMenuUsesRealIndonesianTrackWhenPresent() {
-        val tracks = listOf(sub("id", "Indonesia (terjemahan)"), sub("en", "English"))
+        val tracks = listOf(sub("id", "Indonesian"), sub("en", "English"))
         assertEquals(
             listOf(SubMenuEntry.Auto, SubMenuEntry.Track(1), SubMenuEntry.Track(0), SubMenuEntry.Off),
             SubLang.menu(tracks),
         )
     }
 
-    @Test fun subtitleMenuWithNoTracksStillOffersIndonesianAndOff() {
-        assertEquals(listOf(SubMenuEntry.Auto, SubMenuEntry.IndonesianPending, SubMenuEntry.Off), SubLang.menu(emptyList()))
+    @Test fun subtitleMenuWithNoTracksIsAutoAndOff() {
+        assertEquals(listOf(SubMenuEntry.Auto, SubMenuEntry.Off), SubLang.menu(emptyList()))
     }
 
     @Test fun playbackOutroDefaultsToNull() {

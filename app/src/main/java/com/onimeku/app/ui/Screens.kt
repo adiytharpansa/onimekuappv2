@@ -914,14 +914,10 @@ fun DetailScreen(vm: AppVM, id: String) {
     LaunchedEffect(id) {
         // Tunggu animasi masuk selesai, baru pemanasan jaringan (di thread IO) — tidak berebut CPU/jaringan dengan transisi.
         delay(450)
-        val trOpts = SubTranslate.Opts(vm.s.settings.subTranslate, vm.s.settings.subTrWifi, vm.s.settings.subEngineUrl)
         val firstEp = a.available.firstOrNull() ?: 1
-        val target = resume?.ep ?: firstEp
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             com.onimeku.app.data.ApiClient.prefetchPlayback(id, firstEp)
             resume?.let { if (it.ep != firstEp) com.onimeku.app.data.ApiClient.prefetchPlayback(id, it.ep) }
-            // Siapkan terjemahan subtitle Indonesia/English selagi Detail dibaca.
-            SubTranslate.prefetch(trCtx, id, target, trOpts)
         }
     }
     // Muat-dulu segmen gudang (debug.60): sesudah data putar episode

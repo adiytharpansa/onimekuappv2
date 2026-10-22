@@ -52,10 +52,6 @@ data class Settings(
     val autoPip: Boolean = true,
     // Unduh otomatis episode berikutnya saat Wi-Fi (jaringan tak terukur) ketika episode berjalan >60%.
     val autoDlNext: Boolean = false,
-    // Terjemahan subtitle otomatis (Indonesia <-> English): aktif, hanya Wi-Fi, dan alamat server terjemahan opsional.
-    val subTranslate: Boolean = true,
-    val subTrWifi: Boolean = false,
-    val subEngineUrl: String = "",
 )
 
 @Serializable
