@@ -603,11 +603,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             )
             .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         // Start cepat + tahan jaringan seluler goyah: mulai putar setelah 1,5 dtk
-        // terbuffer (bawaan 2,5), pulih dari rebuffer di 4 dtk (bawaan 5), buffer
-        // maju hingga 50 dtk, sisakan 20 dtk ke belakang agar seek mundur/ketuk
+        // terbuffer (bawaan 2,5), pulih dari rebuffer di 5 dtk (debug.64; dulu 4 — kini
+        // jeda macet lebih jarang berulang), buffer maju hingga 60 dtk (min 30), sisakan 20 dtk ke belakang agar seek mundur/ketuk
         // dua kali -10 dtk tidak mengunduh ulang segmen.
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
-            .setBufferDurationsMs(20_000, 50_000, 1_500, 4_000)
+            .setBufferDurationsMs(30_000, 60_000, 1_500, 5_000)
             .setBackBuffer(20_000, true)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -957,12 +957,19 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { wantPlay = playWhenReady; vm.playing = playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
                 // Galat jaringan sesaat saat sudah memutar: coba lanjutkan di tempat (maks 3x) sebelum menjatuhkan ke jalur cadangan.
+                // debug.64: dulu hanya CONNECTION_FAILED/TIMEOUT. Segmen yang gagal dengan 5xx/429, galat IO tak spesifik
+                // (koneksi putus di tengah baca), dan TIMEOUT umum juga sesaat -> ikut dicoba ulang di tempat. 4xx lain
+                // (403/404: token/segmen mati) tetap langsung ke rantai cadangan.
+                val httpCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                 val transient = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+                    error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT ||
+                    (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS && httpCode != null && (httpCode >= 500 || httpCode == 429))
                 if (transient && wasReady && netRetry < 3) {
                     netRetry++; buffering = true
-                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} galat jaringan sesaat, coba lagi #$netRetry")
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (!disposed) player.prepare() }, 1500L * netRetry)
+                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} galat sesaat ${error.errorCodeName}${httpCode?.let { " http=$it" } ?: ""}, coba lagi #$netRetry")
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (!disposed) player.prepare() }, 1000L * netRetry)
                     return
                 }
                 vm.resumeMs = "${r.id}:${r.ep}" to player.currentPosition
@@ -982,6 +989,29 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
             player.release()
             vm.playing = false
+        }
+    }
+
+    // debug.64 — pengawas macet. Dulu buffering yang menggantung tanpa galat (koneksi setengah mati) hanya
+    // berakhir setelah timeout baca OkHttp 25 dtk, dan sesudahnya tak ada yang menurunkan beban. Kini, bila video
+    // sudah pernah tampil lalu menunggu data terus-menerus: 12 dtk -> minta ulang segmen di posisi yang sama
+    // (seek ke posisi sekarang); 15 dtk berikutnya -> turunkan kualitas satu tingkat (sesi ini saja, pengaturan
+    // tidak diubah) + siapkan ulang sumber; sekali lagi bila belum pulih. Maks 3 siklus per kemacetan.
+    LaunchedEffect(player, buffering, rendered) {
+        if (!buffering || !rendered) return@LaunchedEffect
+        var tries = 0
+        while (tries < 3) {
+            delay(if (tries == 0) 12_000L else 15_000L)
+            if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@LaunchedEffect
+            tries++
+            val lower = heights.filter { it < playingH }.maxOrNull()
+            if (tries >= 2 && lower != null) {
+                applyQuality("${lower}p")
+                vm.toast("Slow connection · switched to ${lower}p")
+            }
+            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} macet >${if (tries == 1) 12 else 12 + 15 * (tries - 1)}s, pulihkan #$tries (tinggi=$playingH, turun=${lower ?: 0})")
+            player.seekTo(player.currentPosition)
+            if (tries >= 2) player.prepare()
         }
     }
 

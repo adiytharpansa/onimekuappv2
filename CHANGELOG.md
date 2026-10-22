@@ -1,3 +1,9 @@
+# v1.0.0-debug.65 (belum dikompilasi): Stream macet
+**Belum dikompilasi/dijalankan.** Perubahan di `ui/PlayerScreen.kt`.
+- Pengawas macet baru: setelah video pernah tampil, buffering terus-menerus 12 dtk -> minta ulang segmen di posisi yang sama; 15 dtk lagi -> turunkan kualitas satu tingkat (hanya sesi ini) + `prepare()` ulang; maks 3 siklus per kemacetan. Dicatat ke CrashLog ("player ... macet").
+- Coba-ulang di tempat saat sudah memutar diperluas: selain CONNECTION_FAILED/TIMEOUT kini juga IO_UNSPECIFIED, TIMEOUT, dan segmen HTTP 5xx/429; jeda 1/2/3 dtk (dulu 1,5/3/4,5). 403/404 tetap langsung ke rantai cadangan.
+- Buffer: min 30 dtk / maks 60 dtk, pulih rebuffer di 5 dtk (dulu 20/50/4).
+
 # v1.0.0-debug.64 (belum dikompilasi): Subtitle tidak muncul saat stream
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` dulu. Semua perubahan di `ui/PlayerScreen.kt`.
 - **Efek pemulihan trek tidak pernah jalan** (debug.62/.63): `subRecoverTried` adalah state sekaligus kunci `LaunchedEffect`; efek menulisnya di baris pertama sehingga Compose membatalkan korutin itu di `delay` pertama dan memulai ulang efek yang langsung keluar. Kini flag biasa (`booleanArrayOf`) dan kunci efek hanya `needSubs`.
