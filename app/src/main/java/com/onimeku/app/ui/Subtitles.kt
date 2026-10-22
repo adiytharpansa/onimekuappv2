@@ -111,6 +111,14 @@ object SubLang {
         }
         return tracks.indexOfFirst { !isPartial(it) }.takeIf { it >= 0 } ?: 0
     }
+
+    /**
+     * Pilihan setelah trek dipasang ulang (mis. karena geseran waktu). [keep] = daftar trek tidak berubah, jadi
+     * pilihan [current] (-1 = mati) dipertahankan apa adanya; selain itu dipilih ulang lewat [pick].
+     * Tanpa ini, pilihan "English · SDH" / "Signs & Songs" selalu kembali ke trek dialog pertama.
+     */
+    fun restore(keep: Boolean, current: Int, tracks: List<ApiSubtitle>, pref: String, appLang: String): Int =
+        if (keep && current >= -1 && current < tracks.size) current else pick(tracks, pref, appLang)
 }
 
 @Composable

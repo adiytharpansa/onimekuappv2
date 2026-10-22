@@ -808,6 +808,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // ke 0 trek samping dilepas dan trek manifest dipakai lagi.
     val subOffsetNow = vm.s.settings.subOffsetByTitle[r.id] ?: 0
     var appliedOffset by remember(r) { mutableIntStateOf(if (playback.source == "gudang" && !offline) 0 else subOffsetNow) }
+    // Pasang ulang karena geseran: daftar trek sama persis, jadi pilihan pengguna (mis. "English · SDH") harus dipertahankan,
+    // bukan dihitung ulang dari preferensi bahasa (yang selalu jatuh ke trek pertama bahasa itu).
+    var keepSel by remember(r) { mutableStateOf(false) }
     fun reattachSubs(configs: List<MediaItem.SubtitleConfiguration>) {
         val cur = player.currentMediaItem ?: return
         val pos = player.currentPosition
@@ -817,6 +820,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (sf != null) player.setMediaSource(sf.createMediaSource(item), pos) else player.setMediaItem(item, pos)
         player.prepare()
         player.playWhenReady = play
+        keepSel = subReady
         subReady = false
     }
     LaunchedEffect(subOffsetNow) {
@@ -1058,9 +1062,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (!subReady && tracks.groups.any { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }) {
                     subReady = true
                     val pref = vm.s.settings.subLang
-                    val pick = SubLang.pick(subTracks, pref, vm.s.settings.lang)
+                    val kept = keepSel
+                    keepSel = false
+                    val pick = SubLang.restore(kept, subIdx, subTracks, pref, vm.s.settings.lang)
                     // Bahasa pilihan tidak tersedia di episode ini -> beri tahu, lalu pakai bahasa cadangan.
-                    if (pref != "auto" && pref != "off" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
+                    // (Tidak diulang saat trek hanya dipasang ulang karena geseran.)
+                    if (!kept && pref != "auto" && pref != "off" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
                         vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
                     applySub(pick)
                 } else if (subReady && subIdx >= 0 && !subLocalApplied && tracks.groups.any { isLocalSubtitleGroup(it) }) {

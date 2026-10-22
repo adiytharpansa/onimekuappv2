@@ -56,4 +56,14 @@ class SubtitleLogicTest {
         assertEquals("Indonesian", SubLang.display(sub("id", "Indonesian"), 2))
         assertEquals("Arabic", SubLang.display(sub("ar", "Arabic"), 3))
     }
+    @Test fun restoreKeepsUserChoiceAfterReattach() {
+        val tracks = listOf(sub("en", "English"), sub("en", "English (SDH)"), sub("id", "Indonesian"))
+        // Pengguna memilih "English (SDH)"; pasang ulang karena geseran tidak boleh mengembalikannya ke trek pertama.
+        assertEquals(1, SubLang.restore(true, 1, tracks, "en", "en"))
+        assertEquals(-1, SubLang.restore(true, -1, tracks, "auto", "en"))   // sengaja dimatikan tetap mati
+        // Tanpa keep (muat pertama / daftar trek berubah): ikut preferensi.
+        assertEquals(0, SubLang.restore(false, 1, tracks, "en", "en"))
+        // Indeks di luar daftar -> jatuh ke preferensi.
+        assertEquals(2, SubLang.restore(true, 9, tracks, "id", "en"))
+    }
 }
