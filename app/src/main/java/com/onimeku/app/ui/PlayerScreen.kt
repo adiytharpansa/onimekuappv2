@@ -262,6 +262,7 @@ private suspend fun localizeSubtitles(
     r: Route.Player,
     ready: com.onimeku.app.data.Playback,
     budgetMs: Long? = null,
+    offsetMs: Int = 0,
 ): com.onimeku.app.data.Playback {
     if (ready.subtitles.isEmpty()) return ready
     val isGudangPb = ready.source == "gudang"
@@ -286,7 +287,39 @@ private suspend fun localizeSubtitles(
             }
         }.awaitAll().filterNotNull()
     }
-    return ready.copy(subtitles = loaded)
+    return ready.copy(subtitles = if (offsetMs != 0) withSubOffset(loaded, offsetMs) else loaded)
+}
+
+/**
+ * Sinkronisasi subtitle: pasang berkas lokal yang waktunya digeser [offsetMs] (lihat [SubSync]). Berkas asli tidak
+ * diubah; hasil geseran di-cache di sebelahnya (".s<ms>") sehingga ketukan berulang pada nilai yang sama murah.
+ * Trek yang bukan berkas lokal (URL pintu gudang) dikembalikan apa adanya. 0 = kembali ke berkas asli.
+ */
+private suspend fun withSubOffset(
+    subs: List<com.onimeku.app.data.ApiSubtitle>, offsetMs: Int,
+): List<com.onimeku.app.data.ApiSubtitle> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    subs.map { s ->
+        try {
+            val uri = android.net.Uri.parse(s.url)
+            val path = if (uri.scheme == "file") uri.path else null
+            if (path == null) return@map s
+            val orig = SubSync.originalPath(path)
+            val target = SubSync.targetPath(orig, offsetMs)
+            val src = java.io.File(orig)
+            if (!src.exists()) return@map s
+            val tf = java.io.File(target)
+            if (offsetMs != 0 && (!tf.exists() || tf.length() == 0L)) {
+                val shifted = SubSync.shift(src.readText(Charsets.UTF_8), ".${src.extension}", offsetMs)
+                val tmp = java.io.File("$target.tmp")
+                tmp.writeText(shifted, Charsets.UTF_8)
+                if (!tmp.renameTo(tf)) { tf.writeText(shifted, Charsets.UTF_8); tmp.delete() }
+            }
+            s.copy(url = android.net.Uri.fromFile(tf).toString())
+        } catch (e: Exception) {
+            com.onimeku.app.data.CrashLog.note("subs", "geser subtitle ${s.lang} gagal (${e.javaClass.simpleName})")
+            s
+        }
+    }
 }
 
 @Composable
@@ -390,7 +423,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // daftar payload (en/id) hanya menjadi model menu, URL-nya
             // tidak diunduh dan tidak ditempel ke pemutar.
             if (ready.subtitles.isNotEmpty() && ready.source != "gudang") {
-                ready = localizeSubtitles(ctx, r, ready)
+                ready = localizeSubtitles(ctx, r, ready, offsetMs = vm.s.settings.subOffsetByTitle[r.id] ?: 0)
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
             settle()
@@ -442,7 +475,7 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
                 com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} pemulihan trek: percobaan ${i + 1} belum berhasil")
                 continue
             }
-            val prepared = localizeSubtitles(ctx, r, fresh, budgetMs = 20_000L)
+            val prepared = localizeSubtitles(ctx, r, fresh, budgetMs = 20_000L, offsetMs = vm.s.settings.subOffsetByTitle[r.id] ?: 0)
             if (prepared.subtitles.isEmpty()) continue
             pb = (pb ?: cur).copy(subtitles = prepared.subtitles)
             com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} trek dipulihkan: ${prepared.subtitles.size} trek (percobaan ${i + 1})")
@@ -755,6 +788,30 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 subReady = false
             }
         }
+    }
+    // Geseran waktu subtitle per judul (menu Subtitle -> Sinkronisasi). Berkas lokal ditulis ulang oleh [withSubOffset],
+    // lalu trek dipasang ulang ke item yang sama dari posisi yang sama. Putar gudang daring memakai trek manifest HLS
+    // yang tidak bisa ditulis ulang, jadi dilewati (menu tetap menyimpan nilainya untuk putar lain).
+    val subOffsetNow = vm.s.settings.subOffsetByTitle[r.id] ?: 0
+    var appliedOffset by remember(r) { mutableIntStateOf(subOffsetNow) }
+    LaunchedEffect(subOffsetNow) {
+        if (subOffsetNow == appliedOffset) return@LaunchedEffect
+        delay(400) // ketukan beruntun digabung: pasang ulang sekali saja
+        appliedOffset = subOffsetNow
+        if (playback.source == "gudang" && !offline) return@LaunchedEffect
+        val shifted = withSubOffset(playback.subtitles, subOffsetNow)
+        if (shifted.map { it.url } == playback.subtitles.map { it.url }) return@LaunchedEffect
+        val next = playback.copy(subtitles = shifted)
+        pb = next
+        val cur = player.currentMediaItem ?: return@LaunchedEffect
+        val pos = player.currentPosition
+        val play = player.playWhenReady
+        val item = cur.buildUpon().setSubtitleConfigurations(subConfigs(next)).build()
+        val sf = srcFactory[0]
+        if (sf != null) player.setMediaSource(sf.createMediaSource(item), pos) else player.setMediaItem(item, pos)
+        player.prepare()
+        player.playWhenReady = play
+        subReady = false
     }
     // Menu pengaturan ala YouTube (roda gigi): null = tertutup, "main" | "quality" | "subs" | "speed" | "audio".
     var sheet by remember { mutableStateOf<String?>(null) }
@@ -1695,6 +1752,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         subColor = vm.s.settings.subColor, subSystem = vm.s.settings.subSystem,
         onSubColor = { v -> vm.setSettings { it.copy(subColor = v) } },
         onSubSystem = { v -> vm.setSettings { it.copy(subSystem = v) } },
+        subOffsetMs = subOffsetNow,
+        subSyncSupported = !(playback.source == "gudang" && !offline),
+        onSubOffset = { v -> vm.setSettings { it.copy(subOffsetByTitle = SubSync.remember(it.subOffsetByTitle, r.id, v)) } },
         autoplay = vm.s.settings.autoplay, onAutoplay = { v -> vm.setSettings { it.copy(autoplay = v) }; vm.toast("${I18n.t("autoplay_next", "Autoplay next")}: ${if (v) "On" else "Off"}") },
         speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
         audioLabels = audioLabels, audioKeys = audioKeys, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}") },

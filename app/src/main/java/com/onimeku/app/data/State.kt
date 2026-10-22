@@ -59,6 +59,8 @@ data class Settings(
     // Warna teks subtitle: "white" | "yellow". subSystem = ikuti gaya teks-tayang (captioning) sistem Android.
     val subColor: String = "white",
     val subSystem: Boolean = false,
+    // Geseran waktu subtitle per judul (id anime -> milidetik; + = teks muncul lebih lambat). Maks. 200 judul terakhir.
+    val subOffsetByTitle: Map<String, Int> = emptyMap(),
     // Petunjuk gestur di halaman pemutar: tampil sampai ditutup/20 dtk menonton, lalu tidak muncul lagi.
     val gestureHintSeen: Boolean = false,
     // Picture-in-picture otomatis saat menekan Home/gestur home ketika video diputar (seperti YouTube).

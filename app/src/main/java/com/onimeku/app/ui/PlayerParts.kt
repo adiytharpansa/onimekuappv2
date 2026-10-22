@@ -177,6 +177,7 @@ internal fun PlayerSettingsSheet(
     onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
     subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
     subColor: String = "white", subSystem: Boolean = false, onSubColor: (String) -> Unit = {}, onSubSystem: (Boolean) -> Unit = {},
+    subOffsetMs: Int = 0, subSyncSupported: Boolean = true, onSubOffset: (Int) -> Unit = {},
     speed: Float, onSpeed: (Float) -> Unit,
     autoplay: Boolean = true, onAutoplay: (Boolean) -> Unit = {},
     audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit, audioKeys: List<String> = emptyList(),
@@ -239,6 +240,29 @@ internal fun PlayerSettingsSheet(
                             Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
                             SheetRowItem(Icons.Filled.FormatSize, I18n.t("sub_style", "Subtitle style"),
                                 if (subSystem) I18n.t("sub_sys_short", "System") else sizeNames.firstOrNull { it.first == subSize }?.second ?: I18n.t("normal", "Normal")) { onPage("substyle") }
+                            SheetRowItem(Icons.Filled.Schedule, I18n.t("sub_sync", "Subtitle sync"), SubSync.label(subOffsetMs)) { onPage("subsync") }
+                        }
+                        "subsync" -> {
+                            SheetHeader(I18n.t("sub_sync", "Subtitle sync")) { onPage("subs") }
+                            Text(
+                                SubSync.label(subOffsetMs),
+                                Modifier.fillMaxWidth().padding(horizontal = Sp.S20, vertical = Sp.S8),
+                                fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                            Text(
+                                if (subSyncSupported) I18n.t("sub_sync_hint", "Text shows too early? Tap + to delay it. Too late? Tap − to bring it forward. Saved for this title.")
+                                else I18n.t("sub_sync_na", "This source uses built-in subtitles that can't be shifted."),
+                                Modifier.fillMaxWidth().padding(horizontal = Sp.S20, vertical = Sp.S4),
+                                fontSize = Ty.Small, color = NavOff,
+                            )
+                            if (subSyncSupported) {
+                                SheetOption("− 0.5 s", false) { onSubOffset(SubSync.clamp(subOffsetMs - SubSync.STEP_COARSE)) }
+                                SheetOption("− 0.1 s", false) { onSubOffset(SubSync.clamp(subOffsetMs - SubSync.STEP_FINE)) }
+                                SheetOption("+ 0.1 s", false) { onSubOffset(SubSync.clamp(subOffsetMs + SubSync.STEP_FINE)) }
+                                SheetOption("+ 0.5 s", false) { onSubOffset(SubSync.clamp(subOffsetMs + SubSync.STEP_COARSE)) }
+                                SheetOption(I18n.t("sub_sync_reset", "Reset"), subOffsetMs == 0) { onSubOffset(0) }
+                            }
                         }
                         "substyle" -> {
                             SheetHeader(I18n.t("sub_style", "Subtitle style")) { onPage("subs") }
