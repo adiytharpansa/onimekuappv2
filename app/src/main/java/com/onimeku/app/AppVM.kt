@@ -728,6 +728,12 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         Downloads.setWifiOnly(app, s.settings.wifi)
     }
 
+    /** Kembalikan pengaturan ke bawaan; bahasa antarmuka, petunjuk gestur, dan dubbing per judul dipertahankan. */
+    fun resetSettings() {
+        setSettings { Settings(lang = it.lang, gestureHintSeen = it.gestureHintSeen, dubByTitle = it.dubByTitle) }
+        toast(I18n.t("settings_reset_done", "Settings reset"))
+    }
+
     // ---------- profiles ----------
     fun switchProfile(i: Int) {
         if (i !in s.profiles.indices) return

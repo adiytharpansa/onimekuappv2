@@ -1,3 +1,11 @@
+# Penyempurnaan layar Settings, Help, About (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/ProfileScreens.kt`, `AppVM.kt`, `I18n.kt`.
+- **Pengaturan baru di layar Settings:** Kualitas bawaan (Auto/1080p/720p/480p); grup Subtitle (bahasa bawaan, ukuran, warna, latar gelap, gaya sistem + pratinjau langsung); grup Penyimpanan (ringkasan unduhan + Hapus semua dengan konfirmasi); tombol Atur ulang pengaturan (bahasa, daftar, unduhan, dubbing per judul tetap). Sebelumnya opsi subtitle/kualitas hanya bisa diubah dari dalam pemutar.
+- **Bug UX: "Auto-skip intro" tampak bisa dipakai padahal tidak berefek** saat "Skip intro" mati (`SkipLogic.autoSkipTarget` mensyaratkan keduanya). Kini redup dan tidak bisa diubah sampai Skip intro aktif.
+- **Sakelar:** seluruh baris bisa diketuk dan dibaca TalkBack sebagai satu sakelar (dulu hanya kenop kecil).
+- **Help:** FAQ dikoreksi (dulu menyebut "tab Download" yang kini ada di Profil > Unduhan) dan ditambah FAQ profil + subtitle; semua teks Help/About/notifikasi uji kini punya terjemahan Indonesia (dulu hard-coded Inggris).
+- Rollback cepat: kembalikan `ui/ProfileScreens.kt`, `AppVM.kt`, `I18n.kt` dari versi sebelumnya.
+
 # Penyempurnaan layar Search (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/Screens.kt`, `AppVM.kt`, `I18n.kt`, berkas baru `data/SearchLogic.kt` + tes `SearchLogicTest.kt`.
 - **Pencarian lebih pintar:** semua kata kueri harus cocok tetapi urutan bebas ("titan attack" menemukan "Attack on Titan"); aksen dan tanda baca diabaikan ("pokemon" = "Pokémon", "rezero" = "Re:Zero"); genre ikut dicari. Dulu hanya pencocokan substring persis.

@@ -5,9 +5,11 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -244,16 +247,33 @@ private fun ChoiceRow(title: String, desc: String, options: List<Pair<String, St
 }
 
 @Composable
-private fun SwitchRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S12), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
+private fun SwitchRow(title: String, desc: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    // Seluruh baris bisa diketuk (target besar) dan dibaca TalkBack sebagai satu sakelar.
+    Row(Modifier.fillMaxWidth().toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+        .padding(horizontal = Sp.S16, vertical = Sp.S12).graphicsAlpha(if (enabled) 1f else 0.45f),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium)
             Text(desc, fontSize = Ty.Small, color = NavOff, modifier = Modifier.padding(top = Sp.S2))
         }
-        Switch(checked, onChange, colors = SwitchDefaults.colors(
+        Switch(checked, null, enabled = enabled, colors = SwitchDefaults.colors(
             checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
-            uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50)))
+            uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50),
+            disabledCheckedThumbColor = Color.White, disabledCheckedTrackColor = Red, disabledUncheckedThumbColor = Color.White, disabledUncheckedTrackColor = Color(0xFF3A3E50)))
+    }
+}
+
+private fun Modifier.graphicsAlpha(a: Float): Modifier = if (a >= 1f) this else this.then(Modifier.graphicsLayer { alpha = a })
+
+/** Contoh teks subtitle dengan gaya terpilih (warna, ukuran, latar). */
+@Composable
+private fun SubPreview(set: com.onimeku.app.data.Settings) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S12).height(84.dp).clip(RoundedCornerShape(14.dp))
+        .background(Brush.verticalGradient(listOf(Color(0xFF2B3350), Color(0xFF12141C)))), contentAlignment = Alignment.BottomCenter) {
+        if (set.subSystem) Text(I18n.t("sub_sys_d", "Follows Android caption settings (size, color, edge)."), Modifier.padding(Sp.S12), fontSize = Ty.Small, color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        else Text(I18n.t("sub_preview", "Sample subtitle text"),
+            Modifier.padding(bottom = Sp.S12).let { if (set.subBg) it.background(Color(0xB3000000)).padding(horizontal = Sp.S8, vertical = Sp.S2) else it },
+            fontSize = (15f * subScaleOf(set.subSize)).sp, color = Color(subColorOf(set.subColor)), fontWeight = FontWeight.Medium)
     }
 }
 
@@ -274,11 +294,18 @@ fun SubScreen(vm: AppVM, key: String) {
                     HLine()
                     SwitchRow(I18n.t("skip_intro_t", "Skip intro"), I18n.t("skip_intro_d", "Show a button to skip opening songs."), set.skipIntro) { v -> vm.setSettings { it.copy(skipIntro = v) } }
                     HLine()
-                    SwitchRow(I18n.t("auto_skip_t", "Auto-skip intro"), I18n.t("auto_skip_d", "Jump past the opening automatically when the episode has intro markers."), set.autoSkipIntro) { v -> vm.setSettings { it.copy(autoSkipIntro = v) } }
+                    // Lompat otomatis hanya bekerja bila tombol lewati intro aktif (lihat SkipLogic.autoSkipTarget).
+                    SwitchRow(I18n.t("auto_skip_t", "Auto-skip intro"), I18n.t("auto_skip_d", "Jump past the opening automatically when the episode has intro markers."), set.autoSkipIntro, enabled = set.skipIntro) { v -> vm.setSettings { it.copy(autoSkipIntro = v) } }
                     HLine()
                     SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
                     HLine()
                     SwitchRow(I18n.t("pip_t", "Picture-in-picture"), I18n.t("pip_d", "Keep watching in a small window when you press Home while a video is playing."), set.autoPip) { v -> vm.setSettings { it.copy(autoPip = v) } }
+                    HLine()
+                    ChoiceRow(
+                        I18n.t("quality_def_t", "Default quality"), I18n.t("quality_def_d", "Auto adapts to your connection. A fixed quality is used when the episode has it."),
+                        listOf("Auto", "1080p", "720p", "480p").let { base -> if (set.quality !in base) base + set.quality else base }.map { it to it },
+                        set.quality,
+                    ) { k -> vm.setSettings { it.copy(quality = k) } }
                     HLine()
                     ChoiceRow(
                         I18n.t("dub_def_t", "Default dubbing"), I18n.t("dub_def_d", "Used automatically when an episode offers that audio track."),
@@ -289,6 +316,32 @@ fun SubScreen(vm: AppVM, key: String) {
                         set.dubLang,
                     ) { k -> vm.setSettings { it.copy(dubLang = k) } }
                 }
+                Grp(I18n.t("subtitles", "Subtitles"))
+                CardBox {
+                    ChoiceRow(
+                        I18n.t("sub_def_t", "Default subtitle language"), I18n.t("sub_def_d", "Auto follows the app language. Used when the episode has that track."),
+                        listOf("auto" to "Auto", "id" to I18n.t("dub_id", "Indonesian"), "en" to I18n.t("dub_en", "English"), "off" to I18n.t("ctl_off", "Off")).let { base ->
+                            if (set.subLang !in base.map { it.first }) base + (set.subLang to (dubLangName(set.subLang) ?: set.subLang)) else base
+                        },
+                        set.subLang,
+                    ) { k -> vm.setSettings { it.copy(subLang = k) } }
+                    HLine()
+                    ChoiceRow(
+                        I18n.t("sub_size_t", "Subtitle size"), I18n.t("sub_size_d", "Applies to the player's subtitles."),
+                        listOf("small" to I18n.t("sub_sz_small", "Small"), "normal" to I18n.t("normal", "Normal"), "large" to I18n.t("sub_sz_large", "Large"), "xl" to I18n.t("sub_sz_xl", "Extra large")),
+                        set.subSize,
+                    ) { k -> vm.setSettings { it.copy(subSize = k) } }
+                    HLine()
+                    ChoiceRow(
+                        I18n.t("sub_color_t", "Subtitle color"), I18n.t("sub_color_d", "Text color for subtitles."),
+                        listOf("white" to I18n.t("sub_c_white", "White"), "yellow" to I18n.t("sub_c_yellow", "Yellow")), set.subColor,
+                    ) { k -> vm.setSettings { it.copy(subColor = k) } }
+                    HLine()
+                    SwitchRow(I18n.t("sub_bg", "Black background"), I18n.t("sub_bg_d", "Put a dark box behind the text for easier reading."), set.subBg) { v -> vm.setSettings { it.copy(subBg = v) } }
+                    HLine()
+                    SwitchRow(I18n.t("sub_sys_t", "Use system caption style"), I18n.t("sub_sys_d", "Follows Android caption settings (size, color, edge)."), set.subSystem) { v -> vm.setSettings { it.copy(subSystem = v) } }
+                    SubPreview(set)
+                }
                 Grp(I18n.t("grp_data", "Data and alerts"))
                 CardBox {
                     SwitchRow(I18n.t("wifi_only_t", "Stream over Wi-Fi only"), I18n.t("wifi_only_d", "Avoid using mobile data."), set.wifi) { v -> vm.setSettings { it.copy(wifi = v) } }
@@ -297,9 +350,37 @@ fun SubScreen(vm: AppVM, key: String) {
                     HLine()
                     SwitchRow(I18n.t("alerts_t", "New episode alerts"), I18n.t("alerts_d", "Get notified when your list updates."), set.alerts) { v ->
                         vm.setSettings { it.copy(alerts = v) }
-                        if (v) ensure { g -> if (g) Notifier.show(ctx, "Alerts on", "You will get new episode and reminder alerts") }
+                        if (v) ensure { g -> if (g) Notifier.show(ctx, I18n.t("alerts_on_t", "Alerts on"), I18n.t("alerts_on_d", "You will get new episode and reminder alerts")) }
                     }
                 }
+                // Penyimpanan: ringkasan unduhan + hapus semua (dengan konfirmasi).
+                Grp(I18n.t("grp_storage", "Storage"))
+                var confirmDl by rememberSaveable { mutableStateOf(false) }
+                var confirmReset by rememberSaveable { mutableStateOf(false) }
+                CardBox {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S12), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(I18n.t("tab_download", "Download"), fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium)
+                            Text(if (vm.s.downloads.isEmpty()) I18n.t("dl_profile_empty", "Watch offline") else "${vm.s.downloads.size} ${I18n.t("dl_saved", "episodes saved")}", fontSize = Ty.Small, color = NavOff, modifier = Modifier.padding(top = Sp.S2))
+                        }
+                        if (vm.s.downloads.isNotEmpty()) Chip(I18n.t("dl_delete_all", "Delete all")) { confirmDl = true }
+                    }
+                }
+                Box(Modifier.padding(top = Sp.S24)) { Btn(I18n.t("reset_settings", "Reset settings"), BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { confirmReset = true } }
+                if (confirmDl) androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { confirmDl = false },
+                    title = { Text(I18n.t("dl_delete_all_t", "Delete all downloads?")) },
+                    text = { Text(I18n.t("dl_delete_all_b", "Saved episodes will be removed from this device. You can download them again later.")) },
+                    confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmDl = false; vm.removeAllDl() }) { Text(I18n.t("prof_delete_confirm", "Delete"), color = RedText) } },
+                    dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmDl = false }) { Text(I18n.t("prof_cancel", "Cancel")) } },
+                )
+                if (confirmReset) androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { confirmReset = false },
+                    title = { Text(I18n.t("reset_settings_t", "Reset settings?")) },
+                    text = { Text(I18n.t("reset_settings_b", "Playback, subtitle and alert options go back to their defaults. Your language, lists and downloads are kept.")) },
+                    confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmReset = false; vm.resetSettings() }) { Text(I18n.t("reset", "Reset"), color = RedText) } },
+                    dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmReset = false }) { Text(I18n.t("prof_cancel", "Cancel")) } },
+                )
             }
             "language" -> {
                 Text(I18n.t("choose_language", "Choose the language used in the app."), Modifier.padding(start = Sp.S4, bottom = Sp.S16), color = InkSoft)
@@ -322,14 +403,16 @@ fun SubScreen(vm: AppVM, key: String) {
                 }
             }
             "help" -> {
-                Text("Quick answers to common questions.", Modifier.padding(start = Sp.S4, bottom = Sp.S16), color = InkSoft)
+                Text(I18n.t("help_intro", "Quick answers to common questions."), Modifier.padding(start = Sp.S4, bottom = Sp.S16), color = InkSoft)
                 CardBox {
                     val faq = listOf(
-                        "How do I watch an episode offline?" to "Open the Download tab and save an episode while you are online. Saved episodes stay there until you remove them.",
-                        "How do I add an anime to My List?" to "Tap the My List button on the anime you like. It will be saved in the My List tab.",
-                        "An episode will not play. What can I do?" to "Check your connection, then lower the video quality with the gear icon in the player. If it still fails, close the app and open it again.",
-                        "Why is some quality missing?" to "Not every episode is available in every quality. Auto picks the best one for your connection.",
-                        "How do I get new episode alerts?" to "Turn on New episode alerts in Settings. You will be told when something in your list updates.",
+                        I18n.t("faq_q1", "How do I watch an episode offline?") to I18n.t("faq_a1", "Tap Download on the episode page while you are online. Find saved episodes in Profile > Download; they stay there until you remove them."),
+                        I18n.t("faq_q2", "How do I add an anime to My List?") to I18n.t("faq_a2", "Tap the My List button on the anime you like. It will be saved in the My List tab, where you can filter and sort it."),
+                        I18n.t("faq_q3", "An episode will not play. What can I do?") to I18n.t("faq_a3", "Check your connection, then lower the video quality with the gear icon in the player. If it still fails, use Report a problem, or close the app and open it again."),
+                        I18n.t("faq_q4", "Why is some quality missing?") to I18n.t("faq_a4", "Not every episode is available in every quality. Auto picks the best one for your connection."),
+                        I18n.t("faq_q5", "How do I get new episode alerts?") to I18n.t("faq_a5", "Turn on New episode alerts in Settings, or tap the bell on an episode in the Calendar for a reminder before it airs."),
+                        I18n.t("faq_q6", "Can several people share one device?") to I18n.t("faq_a6", "Yes. Add up to 4 profiles in Profile. Each has its own My List, progress and stats."),
+                        I18n.t("faq_q7", "How do I change the subtitles?") to I18n.t("faq_a7", "Tap CC in the player to pick a track. Set the default language, size and color in Settings > Subtitles."),
                     )
                     faq.forEachIndexed { i, (qq, aa) ->
                         if (i > 0) HLine()
@@ -349,10 +432,10 @@ fun SubScreen(vm: AppVM, key: String) {
                     Logo(56.dp)
                     Column {
                         Text("Onimeku", fontSize = Ty.Head, fontWeight = FontWeight.SemiBold)
-                        Text("Version ${com.onimeku.app.BuildConfig.VERSION_NAME}", color = NavOff)
+                        Text("${I18n.t("version", "Version")} ${com.onimeku.app.BuildConfig.VERSION_NAME}", color = NavOff)
                     }
                 }
-                Text("Onimeku is a place to watch anime online. Browse top hits, follow new episodes, and keep a list of what you want to watch next.",
+                Text(I18n.t("about_body", "Onimeku is a place to watch anime online. Browse top hits, follow new episodes, and keep a list of what you want to watch next."),
                     Modifier.padding(start = Sp.S4, bottom = Sp.S16), color = InkSoft)
                 CardBox {
                     val ctxA = androidx.compose.ui.platform.LocalContext.current
@@ -365,11 +448,11 @@ fun SubScreen(vm: AppVM, key: String) {
                         }
                         ctxA.startActivity(android.content.Intent.createChooser(send, "Send diagnostics").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     }.padding(horizontal = Sp.S16, vertical = Sp.S16), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Send diagnostics", Modifier.weight(1f), fontSize = Ty.Subtitle)
+                        Text(I18n.t("send_diag", "Send diagnostics"), Modifier.weight(1f), fontSize = Ty.Subtitle)
                         Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
                     }
                     HLine()
-                    listOf("terms" to "Terms of Service", "privacy" to "Privacy Policy", "licenses" to "Licenses").forEachIndexed { i, (k2, l) ->
+                    listOf("terms" to I18n.t("terms", "Terms of Service"), "privacy" to I18n.t("privacy", "Privacy Policy"), "licenses" to I18n.t("licenses", "Licenses")).forEachIndexed { i, (k2, l) ->
                         if (i > 0) HLine()
                         Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k2)) }.padding(horizontal = Sp.S16, vertical = Sp.S16),
                             verticalAlignment = Alignment.CenterVertically) {
