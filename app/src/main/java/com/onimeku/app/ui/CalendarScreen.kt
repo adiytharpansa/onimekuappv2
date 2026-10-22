@@ -3,6 +3,7 @@ package com.onimeku.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -62,7 +69,6 @@ private val DOT_Y = 16.dp
 fun CalendarScreen(vm: AppVM) {
     val ensure = LocalEnsureNotif.current
     val zone = remember { ZoneId.systemDefault() }
-    val days = remember { (0..6).map { LocalDate.now().plusDays(it.toLong()) } }
     var onlyList by rememberSaveable { mutableStateOf(false) }
     var jumped by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.loadSchedule() }
@@ -71,6 +77,16 @@ fun CalendarScreen(vm: AppVM) {
     val nowSec by produceState(System.currentTimeMillis() / 1000) {
         while (true) { delay(30_000); value = System.currentTimeMillis() / 1000 }
     }
+    // Tanggal "hari ini" ikut jam; dulu dibekukan saat layar pertama dibuat sehingga lewat tengah malam
+    // chip tanggal dan penanda "hari ini" salah sampai aplikasi dimulai ulang.
+    val today = Instant.ofEpochSecond(nowSec).atZone(zone).toLocalDate()
+    val days = remember(today) { (0..6).map { today.plusDays(it.toLong()) } }
+    var lastToday by rememberSaveable { mutableStateOf(today.toString()) }
+    LaunchedEffect(today) {
+        if (lastToday != today.toString()) { lastToday = today.toString(); vm.calDay = 0; vm.loadSchedule(force = true) }
+    }
+    // Segarkan jadwal otomatis tiap 15 menit selama layar terbuka (loadSchedule sendiri menahan bila masih segar).
+    LaunchedEffect(nowSec / 900) { vm.loadSchedule() }
     val sched = vm.schedule
     val byAnilist = remember(Catalog.all) {
         Catalog.unique.filter { it.anilistId != null }.groupBy { it.anilistId!! }
@@ -104,14 +120,22 @@ fun CalendarScreen(vm: AppVM) {
             Column(Modifier.weight(1f).padding(end = Sp.S12)) {
                 Text(I18n.t("calendar_t", "Release Calendar"), fontSize = Ty.Display, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
                 val mins = ((nowSec * 1000 - vm.scheduleUpdatedAt) / 60_000).coerceAtLeast(0)
-                Text(
-                    when {
-                        sched == null -> I18n.t("calendar_sub", "Episodes airing this week.")
-                        mins < 1 -> I18n.t("cal_updated_now", "Updated just now")
-                        else -> I18n.t("cal_updated", "Updated %d min ago").format(mins)
-                    },
-                    Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = NavOff,
-                )
+                Row(
+                    Modifier.padding(top = Sp.S4).clip(CircleShape).clickable {
+                        vm.loadSchedule(force = true); vm.toast(I18n.t("cal_refreshing", "Refreshing schedule…"))
+                    }.padding(vertical = Sp.S4),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4),
+                ) {
+                    Text(
+                        when {
+                            sched == null -> I18n.t("calendar_sub", "Episodes airing this week.")
+                            mins < 1 -> I18n.t("cal_updated_now", "Updated just now")
+                            else -> I18n.t("cal_updated", "Updated %d min ago").format(mins)
+                        },
+                        fontSize = Ty.Small, color = NavOff,
+                    )
+                    Icon(AppIcons.Refresh, I18n.t("retry", "Retry"), Modifier.size(14.dp), tint = NavOff)
+                }
             }
             ListFilter(onlyList) { onlyList = !onlyList }
         }
@@ -124,6 +148,10 @@ fun CalendarScreen(vm: AppVM) {
                 Column(
                     Modifier.weight(1f).height(78.dp).clip(RoundedCornerShape(18.dp))
                         .background(if (sel) Red else Bg2).border(1.dp, if (sel) Red else Line, RoundedCornerShape(18.dp))
+                        .semantics(mergeDescendants = true) {
+                            selected = sel; role = Role.Tab
+                            contentDescription = "${d.dayOfWeek.getDisplayName(DateTextStyle.FULL, uiLocale())} ${d.dayOfMonth}, " + countText(n)
+                        }
                         .pressable { vm.calDay = k },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
@@ -146,23 +174,53 @@ fun CalendarScreen(vm: AppVM) {
             ) { TextButton(onClick = { vm.loadSchedule(force = true) }) { Text(I18n.t("retry", "Retry")) } }
             !ready -> SkeletonRows(5)
             else -> key(vm.calDay) {
-                Column(Modifier.fadeSlideIn()) {
+                var drag by remember { mutableStateOf(0f) }
+                Column(
+                    Modifier.fadeSlideIn().fillMaxWidth().heightIn(min = 360.dp).pointerInput(Unit) {
+                        // Geser kiri/kanan untuk pindah hari.
+                        detectHorizontalDragGestures(
+                            onDragStart = { drag = 0f },
+                            onDragEnd = {
+                                if (drag < -120f && vm.calDay < days.lastIndex) vm.calDay++
+                                else if (drag > 120f && vm.calDay > 0) vm.calDay--
+                            },
+                            onHorizontalDrag = { _, dx -> drag += dx },
+                        )
+                    },
+                ) {
                     val list = perDay[vm.calDay]
+                    val dayDate = days[vm.calDay]
+                    // Tajuk hari: tanggal lengkap, jumlah episode, dan zona waktu (jam di bawah memakai zona perangkat).
+                    Text(
+                        listOf(
+                            dayDate.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", uiLocale())),
+                            countText(list.size),
+                            ZonedDateTime.now(zone).format(DateTimeFormatter.ofPattern("zzz", uiLocale())),
+                        ).joinToString("  ·  "),
+                        Modifier.padding(bottom = Sp.S12), fontSize = Ty.Small, color = NavOff,
+                    )
                     if (list.isEmpty()) {
+                        val nextIdx = perDay.indices.firstOrNull { it > vm.calDay && perDay[it].isNotEmpty() }
                         EmptyBox(
-                            I18n.t("cal_empty_t", "No releases today"),
+                            I18n.t("cal_empty_day", "No releases on this day"),
                             if (onlyList) I18n.t("cal_empty_ml", "None of your My List titles air on this day. Turn off the filter to see everything.")
                             else I18n.t("nothing_airing_b", "No new episodes are scheduled for this day."),
-                        )
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+                                if (onlyList) Chip(I18n.t("cal_show_all", "Show all")) { onlyList = false }
+                                if (nextIdx != null) Chip(I18n.t("cal_next_day", "Next release: %s").format(
+                                    days[nextIdx].format(DateTimeFormatter.ofPattern("EEE d", uiLocale())))) { vm.calDay = nextIdx }
+                            }
+                        }
                     } else {
-                        val today = vm.calDay == 0
-                        list.groupBy { periodOf(it, nowSec, today) }.forEach { (period, slots) ->
+                        val isToday = vm.calDay == 0
+                        list.groupBy { periodOf(it, nowSec, isToday) }.forEach { (period, slots) ->
                             Text(
                                 periodLabel(period), Modifier.padding(start = TIME_W + RAIL, top = Sp.S8, bottom = Sp.S12),
                                 fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = NavOff,
                             )
                             slots.forEachIndexed { i, s ->
-                                TimelineRow(s, i == 0, i == slots.lastIndex, next = today && s === list.first(), nowSec, vm, ensure)
+                                TimelineRow(s, i == 0, i == slots.lastIndex, next = isToday && s === list.first(), nowSec, vm, ensure)
                             }
                         }
                     }
@@ -171,6 +229,9 @@ fun CalendarScreen(vm: AppVM) {
         }
     }
 }
+
+private fun countText(n: Int): String =
+    if (n == 1) I18n.t("cal_count1", "1 episode") else I18n.t("cal_count", "%d episodes").format(n)
 
 private fun periodOf(s: Slot, nowSec: Long, today: Boolean): String {
     if (today && s.item.airingAt - nowSec < 3600) return "soon"
@@ -282,6 +343,6 @@ private fun ListFilter(on: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8),
     ) {
         Icon(if (on) AppIcons.BookmarkFill else AppIcons.Bookmark, null, Modifier.size(16.dp), tint = if (on) Color.White else NavOff)
-        Text("My List", fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else TimeInk)
+        Text(I18n.t("my_list", "My List"), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else TimeInk)
     }
 }

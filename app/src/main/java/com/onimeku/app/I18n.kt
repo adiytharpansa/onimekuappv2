@@ -18,6 +18,12 @@ object I18n {
         // Navigasi & umum
         "tab_home" to "Beranda",
         // Kalender
+        "cal_count" to "%d episode",
+        "cal_count1" to "1 episode",
+        "cal_empty_day" to "Tidak ada rilis di hari ini",
+        "cal_show_all" to "Tampilkan semua",
+        "cal_next_day" to "Rilis berikutnya: %s",
+        "cal_refreshing" to "Memperbarui jadwal…",
         "cal_soon" to "Segera",
         "cal_dawn" to "Dini hari",
         "cal_morning" to "Pagi",

@@ -1,3 +1,14 @@
+# Penyempurnaan layar Kalender (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/CalendarScreen.kt`, `I18n.kt`.
+- **Bug: tanggal "hari ini" membeku.** Daftar 7 hari dihitung sekali saat layar dibuat; lewat tengah malam chip tanggal dan penanda hari ini salah. Kini mengikuti jam; saat hari berganti pilihan kembali ke hari ini dan jadwal dimuat ulang.
+- **Bug: judul kosong selalu "Tidak ada rilis hari ini"** walau hari yang dipilih bukan hari ini. Kini "Tidak ada rilis di hari ini/pada hari ini" netral, dengan tombol "Rilis berikutnya: <hari>" dan "Tampilkan semua" (bila filter My List aktif).
+- **Tajuk hari:** tanggal lengkap, jumlah episode, dan zona waktu (jam di timeline memakai zona perangkat).
+- **Segarkan jadwal:** ketuk "Updated ... ago" untuk memuat ulang; otomatis dicek tiap 15 menit selama layar terbuka.
+- **Geser kiri/kanan** untuk pindah hari.
+- **Aksesibilitas:** chip tanggal punya deskripsi (hari, tanggal, jumlah episode) dan status terpilih.
+- Filter "My List" kini dilokalisasi.
+- Rollback cepat: kembalikan `ui/CalendarScreen.kt` dan `I18n.kt` dari versi sebelumnya.
+
 # Penyempurnaan halaman pemutar (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/PlayerScreen.kt`, `I18n.kt`.
 - **Bug: subtitle menempel di bilah seek / tampak redup saat video dijeda.** Subtitle hanya diangkat bila `showUi` aktif, padahal kontrol juga tampil saat dijeda, buffering, atau galat. Subtitle jadi tertimpa lapisan gradien gelap kontrol. Kini angkat mengikuti keadaan kontrol sebenarnya (`ctlShown`).
