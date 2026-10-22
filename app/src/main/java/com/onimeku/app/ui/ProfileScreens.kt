@@ -46,6 +46,20 @@ import com.onimeku.app.Notifier
 import com.onimeku.app.Route
 import com.onimeku.app.data.Catalog
 
+/** Avatar bulat: foto akun bila ada (Google/Gmail), selain itu huruf awal di atas warna. Huruf tetap jadi cadangan selagi foto dimuat/gagal. */
+@Composable
+private fun AccountAvatar(url: String, initial: String, size: androidx.compose.ui.unit.Dp, bg: Color, border: Color, borderW: androidx.compose.ui.unit.Dp, fontSize: androidx.compose.ui.unit.TextUnit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val req = remember(url) {
+        if (url.isBlank()) null
+        else coil.request.ImageRequest.Builder(ctx).data(url.replace(Regex("=s\\d+-c$"), "=s256-c")).crossfade(false).build()
+    }
+    Box(Modifier.size(size).clip(CircleShape).background(bg).border(borderW, border, CircleShape), contentAlignment = Alignment.Center) {
+        Text(initial, fontSize = fontSize, fontWeight = FontWeight.Bold)
+        if (req != null) coil.compose.AsyncImage(req, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+    }
+}
+
 private val avatarColors = listOf(Color(0xFFA6122D), Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B))
 
 @Composable
@@ -61,25 +75,26 @@ fun ProfileScreen(vm: AppVM) {
     }
     Page(extraTop = 24.dp) {
         val acc = vm.s.account
+        LaunchedEffect(acc?.userId) { vm.syncAccountProfile() }
         val hShape = RoundedCornerShape(24.dp)
         Row(
             Modifier.fillMaxWidth().padding(bottom = Sp.S24).clip(hShape).background(Brush.linearGradient(listOf(Color(0xFF3A1220), Bg2)))
                 .border(1.dp, Line, hShape).padding(Sp.S20),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16),
         ) {
-            Box(Modifier.size(68.dp).clip(CircleShape).background(if (acc != null) Red else Color(0x26FFFFFF)).border(2.dp, if (acc != null) RedText else Line, CircleShape), contentAlignment = Alignment.Center) {
-                if (acc != null) Text(acc.email.take(1).uppercase(), fontSize = Ty.Display, fontWeight = FontWeight.Bold)
-                else Icon(AppIcons.User, null, Modifier.size(34.dp), tint = InkSoft)
+            if (acc != null) AccountAvatar(acc.avatarUrl, acc.name.ifBlank { acc.email }.take(1).uppercase(), 68.dp, Red, RedText, 2.dp, Ty.Display)
+            else Box(Modifier.size(68.dp).clip(CircleShape).background(Color(0x26FFFFFF)).border(2.dp, Line, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(AppIcons.User, null, Modifier.size(34.dp), tint = InkSoft)
             }
             Column(Modifier.weight(1f)) {
-                Text(if (acc != null) I18n.t("prof_signed_in", "Signed in") else I18n.t("prof_guest", "Guest"), fontSize = Ty.Head2, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                Text(if (acc != null) acc.name.ifBlank { I18n.t("prof_signed_in", "Signed in") } else I18n.t("prof_guest", "Guest"), fontSize = Ty.Head2, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(acc?.email ?: I18n.t("prof_not_signed", "Not signed in"), Modifier.padding(top = Sp.S2), fontSize = Ty.Body, color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(I18n.t("prof_active", "Active profile: %s").format(vm.p.name), Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         val st = remember(vm.p.days, vm.p.seen, vm.p.myList, Catalog.all) { com.onimeku.app.data.Stats.compute(vm.p) }
         Text(I18n.t("stats_title", "Your stats"), fontSize = Ty.Title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = Sp.S12))
-        CardBox(Modifier.padding(bottom = Sp.S24).fadeSlideIn(60)) {
+        CardBox(Modifier.padding(bottom = Sp.S24)) {
             Column(Modifier.padding(Sp.S16), verticalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 val mu = I18n.t("unit_min", "min"); val hu = I18n.t("unit_h", "h")
                 fun days(n: Int) = "$n ${if (n == 1) I18n.t("unit_day", "day") else I18n.t("unit_days", "days")}"
@@ -101,17 +116,15 @@ fun ProfileScreen(vm: AppVM) {
         Text(I18n.t("prof_title", "Profiles"), fontSize = Ty.Title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = Sp.S12))
         vm.s.profiles.forEachIndexed { i, pr ->
             val sel = i == vm.s.pi
-            val bd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, androidx.compose.animation.core.tween(250), label = "profBd")
-            Row(Modifier.padding(bottom = Sp.S12).fadeSlideIn(minOf(i, 3) * 60), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.CenterVertically) {
+            val bd = if (sel) Red else Line
+            Row(Modifier.padding(bottom = Sp.S12), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.CenterVertically) {
                 Row(
                     Modifier.weight(1f).heightIn(min = 56.dp).clip(RoundedCornerShape(18.dp)).background(Bg2)
                         .border(1.dp, bd, RoundedCornerShape(18.dp))
                         .clickable { vm.switchProfile(i) }.padding(horizontal = Sp.S16, vertical = Sp.S12),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
                 ) {
-                    Box(Modifier.size(36.dp).clip(CircleShape).background(avatarColors[i % 4]), contentAlignment = Alignment.Center) {
-                        Text(pr.name.take(1).uppercase(), fontWeight = FontWeight.Bold)
-                    }
+                    AccountAvatar(if (i == 0) acc?.avatarUrl.orEmpty() else "", pr.name.take(1).uppercase(), 36.dp, avatarColors[i % 4], Color.Transparent, 0.dp, androidx.compose.ui.unit.TextUnit.Unspecified)
                     Column(Modifier.weight(1f)) {
                         Text(pr.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(I18n.t("prof_in_list", "%d in My List").format(pr.myList.size), fontSize = Ty.Caption, color = NavOff)
@@ -166,7 +179,7 @@ fun ProfileScreen(vm: AppVM) {
             )
         }
 
-        if (acc == null) CardBox(Modifier.padding(top = Sp.S20).fadeSlideIn(120)) {
+        if (acc == null) CardBox(Modifier.padding(top = Sp.S20)) {
             Column(Modifier.padding(Sp.S20)) {
                 Text(I18n.t("prof_signin_t", "Sign in to Onimeku"), fontSize = Ty.Title2, fontWeight = FontWeight.SemiBold)
                 Text(I18n.t("prof_signin_b", "Save your watchlist and pick up where you left off on any device."), Modifier.padding(top = Sp.S8), color = InkSoft, fontSize = Ty.Body)
@@ -196,7 +209,7 @@ fun ProfileScreen(vm: AppVM) {
             )
         }
 
-        CardBox(Modifier.padding(top = Sp.S20).fadeSlideIn(160)) {
+        CardBox(Modifier.padding(top = Sp.S20)) {
             Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Downloads) }.padding(horizontal = Sp.S16, vertical = Sp.S16),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 Box(Modifier.size(34.dp).clip(CircleShape).background(Red.copy(alpha = 0.28f)), contentAlignment = Alignment.Center) {
@@ -213,7 +226,7 @@ fun ProfileScreen(vm: AppVM) {
             }
         }
 
-        CardBox(Modifier.padding(top = Sp.S16).fadeSlideIn(200)) {
+        CardBox(Modifier.padding(top = Sp.S16)) {
             listOf("settings" to I18n.t("settings", "Settings"), "language" to I18n.t("language", "Language"), "help" to I18n.t("help", "Help Center"), "about" to I18n.t("about", "About Onimeku")).forEachIndexed { i, (k, label) ->
                 if (i > 0) HLine()
                 Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = Sp.S16, vertical = Sp.S16),
@@ -484,7 +497,11 @@ private fun WeekChart(week: List<Int>) {
     val today = java.time.LocalDate.now()
     val loc = java.util.Locale(I18n.lang)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = Sp.S16, vertical = Sp.S12)) {
-        Text(I18n.t("stat_week", "Last 7 days"), fontSize = Ty.Caption, color = NavOff)
+        val weekSec = week.sum()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(I18n.t("stat_week", "Last 7 days"), Modifier.weight(1f), fontSize = Ty.Caption, color = NavOff)
+            if (weekSec > 0) Text(com.onimeku.app.data.Stats.fmtDuration(weekSec, I18n.t("unit_min", "min"), I18n.t("unit_h", "h")), fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = InkSoft)
+        }
         Row(Modifier.fillMaxWidth().padding(top = Sp.S12), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.Bottom) {
             week.forEachIndexed { i, sec ->
                 val d = today.minusDays((6 - i).toLong())

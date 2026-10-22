@@ -848,7 +848,27 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         toast("Reset link sent if the email exists")
     }
 
+    private var profileSynced = false
+
+    /**
+     * Akun yang login sebelum fitur foto belum menyimpan avatar: ambil sekali per sesi dari /auth/v1/user
+     * (tanpa foto = akun email biasa, tidak diulang). Token dirotasi bila perlu.
+     */
+    fun syncAccountProfile() {
+        val acc = s.account ?: return
+        if (acc.avatarUrl.isNotBlank() || profileSynced) return
+        profileSynced = true
+        viewModelScope.launch {
+            try {
+                val got = try { AuthClient.fromTokens(acc.accessToken, acc.refreshToken) }
+                catch (e: AuthException) { val f = AuthClient.refresh(acc.refreshToken); AuthClient.fromTokens(f.accessToken, f.refreshToken) }
+                upd { st -> st.account?.let { cur -> st.copy(account = cur.copy(accessToken = got.accessToken, refreshToken = got.refreshToken, avatarUrl = got.avatarUrl, name = got.name)) } ?: st }
+            } catch (_: Exception) {}
+        }
+    }
+
     fun signOut() {
+        profileSynced = false
         val acc = s.account ?: return
         upd { it.copy(account = null) }
         toast(I18n.t("auth_signed_out", "Signed out"))

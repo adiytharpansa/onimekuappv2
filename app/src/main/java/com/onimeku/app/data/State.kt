@@ -12,7 +12,11 @@ import kotlinx.serialization.json.Json
 @Serializable data class Watch(val id: String, val ep: Int, val at: Long = 0, val dur: Int = 0)
 
 /** Sesi akun yang sedang masuk (null = tamu). */
-@Serializable data class Account(val userId: String, val email: String, val accessToken: String, val refreshToken: String)
+@Serializable data class Account(
+    val userId: String, val email: String, val accessToken: String, val refreshToken: String,
+    /** Foto profil akun (mis. foto Google/Gmail) dan nama tampilan; kosong bila akun email biasa tanpa foto. */
+    val avatarUrl: String = "", val name: String = "",
+)
 
 @Serializable
 data class Profile(

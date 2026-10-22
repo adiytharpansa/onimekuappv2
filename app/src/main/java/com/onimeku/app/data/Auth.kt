@@ -59,13 +59,18 @@ object AuthClient {
         }
     }
 
+    private fun metaStr(u: JsonObject?, vararg keys: String): String {
+        val m = u?.get("user_metadata") as? JsonObject ?: return ""
+        return keys.firstNotNullOfOrNull { (m[it] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.takeIf { v -> v.isNotBlank() } }.orEmpty()
+    }
+
     private fun session(o: JsonObject): Account? {
         val at = o["access_token"]?.jsonPrimitive?.contentOrNull ?: return null
         val rt = o["refresh_token"]?.jsonPrimitive?.contentOrNull.orEmpty()
         val u = o["user"]?.jsonObject
         val id = u?.get("id")?.jsonPrimitive?.contentOrNull.orEmpty()
         val em = u?.get("email")?.jsonPrimitive?.contentOrNull.orEmpty()
-        return Account(id, em, at, rt)
+        return Account(id, em, at, rt, metaStr(u, "avatar_url", "picture"), metaStr(u, "full_name", "name"))
     }
 
     private fun creds(email: String, password: String) =
@@ -109,6 +114,7 @@ object AuthClient {
                 u["id"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 u["email"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 accessToken, refreshToken,
+                metaStr(u, "avatar_url", "picture"), metaStr(u, "full_name", "name"),
             )
         }
     }
