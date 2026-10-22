@@ -224,7 +224,10 @@ fun SubScreen(vm: AppVM, key: String) {
                     HLine()
                     ChoiceRow(
                         I18n.t("dub_def_t", "Default dubbing"), I18n.t("dub_def_d", "Used automatically when an episode offers that audio track."),
-                        listOf("auto" to "Auto", "ja" to I18n.t("dub_ja", "Japanese"), "id" to I18n.t("dub_id", "Indonesian"), "en" to I18n.t("dub_en", "English")),
+                        listOf("auto" to "Auto", "ja" to I18n.t("dub_ja", "Japanese"), "id" to I18n.t("dub_id", "Indonesian"), "en" to I18n.t("dub_en", "English")).let { base ->
+                            // Dubbing lain yang pernah dipilih di pemutar (mis. Korea) tetap tampil sebagai opsi aktif.
+                            if (set.dubLang != "auto" && base.none { it.first == set.dubLang }) base + (set.dubLang to (dubLangName(set.dubLang) ?: set.dubLang)) else base
+                        },
                         set.dubLang,
                     ) { k -> vm.setSettings { it.copy(dubLang = k) } }
                 }

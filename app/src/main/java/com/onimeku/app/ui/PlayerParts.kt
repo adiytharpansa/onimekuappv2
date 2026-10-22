@@ -253,7 +253,7 @@ internal fun PlayerSettingsSheet(
                         "audio" -> {
                             SheetHeader(I18n.t("dubbing", "Dubbing")) { onPage("main") }
                             // Urutan tampil: English pertama, Indonesia kedua, sisanya (mis. Japanese) mengikuti urutan trek asli.
-                            audioLabels.indices.sortedBy { i -> when (audioKeys.getOrNull(i)) { "en" -> 0; "id" -> 1; else -> 2 } }
+                            DubLogic.sheetOrder(audioLabels.indices.map { audioKeys.getOrNull(it).orEmpty() })
                                 .forEach { i -> DubOption(audioLabels[i], dubFlag(audioKeys.getOrNull(i)), i == audioIdx) { onAudio(i) } }
                         }
                         "sleep" -> {
@@ -309,29 +309,24 @@ internal fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) 
 }
 
 // ------------------------------------------------------------------ Dubbing (trek audio)
-private val LANG3 = mapOf(
-    "jpn" to "ja", "ind" to "id", "eng" to "en", "kor" to "ko", "zho" to "zh", "chi" to "zh", "spa" to "es",
-    "por" to "pt", "fra" to "fr", "fre" to "fr", "deu" to "de", "ger" to "de", "ara" to "ar", "tha" to "th",
-    "vie" to "vi", "msa" to "ms", "may" to "ms", "rus" to "ru", "ita" to "it",
-)
-
 /** Nama dubbing yang ramah dibaca: label trek bila bermakna, kalau tidak nama bahasa dari kodenya ("ja" -> Japanese / Jepang). */
 internal fun dubName(f: androidx.media3.common.Format, i: Int): String {
     val label = f.label?.trim().orEmpty()
     if (label.length > 3) return label
-    val raw = (f.language ?: label).trim().lowercase()
-    if (raw.isNotEmpty() && raw != "und") {
-        val code = LANG3[raw] ?: raw
-        val n = java.util.Locale.forLanguageTag(code).getDisplayLanguage(uiLocale())
-        if (n.isNotBlank() && !n.equals(code, true)) return n.replaceFirstChar { it.uppercase() }
-    }
+    val code = DubLogic.normalize(f.language).ifEmpty { DubLogic.normalize(label) }
+    if (code.isNotEmpty()) dubLangName(code)?.let { return it }
     return "Track ${i + 1}"
+}
+
+/** Nama bahasa dari kode ("ja" -> Japanese / Jepang) mengikuti bahasa aplikasi; null bila tak dikenal. */
+internal fun dubLangName(code: String): String? {
+    val n = java.util.Locale.forLanguageTag(code).getDisplayLanguage(uiLocale())
+    return if (n.isNotBlank() && !n.equals(code, true)) n.replaceFirstChar { it.uppercase() } else null
 }
 
 /** Kunci stabil sebuah trek audio, dipakai mengingat pilihan dubbing antar episode. */
 internal fun audioKey(f: androidx.media3.common.Format): String {
-    val raw = (f.language ?: f.label ?: "").trim().lowercase().substringBefore('-')
-    return LANG3[raw] ?: raw
+    return DubLogic.normalize(f.language).ifEmpty { DubLogic.normalize(f.label) }
 }
 
 /** Bendera kecil untuk kode bahasa trek audio; null bila tak dikenal (chip/baris memakai ikon not musik). */
@@ -383,6 +378,7 @@ internal fun DubOption(label: String, flag: String?, selected: Boolean, onClick:
     Row(
         Modifier.fillMaxWidth().padding(horizontal = Sp.S12, vertical = 2.dp).clip(shape)
             .background(if (selected) Color(0x26E8566F) else Color.Transparent)
+            .semantics { stateDescription = if (selected) I18n.t("dub_selected", "Selected") else "" }
             .clickable(role = Role.RadioButton, onClick = onClick).padding(horizontal = Sp.S8, vertical = Sp.S8),
         verticalAlignment = Alignment.CenterVertically,
     ) {

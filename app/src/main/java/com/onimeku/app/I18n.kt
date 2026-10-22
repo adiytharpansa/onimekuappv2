@@ -137,6 +137,8 @@ object I18n {
         "dub_ja" to "Jepang",
         "dub_id" to "Indonesia",
         "dub_en" to "Inggris",
+        "dub_unavail" to "Dubbing %1\$s tidak tersedia · memakai %2\$s",
+        "dub_selected" to "Dipilih",
         "fit_fill" to "Pas layar / penuh",
         "download" to "Unduh",
         "pip_na" to "Picture-in-Picture tidak tersedia",

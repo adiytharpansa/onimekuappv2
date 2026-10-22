@@ -690,6 +690,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var audioLabels by remember(r) { mutableStateOf<List<String>>(emptyList()) }
     var audioKeys by remember(r) { mutableStateOf<List<String>>(emptyList()) }
     var audioIdx by remember(r) { mutableIntStateOf(0) }
+    // true = dubbing episode ini sudah ditetapkan (otomatis atau pilihan pengguna); onTracksChanged tidak menimpanya lagi.
+    val dubDone = remember(r) { BooleanArray(1) }
     var heights by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
     var sleepMin by remember(r) { mutableIntStateOf(0) }
     var locked by remember(r) { mutableStateOf(false) }
@@ -834,12 +836,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         player.trackSelectionParameters = b.build()
     }
     fun applyAudio(i: Int, save: Boolean = true) {
+        if (save) dubDone[0] = true
         val g = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }.getOrNull(i) ?: return
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0)).build()
         audioIdx = i
         // Pilihan pengguna jadi dubbing bawaan (tersimpan permanen), dipakai lagi di episode berikutnya.
-        if (save) audioKey(g.mediaTrackGroup.getFormat(0)).takeIf { it.isNotBlank() }?.let { k -> vm.setSettings { it.copy(dubLang = k) } }
+        // Disimpan dua tingkat: bawaan global (judul baru ikut) + khusus judul ini (menang atas global saat judul ini dibuka lagi).
+        if (save) audioKey(g.mediaTrackGroup.getFormat(0)).takeIf { it.isNotBlank() }?.let { k ->
+            vm.setSettings { it.copy(dubLang = k, dubByTitle = DubLogic.remember(it.dubByTitle, r.id, k)) }
+        }
     }
     fun seekBy(ms: Long) {
         val t = (player.currentPosition + ms).coerceIn(0L, if (player.duration > 0) player.duration else Long.MAX_VALUE)
@@ -893,14 +899,23 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 // Perbaikan agen: alias C0 sama ilegalnya dengan val C.
                 val ag = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }
                 val af = ag.map { it.mediaTrackGroup.getFormat(0) }
-                audioLabels = af.mapIndexed { i, f -> dubName(f, i) }
-                audioKeys = af.map { audioKey(it) }
+                val keys = af.map { audioKey(it) }
+                audioLabels = DubLogic.uniqueLabels(af.mapIndexed { i, f -> dubName(f, i) })
+                audioKeys = keys
                 audioIdx = ag.indexOfFirst { it.isSelected }.coerceAtLeast(0)
-                // Dubbing pilihan sebelumnya dipakai lagi di episode ini bila trek itu tersedia.
-                val wantDub = vm.s.settings.dubLang
-                if (wantDub != "auto") {
-                    val wi = af.indexOfFirst { audioKey(it) == wantDub }
-                    if (wi >= 0 && wi != audioIdx) applyAudio(wi, save = false)
+                // Dubbing otomatis SEKALI per episode (judul ini > bawaan global). Dulu dicoba tiap trek berubah, sehingga dua trek
+                // berbahasa sama (mis. dua "English") selalu dikembalikan ke yang pertama dan pilihan pengguna tertimpa.
+                if (!dubDone[0] && af.isNotEmpty()) {
+                    dubDone[0] = true
+                    val st = vm.s.settings
+                    val title = st.dubByTitle[r.id]
+                    val wi = DubLogic.pick(keys, title, st.dubLang)
+                    if (wi != null && wi != audioIdx) applyAudio(wi, save = false)
+                    val used = wi ?: audioIdx
+                    // Dubbing pilihan tidak ada di episode ini (tapi ada pilihan lain): beri tahu, seperti subtitle.
+                    DubLogic.fallbackNotice(keys, title, st.dubLang, used)?.let { w ->
+                        vm.toast(I18n.t("dub_unavail", "%1\$s dubbing unavailable · using %2\$s").format(dubLangName(w) ?: w, audioLabels.getOrElse(used) { "?" }))
+                    }
                 }
                 heights = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
                     .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).height } }

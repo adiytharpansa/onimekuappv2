@@ -47,6 +47,8 @@ data class Settings(
     val subLang: String = "auto",
     // Dubbing (trek audio) bawaan: "auto" (ikut stream) atau kode bahasa ("ja", "id", "en"). Dipakai otomatis bila episode punya trek itu.
     val dubLang: String = "auto",
+    // Dubbing pilihan per judul (id anime -> kode bahasa). Menang atas [dubLang]; maks. 200 judul terakhir.
+    val dubByTitle: Map<String, String> = emptyMap(),
     // Gaya subtitle pemutar: ukuran "small" | "normal" | "large" | "xl", latar hitam di belakang teks.
     val subSize: String = "normal",
     val subBg: Boolean = false,

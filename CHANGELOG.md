@@ -1,3 +1,14 @@
+# Penyempurnaan dubbing (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di berkas baru `ui/DubLogic.kt` + tes `DubLogicTest.kt`, serta `ui/PlayerScreen.kt`, `ui/PlayerParts.kt`, `ui/ProfileScreens.kt`, `data/State.kt`, `I18n.kt`.
+- **Bug: pilihan dubbing tertimpa.** `onTracksChanged` dulu menerapkan ulang dubbing bawaan setiap trek berubah; bila dua trek berbahasa sama (mis. dua "English") pilihan pengguna selalu dikembalikan ke yang pertama. Kini dubbing otomatis diterapkan SEKALI per episode (`dubDone`), dan pilihan manual tidak pernah ditimpa.
+- **Ingatan per judul:** `Settings.dubByTitle` (id anime -> kode bahasa, maks. 200 judul terakhir). Urutan prioritas: pilihan judul ini > "Default dubbing" global > bawaan stream. Pilihan manual di pemutar menyimpan keduanya, jadi judul baru tetap mengikuti pilihan terakhir (perilaku lama) sementara judul yang pernah diatur tidak ikut berubah.
+- **Pemberitahuan cadangan:** bila dubbing yang diinginkan tidak ada di episode yang punya >=2 trek audio, muncul toast "<Bahasa> dubbing unavailable · using <trek>" (seperti subtitle). Judul sub-saja (1 trek) tetap senyap.
+- **Pengenalan bahasa lebih kuat** (`DubLogic.normalize`): "jpn/ind/eng", "en-US", dan label nama ("Japanese - Stereo", "Bahasa Indonesia") dipetakan ke kode 2 huruf; "und"/kosong tidak lagi tersimpan sebagai pilihan (dulu bisa menyimpan "und").
+- Label trek kembar diberi nomor ("English", "English 2"); baris pilihan punya status "Dipilih/Selected" untuk TalkBack.
+- Profil > Settings > Default dubbing menampilkan juga dubbing lain yang pernah dipilih di pemutar (mis. Korea) sebagai opsi aktif.
+- Catatan: mengubah "Default dubbing" tidak menghapus pilihan per judul yang sudah ada.
+- Rollback cepat: kembalikan berkas di atas dari versi sebelumnya dan hapus `ui/DubLogic.kt`, `DubLogicTest.kt`.
+
 # Responsif lintas perangkat: ponsel, lipat, tablet, split-screen (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di berkas baru `ui/Responsive.kt`, serta `ui/Components.kt`, `ui/Screens.kt`, `ui/PlayerScreen.kt`, `ui/PlayerParts.kt`, `MainActivity.kt`.
 - `ui/Responsive.kt` (baru): `WidthClass` (Compact <600dp, Medium 600-839dp, Expanded >=840dp, berdasarkan lebar JENDELA), `ContentMaxW` 720dp, `GridMaxW` 1200dp, `TabBarMaxW` 560dp, `pageSidePad()`, `gridCellMin()`, `Modifier.safeSides()` (menjauhi lubang kamera/bilah navigasi di sisi saat landscape).
