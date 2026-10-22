@@ -50,20 +50,20 @@ fun ExitDialog(onCancel: () -> Unit, onExit: () -> Unit) {
         onDismissRequest = { if (pending == null) pending = onCancel },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(Modifier.fillMaxSize().padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().padding(horizontal = Sp.S28), contentAlignment = Alignment.Center) {
             Column(
                 Modifier.widthIn(max = 340.dp).fillMaxWidth()
                     .graphicsLayer { alpha = k; val s = 0.94f + 0.06f * k; scaleX = s; scaleY = s }
                     .clip(RoundedCornerShape(20.dp)).background(Bg2)
                     .border(0.5.dp, Line, RoundedCornerShape(20.dp))
-                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp),
+                    .padding(start = Sp.S20, end = Sp.S20, top = Sp.S20, bottom = Sp.S16),
             ) {
-                Text(I18n.t("exit_title", "Exit Onimeku?"), fontSize = 18.sp, fontWeight = FontWeight.Medium, color = Color(0xFFF4F4F8), lineHeight = 24.sp)
+                Text(I18n.t("exit_title", "Exit Onimeku?"), fontSize = Ty.Title, fontWeight = FontWeight.Medium, color = Color(0xFFF4F4F8), lineHeight = 24.sp)
                 Text(
-                    I18n.t("exit_body", "Your watch progress is saved."), Modifier.padding(top = 8.dp),
-                    fontSize = 14.sp, lineHeight = 21.sp, color = Color(0xFF9A9DB0),
+                    I18n.t("exit_body", "Your watch progress is saved."), Modifier.padding(top = Sp.S8),
+                    fontSize = Ty.Body, lineHeight = 21.sp, color = Color(0xFF9A9DB0),
                 )
-                Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth().padding(top = Sp.S20), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     DlgBtn(I18n.t("cancel", "Cancel"), Modifier.weight(1f), Color(0xFF232738), Color(0xFFF4F4F8), Line) { if (pending == null) pending = onCancel }
                     DlgBtn(I18n.t("exit", "Exit"), Modifier.weight(1f), Red, Color.White, null) { if (pending == null) pending = onExit }
                 }
@@ -79,5 +79,5 @@ private fun DlgBtn(text: String, modifier: Modifier, bg: Color, fg: Color, strok
         modifier.height(44.dp).clip(shape).background(bg).let { if (stroke != null) it.border(0.5.dp, stroke, shape) else it }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = fg, textAlign = TextAlign.Center) }
+    ) { Text(text, fontSize = Ty.Body, fontWeight = FontWeight.Medium, color = fg, textAlign = TextAlign.Center) }
 }

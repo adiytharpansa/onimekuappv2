@@ -111,20 +111,20 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boo
             drawRect(Brush.verticalGradient(0f to Color(0x59080910), 0.3f to Color.Transparent, 0.55f to Color(0x2214161F), 1f to Color(0xF214161F)))
         })
         Row(
-            Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(8.dp)).background(Red).padding(horizontal = 9.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+            Modifier.align(Alignment.TopStart).padding(Sp.S12).clip(RoundedCornerShape(8.dp)).background(Red).padding(horizontal = Sp.S8, vertical = Sp.S4),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4),
         ) {
             Icon(AppIcons.Clock, null, Modifier.size(12.dp), tint = Color.White)
-            Text(I18n.t("coming_badge", "COMING SOON"), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = Color.White, maxLines = 1, softWrap = false)
+            Text(I18n.t("coming_badge", "COMING SOON"), fontSize = Ty.Micro, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = Color.White, maxLines = 1, softWrap = false)
         }
         if (a.year > 0) Text(
-            "${a.year}", Modifier.align(Alignment.TopEnd).padding(12.dp).clip(RoundedCornerShape(8.dp)).background(GlassFill)
-                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 9.dp, vertical = 4.dp),
-            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+            "${a.year}", Modifier.align(Alignment.TopEnd).padding(Sp.S12).clip(RoundedCornerShape(8.dp)).background(GlassFill)
+                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = Sp.S8, vertical = Sp.S4),
+            fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = Color.White,
         )
         // Lonceng pengingat: satu-satunya tempat lonceng di Beranda, hanya untuk judul yang belum tayang.
         Box(
-            Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).size(40.dp).clip(CircleShape)
+            Modifier.align(Alignment.BottomEnd).padding(end = Sp.S12, bottom = Sp.S12).size(48.dp).clip(CircleShape)
                 .background(if (remind) Red else GlassFill).border(1.dp, if (remind) Red else Color(0x40FFFFFF), CircleShape)
                 .clickable(onClick = onRemind),
             contentAlignment = Alignment.Center,
@@ -132,10 +132,10 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boo
             Icon(if (remind) AppIcons.BellFill else AppIcons.Bell,
                 if (remind) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), Modifier.size(20.dp), tint = Color.White)
         }
-        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 14.dp, end = 64.dp, bottom = 12.dp)) {
-            Text(a.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp, letterSpacing = (-0.2).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = Sp.S16, end = 64.dp, bottom = Sp.S12)) {
+            Text(a.title, fontSize = Ty.Title, fontWeight = FontWeight.Bold, lineHeight = 21.sp, letterSpacing = (-0.2).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = a.genres.take(3).joinToString("  ·  ")
-            if (meta.isNotBlank()) Text(meta, Modifier.padding(top = 3.dp), fontSize = 12.sp, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (meta.isNotBlank()) Text(meta, Modifier.padding(top = Sp.S4), fontSize = Ty.Caption, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -279,7 +279,7 @@ private fun HomeContent(vm: AppVM) {
     ) {
         item(key = "hero", contentType = "hero") { Hero(vm, heroH) { stretch } }
         item(key = "surprise", contentType = "surprise") {
-            Row(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(horizontal = Sp.S16).padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                 Chip(I18n.t("surprise", "Surprise me"), icon = AppIcons.Dice) { vm.surprise() }
             }
         }
@@ -345,7 +345,7 @@ private fun HomeContent(vm: AppVM) {
                                 Column(motionItem().width(railW)) {
                                     // debug.33: ukuran poster potret SAMA dengan rail lain (dulu kartu lanskap 232:150).
                                     Poster(a, railW, badges = true, meta = "Episode $ep" to whenTxt, newBadge = whenTxt == "Today" || whenTxt == "Yesterday") { vm.go(Route.Detail(id)) }
-                                    Text(a.title, Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
+                                    Text(a.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
                                         minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
@@ -365,8 +365,8 @@ private fun HomeContent(vm: AppVM) {
                 Spacer(Modifier.height(SectionGap))
                 SectionHead(I18n.t("sec_all", "All Anime")) { vm.go(Route.SeeAll(homeGenre?.let { "genre:$it" } ?: "all")) }
                 // Filter genre di tempat: "Semua" aktif secara bawaan; ketuk genre lagi untuk melepas. Tepi kanan memudar = bisa digeser.
-                Box(Modifier.padding(bottom = 14.dp)) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 16.dp)) {
+                Box(Modifier.padding(bottom = Sp.S16)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Sp.S8), contentPadding = PaddingValues(horizontal = Sp.S16)) {
                         item(key = "__all") { Chip(I18n.t("all_genres", "All"), on = homeGenre == null, height = 32.dp) { vm.homeGenre = null } }
                         items(Catalog.chips, key = { it }) { g ->
                             Chip(g, on = homeGenre == g, height = 32.dp) { vm.homeGenre = if (homeGenre == g) null else g }
@@ -379,13 +379,13 @@ private fun HomeContent(vm: AppVM) {
         items(allRows.size, key = { "all-row:${homeGenre ?: "-"}:$it" }, contentType = { "all-row" }) { r ->
             val row = allRows[r]
             // Jarak antarkolom = jarak antarbaris (12dp) agar grid rapi.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S16).padding(bottom = Sp.S12), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 row.forEachIndexed { c, a -> Box(Modifier.weight(1f)) { Tile(a, vm, (r * gridCols + c) % 9) } }
                 repeat(gridCols - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         item(key = "all-more", contentType = "all-more") {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = Sp.S16).padding(top = Sp.S4), contentAlignment = Alignment.Center) {
                 Btn(I18n.t("browse_all", "Browse all"), BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.go(Route.SeeAll(homeGenre?.let { "genre:$it" } ?: "all")) }
             }
         }
@@ -395,7 +395,7 @@ private fun HomeContent(vm: AppVM) {
         val frac = (stretch / ptrThresholdPx).coerceIn(0f, 1f)
         val k = if (vm.refreshing) 1f else frac
         Box(
-            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp)
+            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = Sp.S12)
                 .graphicsLayer {
                     alpha = k
                     scaleX = 0.6f + 0.4f * k; scaleY = 0.6f + 0.4f * k
@@ -498,7 +498,7 @@ private fun Hero(vm: AppVM, heroH: androidx.compose.ui.unit.Dp, pull: () -> Floa
             // Titik indikator: tepat di atas tombol "+", rata tengah dengannya (kotak selebar tombol; baris titik boleh lebih lebar, dipusatkan).
             // Ikut turun bersama hero (tidak ditahan) agar tetap tepat di atas tombol "+".
             Box(Modifier.align(Alignment.BottomEnd).padding(end = HeroPad, bottom = HeroBottomPad + HeroActionW + HeroDotsGap).width(HeroActionW)) {
-                Row(Modifier.wrapContentWidth(Alignment.CenterHorizontally, unbounded = true), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.wrapContentWidth(Alignment.CenterHorizontally, unbounded = true), horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                     items.indices.forEach { i ->
                         HeroDot(selected = pager.currentPage % n == i, page = pager.settledPage)
                     }
@@ -582,12 +582,12 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, ken: androidx.compo
             alpha = (1f - kotlin.math.abs(o) * 1.6f).coerceIn(0f, 1f)
             translationX = -o * pageW * 0.3f
         }.widthIn(max = 600.dp).padding(start = HeroPad, end = HeroPad, bottom = HeroBottomPad)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.CenterVertically) {
                 a.rating?.let { ScorePill(it) }
                 if (a.hd) Tag("HD", accent, Color.White)
                 StatusPill(a.status)
             }
-            Text(a.title, Modifier.padding(top = 12.dp), fontSize = 32.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp, letterSpacing = (-0.6).sp,
+            Text(a.title, Modifier.padding(top = Sp.S12), fontSize = 32.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp, letterSpacing = (-0.6).sp,
                 minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(
                 a.year.takeIf { it > 0 }?.toString(),
@@ -596,9 +596,9 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, ken: androidx.compo
                 else a.eps.takeIf { it > 0 }?.let { "$it ${if (it == 1) "episode" else "episodes"}" },
                 a.genres.take(2).joinToString(", ").ifBlank { null },
             ).joinToString("  ·  ")
-            Text(meta, Modifier.padding(top = 6.dp), fontSize = 13.sp, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(meta, Modifier.padding(top = Sp.S8), fontSize = Ty.Small, color = HeroMeta, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // Selalu memesan 2 baris (juga saat sinopsis kosong) agar posisi tombol sama di semua slide.
-            Text(a.synopsis, Modifier.padding(top = 8.dp), fontSize = 13.sp, lineHeight = 19.sp,
+            Text(a.synopsis, Modifier.padding(top = Sp.S8), fontSize = Ty.Small, lineHeight = 19.sp,
                 color = HeroSynopsis, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = HeroActionsTop), horizontalArrangement = Arrangement.spacedBy(HeroActionGap), verticalAlignment = Alignment.CenterVertically) {
                 PlayButton(I18n.t("play", "Play"), null, Modifier.weight(1f), accent = accent) { vm.go(Route.Player(a.id, firstEp)) }
@@ -621,18 +621,18 @@ fun ItemRow(
 ) {
     val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(shape).background(Bg2).border(1.dp, Line, shape).padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxWidth().padding(bottom = Sp.S12).clip(shape).background(Bg2).border(1.dp, Line, shape).padding(Sp.S8),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
     ) {
         Box(Modifier.width(108.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onThumb ?: onOpen)) {
             RealImage(a, Modifier.fillMaxSize())
-            if (thumbLabel.isNotBlank()) Text(thumbLabel, Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
-                .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (thumbLabel.isNotBlank()) Text(thumbLabel, Modifier.align(Alignment.BottomStart).padding(Sp.S8).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
+                .padding(horizontal = Sp.S8, vertical = Sp.S2), fontSize = Ty.Micro, fontWeight = FontWeight.Bold)
         }
         Column(Modifier.weight(1f).clickable(onClick = onOpen)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
-            Text(sub, fontSize = 12.sp, color = if (subOk) RedText else NavOff, modifier = Modifier.padding(top = 3.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
+            Text(sub, fontSize = Ty.Caption, color = if (subOk) RedText else NavOff, modifier = Modifier.padding(top = Sp.S4), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         trailing()
     }
@@ -646,22 +646,22 @@ fun MyListScreen(vm: AppVM) {
         RootTitle(I18n.t("tab_mylist", "My List"))
         if (l.isEmpty()) {
             // Ajakan di tengah (tanpa kartu berbingkai) + rekomendasi supaya layar tidak kosong.
-            Column(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = Sp.S28), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
                     Icon(AppIcons.Bookmark, null, Modifier.size(28.dp), tint = RedText)
                 }
-                Text(I18n.t("mylist_empty_t", "Your list is empty"), Modifier.padding(top = 12.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                Text(I18n.t("mylist_empty_b", "Tap + on any anime to save it here."), Modifier.padding(top = 6.dp, start = 16.dp, end = 16.dp), fontSize = 13.sp, color = InkSoft, textAlign = TextAlign.Center)
-                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(I18n.t("mylist_empty_t", "Your list is empty"), Modifier.padding(top = Sp.S12), fontSize = Ty.Title, fontWeight = FontWeight.SemiBold)
+                Text(I18n.t("mylist_empty_b", "Tap + on any anime to save it here."), Modifier.padding(top = Sp.S8, start = Sp.S16, end = Sp.S16), fontSize = Ty.Small, color = InkSoft, textAlign = TextAlign.Center)
+                Row(Modifier.padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.CenterVertically) {
                     Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play, height = 42.dp) { vm.setTab(Route.Home) }
                     Chip(I18n.t("surprise", "Surprise me"), icon = AppIcons.Dice) { vm.surprise() }
                 }
             }
             val recs = Catalog.top.take(10).mapNotNull { Catalog.byId[it] }
             if (recs.isNotEmpty()) {
-                Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.padding(end = 8.dp).width(3.dp).height(16.dp).clip(CircleShape).background(Red))
-                    Text(I18n.t("start_here", "Start here"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Row(Modifier.padding(bottom = Sp.S12), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.padding(end = Sp.S8).width(3.dp).height(16.dp).clip(CircleShape).background(Red))
+                    Text(I18n.t("start_here", "Start here"), fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold)
                 }
                 val bleed = with(LocalDensity.current) { 16.dp.roundToPx() }
                 Row(
@@ -669,7 +669,7 @@ fun MyListScreen(vm: AppVM) {
                         val p = m.measure(c.copy(maxWidth = c.maxWidth + bleed))
                         layout(c.maxWidth, p.height) { p.place(0, 0) }
                     }.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Sp.S12),
                 ) {
                     recs.forEach { t ->
                         val on = t.id in vm.p.myList
@@ -677,26 +677,26 @@ fun MyListScreen(vm: AppVM) {
                             Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)).artBackground(t).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { vm.go(Route.Detail(t.id)) }) {
                                 RealImage(t, Modifier.fillMaxSize())
                                 t.rating?.replace("★", "")?.trim()?.takeIf { it.isNotBlank() }?.let {
-                                    Row(Modifier.padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = 6.dp, vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Row(Modifier.padding(Sp.S8).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = Sp.S8, vertical = Sp.S2),
+                                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4)) {
                                         Icon(Icons.Filled.Star, null, Modifier.size(11.dp), tint = Gold)
-                                        Text(it, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Gold)
+                                        Text(it, fontSize = Ty.Micro, fontWeight = FontWeight.Bold, color = Gold)
                                     }
                                 }
                                 Box(
-                                    Modifier.align(Alignment.BottomEnd).padding(6.dp).size(30.dp).clip(CircleShape)
+                                    Modifier.align(Alignment.BottomEnd).padding(Sp.S8).size(30.dp).clip(CircleShape)
                                         .background(if (on) Red else Color(0xCC14161F)).border(1.dp, if (on) Red else Color(0x66FFFFFF), CircleShape)
                                         .clickable { vm.toggleML(t.id) },
                                     contentAlignment = Alignment.Center,
                                 ) { Icon(if (on) AppIcons.Check else AppIcons.Plus, if (on) "Added" else "My List", Modifier.size(16.dp), tint = Color.White) }
                             }
-                            Text(t.title, Modifier.padding(top = 6.dp), fontSize = 12.sp, lineHeight = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(t.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Caption, lineHeight = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
         }
-        else Text("${l.size} ${I18n.t("n_saved", "saved")}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+        else Text("${l.size} ${I18n.t("n_saved", "saved")}", color = InkSoft, modifier = Modifier.padding(top = Sp.S4, bottom = Sp.S4))
     }
 }
 
@@ -706,8 +706,8 @@ fun DownloadsScreen(vm: AppVM) = Page {
     val d = vm.s.downloads
     if (d.isEmpty()) EmptyBox(I18n.t("dl_none_t", "No downloads yet"), I18n.t("dl_none_b", "Open an anime and tap the download icon on an episode to watch it offline.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
     else {
-        Text("${d.size} ${I18n.t("n_episodes_unit", "episode")}${if (d.size > 1 && I18n.lang != "id") "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-        Box(Modifier.padding(bottom = 12.dp)) { Chip(I18n.t("delete_all", "Delete all"), icon = AppIcons.Trash) { vm.removeAllDl() } }
+        Text("${d.size} ${I18n.t("n_episodes_unit", "episode")}${if (d.size > 1 && I18n.lang != "id") "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = Sp.S4, bottom = Sp.S12))
+        Box(Modifier.padding(bottom = Sp.S12)) { Chip(I18n.t("delete_all", "Delete all"), icon = AppIcons.Trash) { vm.removeAllDl() } }
         d.forEachIndexed { idx, x ->
             val a = Catalog.byId[x.id] ?: return@forEachIndexed
             val pct = vm.downloading["${x.id}:${x.ep}"]
@@ -721,7 +721,7 @@ fun DownloadsScreen(vm: AppVM) = Page {
                     val animPct by animateFloatAsState(pct / 100f, tween(300), label = "dlBar")
                     androidx.compose.material3.LinearProgressIndicator(
                         progress = { animPct },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Sp.S12).padding(bottom = Sp.S12),
                         color = Red, trackColor = Line,
                     )
                 }
@@ -756,7 +756,7 @@ private val GoodGreen = Color(0xFF3DDC97)
 @Composable
 fun GlassButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(44.dp).clip(CircleShape).background(Color(0x4D000000))
+        Modifier.size(48.dp).clip(CircleShape).background(Color(0x4D000000))
             .border(1.dp, Color(0x40FFFFFF), CircleShape).pressable(onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, Modifier.size(22.dp), tint = Color.White) }
@@ -766,11 +766,11 @@ fun GlassButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: Str
 @Composable
 private fun ScorePill(score: String) {
     Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).background(ChipGlass).background(Color(0x26FFC857)).padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+        Modifier.clip(RoundedCornerShape(8.dp)).background(ChipGlass).background(Color(0x26FFC857)).padding(horizontal = Sp.S8, vertical = Sp.S4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4),
     ) {
         Icon(Icons.Filled.Star, null, Modifier.size(13.dp), tint = Gold)
-        Text(score.replace("★", "").trim(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Gold)
+        Text(score.replace("★", "").trim(), fontSize = Ty.Caption, fontWeight = FontWeight.Bold, color = Gold)
     }
 }
 
@@ -778,11 +778,11 @@ private fun ScorePill(score: String) {
 private fun StatusPill(status: String) {
     val live = status.equals("Airing", ignoreCase = true)
     Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).background(ChipGlass).padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.clip(RoundedCornerShape(8.dp)).background(ChipGlass).padding(horizontal = Sp.S8, vertical = Sp.S4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8),
     ) {
         if (live) PulseDot(GoodGreen) else Box(Modifier.size(6.dp).clip(CircleShape).background(NavOff))
-        Text(statusText(status), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, softWrap = false)
+        Text(statusText(status), fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, softWrap = false)
     }
 }
 
@@ -793,15 +793,15 @@ private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifie
         modifier.fillMaxWidth().height(56.dp).pressable(onClick).clip(RoundedCornerShape(18.dp))
             .background(Brush.horizontalGradient(if (accent != null) listOf(androidx.compose.ui.graphics.lerp(accent, Color.White, 0.12f), accent) else listOf(Color(0xFFC8142F), Red)))
             .sweepShine()
-            .padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = Sp.S20),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
     ) {
         Box(Modifier.size(32.dp).clip(CircleShape).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.PlayArrow, null, Modifier.size(22.dp), tint = Color.White)
         }
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-            if (sub != null) Text(sub, fontSize = 12.sp, color = Color(0xCCFFFFFF), maxLines = 1)
+            Text(label, fontSize = Ty.Subtitle, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+            if (sub != null) Text(sub, fontSize = Ty.Caption, color = Color(0xCCFFFFFF), maxLines = 1)
         }
         Icon(AppIcons.ChevronRight, null, Modifier.nudgeX(), tint = Color(0xB3FFFFFF))
     }
@@ -821,7 +821,7 @@ internal fun ActionTile(
     ) {
         if (iconOn != null) MorphIcon(on, iconOn, icon, label, 22.dp, if (on) RedText else Color.White)
         else Icon(icon, null, Modifier.size(22.dp), tint = if (on) RedText else Color.White)
-        Text(label, Modifier.padding(top = 5.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium,
+        Text(label, Modifier.padding(top = Sp.S4), fontSize = Ty.Caption, fontWeight = FontWeight.Medium,
             color = if (on) RedText else InkSoft, maxLines = 1)
     }
 }
@@ -830,7 +830,7 @@ internal fun ActionTile(
 fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = Gutter), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(4.dp).height(18.dp).clip(CircleShape).background(Red))
-        Text(text, Modifier.weight(1f).padding(start = 10.dp), fontSize = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)
+        Text(text, Modifier.weight(1f).padding(start = Sp.S12), fontSize = Ty.Title2, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)
         trailing?.invoke()
     }
 }
@@ -844,16 +844,16 @@ fun EpisodeCard(
     val shape = RoundedCornerShape(16.dp)
     val frac = when { seen -> 1f; progSec != null -> (progSec / durSec.coerceAtLeast(1).toFloat()).coerceIn(0.03f, 0.97f); else -> 0f }
     Row(
-        Modifier.padding(horizontal = Gutter).padding(bottom = 10.dp).fillMaxWidth().pressableLong(onLong, onOpen).clip(shape)
+        Modifier.padding(horizontal = Gutter).padding(bottom = Sp.S12).fillMaxWidth().pressableLong(onLong, onOpen).clip(shape)
             .background(if (current) Color(0x1FA6122D) else Bg2)
-            .border(1.dp, if (current) Red.copy(alpha = 0.6f) else Line, shape).padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .border(1.dp, if (current) Red.copy(alpha = 0.6f) else Line, shape).padding(Sp.S8),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
     ) {
         // compact = daftar di halaman pemutar: hulu belum punya thumbnail per episode, jadi poster yang sama berulang
         // terlihat seperti placeholder; tampilkan nomor episode saja.
         if (compact) {
             Box(Modifier.size(58.dp).clip(RoundedCornerShape(11.dp)).background(if (current) Red.copy(alpha = 0.9f) else Color(0x1FFFFFFF)), contentAlignment = Alignment.Center) {
-                Text("$n", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("$n", fontSize = Ty.Title2, fontWeight = FontWeight.Bold, color = Color.White)
                 if (frac > 0f) AnimatedProgressBar(frac, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp), track = Color(0x59FFFFFF))
             }
         } else Box(Modifier.width(118.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(11.dp)).artBackground(a)) {
@@ -862,12 +862,12 @@ fun EpisodeCard(
             Box(Modifier.align(Alignment.Center).size(30.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = Color.White)
             }
-            Text("EP $n", Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
-                .padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("EP $n", Modifier.align(Alignment.TopStart).padding(Sp.S8).clip(RoundedCornerShape(6.dp)).background(Color(0xB3000000))
+                .padding(horizontal = Sp.S8, vertical = Sp.S2), fontSize = Ty.Micro, fontWeight = FontWeight.Bold, color = Color.White)
             if (frac > 0f) AnimatedProgressBar(frac, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp), track = Color(0x59FFFFFF))
         }
         Column(Modifier.weight(1f)) {
-            Text("Episode $n", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            Text("Episode $n", fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold, maxLines = 1,
                 color = if (seen) Color(0xB3FFFFFF) else Color.White)
             val (txt, col) = when {
                 current -> I18n.t("now_watching", "Now watching") to RedText
@@ -876,11 +876,11 @@ fun EpisodeCard(
                 nextUp -> I18n.t("up_next", "Up next") to RedText
                 else -> I18n.t("not_watched", "Not watched yet") to NavOff
             }
-            Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.padding(top = Sp.S4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4)) {
                 if (seen && !current) Icon(Icons.Filled.CheckCircle, null, Modifier.size(13.dp), tint = col)
-                Text(txt, fontSize = 12.sp, color = col, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(txt, fontSize = Ty.Caption, color = col, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (nextUp && !seen && progSec == null) Text(a.title, Modifier.padding(top = 2.dp), fontSize = 12.sp, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (nextUp && !seen && progSec == null) Text(a.title, Modifier.padding(top = Sp.S2), fontSize = Ty.Caption, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         trailing()
     }
@@ -990,28 +990,28 @@ fun DetailScreen(vm: AppVM, id: String) {
                         val sc = 1f - 0.06f * f; scaleX = sc; scaleY = sc
                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)
                     }.padding(horizontal = Gutter)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.CenterVertically) {
                             a.rating?.let { ScorePill(it) }
                             if (a.hd) Tag("HD", Red, Color.White)
                             StatusPill(a.status)
                         }
-                        Text(a.title, Modifier.padding(top = 10.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold,
+                        Text(a.title, Modifier.padding(top = Sp.S12), fontSize = Ty.Display, fontWeight = FontWeight.Bold,
                             lineHeight = 33.sp, letterSpacing = (-0.5).sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                         Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.eps.takeIf { it > 0 }?.let { "$it eps" }, a.genres.take(2).joinToString(", ").ifBlank { null }).joinToString("  ·  "),
-                            Modifier.padding(top = 6.dp), fontSize = 13.sp, color = InkSoft, maxLines = 1)
+                            Modifier.padding(top = Sp.S8), fontSize = Ty.Small, color = InkSoft, maxLines = 1)
                     }
                     }
                 }
             }
             item(key = "actions") {
                 Column(Modifier.padding(horizontal = Gutter).fadeSlideIn(60)) {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(Sp.S16))
                     PlayButton(
                         label = if (resume != null) "${I18n.t("resume", "Resume Ep")} ${resume.ep}" else I18n.t("play", "Play"),
                         sub = resume?.let { r -> vm.p.prog["$id:${r.ep}"]?.let { "${I18n.t("continue_from", "Continue from")} ${fmt(it)}" } }
                             ?: if (resume == null) "${I18n.t("start_with", "Start with Episode")} ${a.available.firstOrNull() ?: 1}" else null,
                     ) { vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1)) }
-                    Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = Sp.S12), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                         ActionTile(AppIcons.Plus, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
                             Modifier.weight(1f), on = on, iconOn = AppIcons.Check) { vm.toggleML(id) }
                         ActionTile(AppIcons.Download, I18n.t("download_all", "Download all"), Modifier.weight(1f)) { vm.downloadAll(id) }
@@ -1020,28 +1020,28 @@ fun DetailScreen(vm: AppVM, id: String) {
                 }
             }
             if (a.genres.isNotEmpty()) item(key = "genres") {
-                Row(Modifier.padding(top = 16.dp).horizontalScroll(rememberScrollState()).padding(horizontal = Gutter).fadeSlideIn(110),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.padding(top = Sp.S16).horizontalScroll(rememberScrollState()).padding(horizontal = Gutter).fadeSlideIn(110),
+                    horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                     a.genres.forEach { g ->
-                        Text(g, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft, maxLines = 1,
-                            modifier = Modifier.clip(CircleShape).background(Color(0x14FFFFFF)).padding(horizontal = 13.dp, vertical = 6.dp))
+                        Text(g, fontSize = Ty.Caption, fontWeight = FontWeight.Medium, color = InkSoft, maxLines = 1,
+                            modifier = Modifier.clip(CircleShape).background(Color(0x14FFFFFF)).padding(horizontal = Sp.S12, vertical = Sp.S8))
                     }
                 }
             }
             item(key = "synopsis") {
-                Column(Modifier.padding(horizontal = Gutter).padding(top = 20.dp).fadeSlideIn(160)) {
-                    Text(I18n.t("synopsis", "Synopsis"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Box(Modifier.padding(top = 8.dp).animateContentSize()) {
+                Column(Modifier.padding(horizontal = Gutter).padding(top = Sp.S20).fadeSlideIn(160)) {
+                    Text(I18n.t("synopsis", "Synopsis"), fontSize = Ty.Subtitle, fontWeight = FontWeight.Bold)
+                    Box(Modifier.padding(top = Sp.S8).animateContentSize()) {
                         // Detail lengkap masih diambil dan sinopsis belum ada -> kerangka teks, bukan ruang kosong.
                         if (a.synopsis.isBlank() && vm.detailBusy == id) TextSkeleton(4)
-                        else Text(a.synopsis, color = InkSoft, fontSize = 14.5.sp, lineHeight = 22.sp,
+                        else Text(a.synopsis, color = InkSoft, fontSize = Ty.Body, lineHeight = 22.sp,
                             maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
                     }
                     if (a.synopsis.length > 180) {
-                        Row(Modifier.padding(top = 6.dp).clip(CircleShape).clickable { expanded = !expanded }.padding(vertical = 4.dp),
+                        Row(Modifier.padding(top = Sp.S8).clip(CircleShape).clickable { expanded = !expanded }.padding(vertical = Sp.S4),
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(if (expanded) I18n.t("read_less", "Show less") else I18n.t("read_more", "Read more"),
-                                color = RedText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                color = RedText, fontSize = Ty.Body, fontWeight = FontWeight.SemiBold)
                             Icon(if (expanded) AppIcons.ChevronUp else AppIcons.ChevronDown, null, Modifier.size(18.dp), tint = RedText)
                         }
                     }
@@ -1049,22 +1049,22 @@ fun DetailScreen(vm: AppVM, id: String) {
             }
             // ===== Episode lebih dulu: ini alasan orang membuka halaman ini =====
             item(key = "ep_head") {
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(Sp.S24))
                 SectionTitle(I18n.t("episodes", "Episodes")) {
-                    Text("${epNums.size}", fontSize = 13.sp, color = NavOff, modifier = Modifier.padding(end = 10.dp))
+                    Text("${epNums.size}", fontSize = Ty.Small, color = NavOff, modifier = Modifier.padding(end = Sp.S12))
                     if (epNums.size > 1) Row(
                         Modifier.clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
-                            .clickable { newestFirst = !newestFirst }.padding(horizontal = 11.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            .clickable { newestFirst = !newestFirst }.padding(horizontal = Sp.S12, vertical = Sp.S8),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4),
                     ) {
                         Icon(AppIcons.Swap, null, Modifier.size(15.dp), tint = InkSoft)
-                        Text(if (newestFirst) I18n.t("ep_newest", "Newest") else I18n.t("ep_oldest", "Oldest"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
+                        Text(if (newestFirst) I18n.t("ep_newest", "Newest") else I18n.t("ep_oldest", "Oldest"), fontSize = Ty.Caption, fontWeight = FontWeight.Medium, color = InkSoft)
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Sp.S12))
                 if (epNums.isEmpty()) {
                     if (vm.detailBusy == id) Box(Modifier.padding(horizontal = Gutter)) { SkeletonRows(3) }
-                    else Text(I18n.t("no_eps", "No episodes available yet."), Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = 14.sp)
+                    else Text(I18n.t("no_eps", "No episodes available yet."), Modifier.padding(horizontal = Gutter), color = NavOff, fontSize = Ty.Body)
                 }
             }
             itemsIndexed(epNums, key = { _, n -> "ep$n" }) { idx, n ->
@@ -1086,14 +1086,14 @@ fun DetailScreen(vm: AppVM, id: String) {
                 }
             }
             if (epNums.size > 1) item(key = "ep_hint") {
-                Text(I18n.t("ep_hint", "Tip: press and hold an episode to mark it as watched."), Modifier.padding(horizontal = Gutter).padding(bottom = 4.dp), fontSize = 12.sp, color = NavOff)
+                Text(I18n.t("ep_hint", "Tip: press and hold an episode to mark it as watched."), Modifier.padding(horizontal = Gutter).padding(bottom = Sp.S4), fontSize = Ty.Caption, color = NavOff)
             }
             if (sim.isNotEmpty()) {
                 item(key = "similar") {
-                    Spacer(Modifier.height(22.dp))
+                    Spacer(Modifier.height(Sp.S24))
                     SectionTitle(I18n.t("more_like", "More like this"))
-                    Spacer(Modifier.height(12.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = Gutter)) {
+                    Spacer(Modifier.height(Sp.S12))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Sp.S12), contentPadding = PaddingValues(horizontal = Gutter)) {
                         items(sim, key = { it.id }) { x -> PosterCard(x, railW) { vm.go(Route.Detail(x.id)) } }
                     }
                 }
@@ -1116,9 +1116,9 @@ fun DetailScreen(vm: AppVM, id: String) {
         }
         // ===== Bilah atas melayang: kaca di atas hero, jadi solid + judul saat digulir =====
         Box(Modifier.fillMaxWidth().height(statusTop + 58.dp).background(Bg.copy(alpha = barA * 0.97f)).padding(top = statusTop)) {
-            Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxSize().padding(horizontal = Sp.S16), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 GlassButton(AppIcons.ArrowLeft, "Back") { vm.back() }
-                Text(a.title, Modifier.weight(1f).graphicsLayer { alpha = barA }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                Text(a.title, Modifier.weight(1f).graphicsLayer { alpha = barA }, fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 GlassButton(if (on) AppIcons.BookmarkFill else AppIcons.Bookmark, if (on) "Remove from My List" else "Add to My List") { vm.toggleML(id) }
             }
@@ -1145,12 +1145,12 @@ fun SeeAllScreen(vm: AppVM, key: String) {
     val items = remember(key, ids, Catalog.all) { ids.mapNotNull { Catalog.byId[it] } }
     // Katalog belum tiba: kerangka grid, bukan daftar kosong "0 anime".
     if (Catalog.all.isEmpty() && Catalog.loading) {
-        Page { SubHead(title, vm); PosterGridSkeleton(4, Modifier.padding(top = 8.dp), hPad = 0.dp) }
+        Page { SubHead(title, vm); PosterGridSkeleton(4, Modifier.padding(top = Sp.S8), hPad = 0.dp) }
         return
     }
     AnimeGrid(items, vm) {
         SubHead(title, vm)
-        Text("${items.size} anime", color = NavOff, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+        Text("${items.size} anime", color = NavOff, fontSize = Ty.Small, modifier = Modifier.padding(start = Sp.S4, bottom = Sp.S4))
     }
 }
 
@@ -1159,29 +1159,29 @@ fun SeeAllScreen(vm: AppVM, key: String) {
 fun NotifScreen(vm: AppVM) = Page {
     SubHead(I18n.t("notifications", "Notifications"), vm)
     if (!vm.s.settings.alerts) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(14.dp)).background(Bg2)
-            .border(1.dp, Line, RoundedCornerShape(14.dp)).padding(12.dp)) {
-            Text("New episode alerts are off. ", fontSize = 13.sp, color = InkSoft)
-            Text("Turn on in Settings", fontSize = 13.sp, color = RedText, modifier = Modifier.clickable { vm.openSettings() })
+        Row(Modifier.fillMaxWidth().padding(bottom = Sp.S8).clip(RoundedCornerShape(14.dp)).background(Bg2)
+            .border(1.dp, Line, RoundedCornerShape(14.dp)).padding(Sp.S12)) {
+            Text("New episode alerts are off. ", fontSize = Ty.Small, color = InkSoft)
+            Text("Turn on in Settings", fontSize = Ty.Small, color = RedText, modifier = Modifier.clickable { vm.openSettings() })
         }
     }
     if (Catalog.all.isEmpty()) SkeletonRows(4)
     Catalog.notifs.forEach { (id, ep, whenTxt) ->
         val a = Catalog.byId[id] ?: return@forEach
         Column {
-            Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Detail(id)) }.padding(vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Detail(id)) }.padding(vertical = Sp.S16),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 Box(Modifier.size(9.dp).clip(CircleShape).background(if (vm.s.notifRead) Color.Transparent else Red))
                 Text(androidx.compose.ui.text.buildAnnotatedString {
                     pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append(a.title); pop()
                     append(" episode $ep is out")
-                }, Modifier.weight(1f), fontSize = 14.sp)
-                Text(whenTxt, fontSize = 12.sp, color = NavOff)
+                }, Modifier.weight(1f), fontSize = Ty.Body)
+                Text(whenTxt, fontSize = Ty.Caption, color = NavOff)
             }
             HLine()
         }
     }
-    if (!vm.s.notifRead) Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("mark_all_read", "Mark all as read"), BtnStyle.Solid) { vm.markAllRead() } }
+    if (!vm.s.notifRead) Box(Modifier.padding(top = Sp.S16)) { Btn(I18n.t("mark_all_read", "Mark all as read"), BtnStyle.Solid) { vm.markAllRead() } }
 }
 
 // ------------------------------------------------------------------ SEARCH
@@ -1209,8 +1209,8 @@ fun SearchScreen(vm: AppVM) {
     val any = gs.isNotEmpty() || yr.isNotEmpty() || st.isNotEmpty()
 
     @Composable fun group(label: String, content: @Composable RowScope.() -> Unit) {
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, Modifier.width(56.dp), fontSize = 12.sp, color = NavOff)
+        Row(Modifier.fillMaxWidth().padding(top = Sp.S12), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, Modifier.width(56.dp), fontSize = Ty.Caption, color = NavOff)
             // Baris chip melewati padding kanan halaman (sampai tepi layar) dan memudar di ujung, bukan terpotong kasar.
             val bleed = with(LocalDensity.current) { 16.dp.roundToPx() }
             Row(
@@ -1230,14 +1230,14 @@ fun SearchScreen(vm: AppVM) {
                         )
                     }
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), content = content,
+                horizontalArrangement = Arrangement.spacedBy(Sp.S8), content = content,
             )
         }
     }
     @Composable fun heading(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, top: androidx.compose.ui.unit.Dp = 20.dp) {
-        Row(Modifier.padding(top = top, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.padding(top = top, bottom = Sp.S8), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
             if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = RedText)
-            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(text, fontSize = Ty.Title, fontWeight = FontWeight.SemiBold)
         }
     }
 
@@ -1265,16 +1265,16 @@ fun SearchScreen(vm: AppVM) {
     AnimeGrid(results, vm) {
         // Search adalah tab utama: tanpa panah kembali kecuali dibuka dari layar lain (tumpukan > 1).
         if (vm.stack.size > 1) SubHead(I18n.t("search", "Search"), vm)
-        else Text(I18n.t("search", "Search"), Modifier.padding(bottom = 12.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
-        Row(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, if (q.isNotEmpty()) Red.copy(alpha = 0.7f) else Line, RoundedCornerShape(18.dp)).padding(start = 16.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        else Text(I18n.t("search", "Search"), Modifier.padding(bottom = Sp.S12), fontSize = Ty.Display, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+        Row(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, if (q.isNotEmpty()) Red.copy(alpha = 0.7f) else Line, RoundedCornerShape(18.dp)).padding(start = Sp.S16, end = Sp.S8),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
             Icon(AppIcons.Search, null, Modifier.size(22.dp), tint = if (q.isNotEmpty()) RedText else NavOff)
             BasicTextField(q, { q = it }, Modifier.weight(1f).focusRequester(fr), singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
+                textStyle = TextStyle(color = Color.White, fontSize = Ty.Subtitle), cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { vm.addHist(q) }),
                 decorationBox = { inner -> if (q.isEmpty()) Text(I18n.t("search_hint2", "Search anime or genre"), color = NavOff); inner() })
-            if (q.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
+            if (q.isNotEmpty()) Box(Modifier.size(48.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
                 Icon(AppIcons.Close, "Clear", Modifier.size(18.dp), tint = InkSoft)
             } else if (voiceOk) Box(Modifier.size(48.dp).clip(CircleShape).clickable { showVoice = true }, contentAlignment = Alignment.Center) {
                 Icon(AppIcons.Mic, I18n.t("voice_search", "Voice search"), Modifier.size(22.dp), tint = InkSoft)
@@ -1287,14 +1287,14 @@ fun SearchScreen(vm: AppVM) {
         }
         if (any) {
             val nf = gs.size + (if (yr.isNotEmpty()) 1 else 0) + (if (st.isNotEmpty()) 1 else 0)
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("$nf ${I18n.t("filters_active", "filters active")}", fontSize = 12.sp, color = NavOff)
+            Row(Modifier.fillMaxWidth().padding(top = Sp.S12), verticalAlignment = Alignment.CenterVertically) {
+                Text("$nf ${I18n.t("filters_active", "filters active")}", fontSize = Ty.Caption, color = NavOff)
                 Spacer(Modifier.weight(1f))
-                Text(I18n.t("reset", "Reset"), Modifier.clip(RoundedCornerShape(8.dp)).clickable { gs = emptyList(); yr = ""; st = "" }.padding(horizontal = 8.dp, vertical = 4.dp),
-                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = RedText)
+                Text(I18n.t("reset", "Reset"), Modifier.clip(RoundedCornerShape(8.dp)).clickable { gs = emptyList(); yr = ""; st = "" }.padding(horizontal = Sp.S8, vertical = Sp.S4),
+                    fontSize = Ty.Small, fontWeight = FontWeight.Medium, color = RedText)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Sp.S8))
         if (q.trim().lowercase() != query) {
             androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Red, trackColor = Color.Transparent)
         }
@@ -1302,14 +1302,14 @@ fun SearchScreen(vm: AppVM) {
         if (query.isEmpty() && !any) {
             if (vm.s.hist.isEmpty()) {
                 // Ajakan singkat (bukan kartu berbingkai bertanda "kosong"): ikon pencarian + dua baris teks.
-                Column(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxWidth().padding(top = Sp.S28, bottom = Sp.S8), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(AppIcons.Search, null, Modifier.size(30.dp), tint = RedText)
-                    Text(I18n.t("find_next_t", "Find your next anime"), Modifier.padding(top = 8.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Text(I18n.t("find_next_b", "Search a title or genre, or pick filters above."), Modifier.padding(top = 4.dp), fontSize = 13.sp, color = InkSoft, textAlign = TextAlign.Center)
+                    Text(I18n.t("find_next_t", "Find your next anime"), Modifier.padding(top = Sp.S8), fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold)
+                    Text(I18n.t("find_next_b", "Search a title or genre, or pick filters above."), Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = InkSoft, textAlign = TextAlign.Center)
                 }
             } else {
                 heading(I18n.t("recent_searches", "Recent searches"), AppIcons.History, top = 14.dp)
-                FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(Modifier.padding(top = Sp.S8), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
                     vm.s.hist.forEach { h -> Chip(h) { q = h } }
                     Chip(I18n.t("clear_hist", "Clear history")) { vm.clearHist() }
                 }
@@ -1320,20 +1320,20 @@ fun SearchScreen(vm: AppVM) {
                 trend.forEachIndexed { i, t ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
                     Row(
-                        Modifier.fillMaxWidth().clickable { vm.go(Route.Detail(t.id)) }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        Modifier.fillMaxWidth().clickable { vm.go(Route.Detail(t.id)) }.padding(vertical = Sp.S8),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
                     ) {
-                        Text("${i + 1}", Modifier.width(18.dp), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = RedText, textAlign = TextAlign.Center)
+                        Text("${i + 1}", Modifier.width(18.dp), fontSize = Ty.Body, fontWeight = FontWeight.Bold, color = RedText, textAlign = TextAlign.Center)
                         Box(Modifier.size(width = 44.dp, height = 62.dp).clip(RoundedCornerShape(8.dp)).artBackground(t)) { RealImage(t, Modifier.fillMaxSize()) }
                         Column(Modifier.weight(1f)) {
-                            Text(t.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
+                            Text(t.title, fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
                             val gl = t.genres.take(2).joinToString(", ")
-                            if (gl.isNotBlank()) Text(gl, Modifier.padding(top = 2.dp), fontSize = 12.sp, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (gl.isNotBlank()) Text(gl, Modifier.padding(top = Sp.S2), fontSize = Ty.Caption, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         t.rating?.replace("★", "")?.trim()?.takeIf { it.isNotBlank() }?.let {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4)) {
                                 Icon(Icons.Filled.Star, null, Modifier.size(13.dp), tint = Gold)
-                                Text(it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Gold)
+                                Text(it, fontSize = Ty.Caption, fontWeight = FontWeight.Bold, color = Gold)
                             }
                         }
                     }
@@ -1342,7 +1342,7 @@ fun SearchScreen(vm: AppVM) {
         } else if (results.isEmpty()) {
             EmptyBox(I18n.t("no_results_t", "No results"), I18n.t("no_results_b", "Nothing matches. Try fewer filters or check the spelling."))
         } else {
-            Text("${results.size} ${I18n.t("n_results", "result")}${if (results.size > 1 && I18n.lang != "id") "s" else ""}", Modifier.padding(bottom = 2.dp), color = NavOff, fontSize = 13.sp)
+            Text("${results.size} ${I18n.t("n_results", "result")}${if (results.size > 1 && I18n.lang != "id") "s" else ""}", Modifier.padding(bottom = Sp.S2), color = NavOff, fontSize = Ty.Small)
         }
     }
 }

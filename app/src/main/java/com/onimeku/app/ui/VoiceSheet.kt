@@ -153,27 +153,27 @@ fun VoiceSearchSheet(onApply: (String) -> Unit, onType: () -> Unit, onDismiss: (
         onDismissRequest = onDismiss, containerColor = SheetBg, contentColor = Color.White,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Sp.S20).padding(bottom = Sp.S28), horizontalAlignment = Alignment.CenterHorizontally) {
             LangToggle(lang) { lang = it }
             when (val s = state) {
                 is VState.Listening -> {
                     MicPulse(level, active = true)
-                    Text(I18n.t("voice_listening", "Listening"), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(I18n.t("voice_listening", "Listening"), fontSize = Ty.Title, fontWeight = FontWeight.SemiBold)
                     Text(
-                        partial.ifEmpty { " " }, Modifier.padding(top = 8.dp).heightIn(min = 30.dp),
-                        fontSize = 22.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center,
+                        partial.ifEmpty { " " }, Modifier.padding(top = Sp.S8).heightIn(min = 30.dp),
+                        fontSize = Ty.Head, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center,
                     )
-                    Text(I18n.t("voice_prompt", "Say an anime title or genre"), Modifier.padding(top = 6.dp), fontSize = 13.sp, color = NavOff)
+                    Text(I18n.t("voice_prompt", "Say an anime title or genre"), Modifier.padding(top = Sp.S8), fontSize = Ty.Small, color = NavOff)
                     Text(
-                        I18n.t("voice_cancel", "Cancel"), Modifier.padding(top = 14.dp).clip(CircleShape).clickable(onClick = onDismiss).padding(horizontal = 16.dp, vertical = 10.dp),
-                        fontSize = 13.sp, color = NavOff,
+                        I18n.t("voice_cancel", "Cancel"), Modifier.padding(top = Sp.S16).clip(CircleShape).clickable(onClick = onDismiss).padding(horizontal = Sp.S16, vertical = Sp.S12),
+                        fontSize = Ty.Small, color = NavOff,
                     )
                 }
                 is VState.Error -> {
                     MicPulse(0f, active = false)
-                    Text(s.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                    Text(s.body, Modifier.padding(top = 6.dp), fontSize = 13.sp, lineHeight = 19.sp, color = NavOff, textAlign = TextAlign.Center)
-                    Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(s.title, fontSize = Ty.Title, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    Text(s.body, Modifier.padding(top = Sp.S8), fontSize = Ty.Small, lineHeight = 19.sp, color = NavOff, textAlign = TextAlign.Center)
+                    Row(Modifier.fillMaxWidth().padding(top = Sp.S20), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                         VButton(I18n.t("voice_type", "Type"), AppIcons.Keyboard, primary = false, Modifier.weight(1f), onType)
                         if (s.needsPermission) VButton(I18n.t("voice_settings", "Open settings"), null, primary = true, Modifier.weight(1f)) {
                             ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
@@ -183,13 +183,13 @@ fun VoiceSearchSheet(onApply: (String) -> Unit, onType: () -> Unit, onDismiss: (
                 is VState.Done -> {
                     var sel by remember(s) { mutableStateOf(s.selected) }
                     val hits = remember(sel, titles) { norm(sel).let { n -> titles.count { it.second.contains(n) } } }
-                    Text(I18n.t("voice_heard", "I heard"), Modifier.padding(top = 20.dp), fontSize = 13.sp, color = NavOff)
-                    Text(s.heard, Modifier.padding(top = 4.dp), fontSize = 22.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-                    Text(I18n.t("voice_maybe", "Did you mean"), Modifier.padding(top = 18.dp, bottom = 10.dp), fontSize = 13.sp, color = NavOff)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(I18n.t("voice_heard", "I heard"), Modifier.padding(top = Sp.S20), fontSize = Ty.Small, color = NavOff)
+                    Text(s.heard, Modifier.padding(top = Sp.S4), fontSize = Ty.Head, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    Text(I18n.t("voice_maybe", "Did you mean"), Modifier.padding(top = Sp.S16, bottom = Sp.S12), fontSize = Ty.Small, color = NavOff)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Sp.S8, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
                         s.picks.forEach { p -> Chip(p, on = p == sel) { sel = p } }
                     }
-                    Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = Sp.S24), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                         VButton(I18n.t("voice_repeat", "Again"), AppIcons.Mic, primary = false, Modifier.weight(1f)) { attempt++ }
                         VButton(
                             if (hits > 0) I18n.t("voice_see", "See %d results").format(hits) else I18n.t("voice_search_go", "Search"),
@@ -204,13 +204,13 @@ fun VoiceSearchSheet(onApply: (String) -> Unit, onType: () -> Unit, onDismiss: (
 
 @Composable
 private fun LangToggle(lang: String, onPick: (String) -> Unit) {
-    Row(Modifier.clip(CircleShape).background(Color(0xFF0F1019)).border(1.dp, Line, CircleShape).padding(3.dp)) {
+    Row(Modifier.clip(CircleShape).background(Color(0xFF0F1019)).border(1.dp, Line, CircleShape).padding(Sp.S4)) {
         listOf("id" to "Indonesia", "en" to "English").forEach { (code, label) ->
             val on = code == lang
             Text(
                 label, Modifier.clip(CircleShape).background(if (on) Color(0xFF2A2D42) else Color.Transparent)
-                    .clickable { if (!on) onPick(code) }.padding(horizontal = 16.dp, vertical = 7.dp),
-                fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = if (on) Color.White else NavOff,
+                    .clickable { if (!on) onPick(code) }.padding(horizontal = Sp.S16, vertical = Sp.S8),
+                fontSize = Ty.Small, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = if (on) Color.White else NavOff,
             )
         }
     }
@@ -226,7 +226,7 @@ private fun MicPulse(level: Float, active: Boolean) {
     )
     val r1 by ring(0); val r2 by ring(1000)
     val core by animateFloatAsState(1f + level * 0.12f, tween(90), label = "core")
-    Box(Modifier.padding(top = 24.dp, bottom = 16.dp).size(88.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.padding(top = Sp.S24, bottom = Sp.S16).size(88.dp), contentAlignment = Alignment.Center) {
         if (active && !reduce) listOf(r1, r2).forEach { p ->
             Box(Modifier.matchParentSize().graphicsLayer { scaleX = 1f + p * 0.8f; scaleY = 1f + p * 0.8f; alpha = 0.7f * (1f - p) }
                 .border(2.dp, RingRed, CircleShape))
@@ -249,7 +249,7 @@ private fun VButton(text: String, icon: ImageVector?, primary: Boolean, modifier
             .border(1.dp, if (primary) Red else Line, shape).clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
-        if (icon != null) { Icon(icon, null, Modifier.size(18.dp), tint = Color.White); Spacer(Modifier.width(8.dp)) }
-        Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (primary) Color.White else TimeInk)
+        if (icon != null) { Icon(icon, null, Modifier.size(18.dp), tint = Color.White); Spacer(Modifier.width(Sp.S8)) }
+        Text(text, fontSize = Ty.Body, fontWeight = FontWeight.SemiBold, color = if (primary) Color.White else TimeInk)
     }
 }

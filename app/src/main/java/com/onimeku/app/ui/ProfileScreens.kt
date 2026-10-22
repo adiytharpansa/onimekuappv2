@@ -48,44 +48,44 @@ fun ProfileScreen(vm: AppVM) {
         val acc = vm.s.account
         val hShape = RoundedCornerShape(24.dp)
         Row(
-            Modifier.fillMaxWidth().padding(bottom = 26.dp).clip(hShape).background(Brush.linearGradient(listOf(Color(0xFF3A1220), Bg2)))
-                .border(1.dp, Line, hShape).padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().padding(bottom = Sp.S24).clip(hShape).background(Brush.linearGradient(listOf(Color(0xFF3A1220), Bg2)))
+                .border(1.dp, Line, hShape).padding(Sp.S20),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16),
         ) {
             Box(Modifier.size(68.dp).clip(CircleShape).background(if (acc != null) Red else Color(0x26FFFFFF)).border(2.dp, if (acc != null) RedText else Line, CircleShape), contentAlignment = Alignment.Center) {
-                if (acc != null) Text(acc.email.take(1).uppercase(), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                if (acc != null) Text(acc.email.take(1).uppercase(), fontSize = Ty.Display, fontWeight = FontWeight.Bold)
                 else Icon(AppIcons.User, null, Modifier.size(34.dp), tint = InkSoft)
             }
             Column(Modifier.weight(1f)) {
-                Text(if (acc != null) "Signed in" else "Guest", fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
-                Text(acc?.email ?: "Not signed in", Modifier.padding(top = 2.dp), fontSize = 14.sp, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(if (acc != null) "Signed in" else "Guest", fontSize = Ty.Head2, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                Text(acc?.email ?: "Not signed in", Modifier.padding(top = Sp.S2), fontSize = Ty.Body, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
         val st = remember(vm.p.days, vm.p.seen, Catalog.all) { com.onimeku.app.data.Stats.compute(vm.p) }
-        Text(I18n.t("stats_title", "Your stats"), fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
-        CardBox(Modifier.padding(bottom = 26.dp).fadeSlideIn(60)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(I18n.t("stats_title", "Your stats"), fontSize = Ty.Title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = Sp.S12))
+        CardBox(Modifier.padding(bottom = Sp.S24).fadeSlideIn(60)) {
+            Column(Modifier.padding(Sp.S16), verticalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 val time = if (st.monthSec < 3600) "${st.monthSec / 60} ${I18n.t("unit_min", "min")}" else "${st.monthSec / 3600}.${(st.monthSec % 3600) / 360} ${I18n.t("unit_h", "h")}"
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     StatCell(time, I18n.t("stat_month", "Watched this month"), Modifier.weight(1f))
                     StatCell("${st.episodes}", I18n.t("stat_eps", "Episodes finished"), Modifier.weight(1f))
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     StatCell(st.topGenre ?: "–", I18n.t("stat_genre", "Top genre"), Modifier.weight(1f))
                     StatCell("${st.streak} ${if (st.streak == 1) I18n.t("unit_day", "day") else I18n.t("unit_days", "days")}", I18n.t("stat_streak", "Daily streak"), Modifier.weight(1f))
                 }
             }
         }
-        Text("Profiles", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+        Text("Profiles", fontSize = Ty.Title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = Sp.S12))
         vm.s.profiles.forEachIndexed { i, pr ->
             val sel = i == vm.s.pi
             val bd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, androidx.compose.animation.core.tween(250), label = "profBd")
-            Row(Modifier.padding(bottom = 10.dp).fadeSlideIn(minOf(i, 3) * 60), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(bottom = Sp.S12).fadeSlideIn(minOf(i, 3) * 60), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.CenterVertically) {
                 Row(
                     Modifier.weight(1f).heightIn(min = 56.dp).clip(RoundedCornerShape(18.dp)).background(Bg2)
                         .border(1.dp, bd, RoundedCornerShape(18.dp))
-                        .clickable { vm.switchProfile(i) }.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .clickable { vm.switchProfile(i) }.padding(horizontal = Sp.S16, vertical = Sp.S12),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
                 ) {
                     Box(Modifier.size(36.dp).clip(CircleShape).background(avatarColors[i % 4]), contentAlignment = Alignment.Center) {
                         Text(pr.name.take(1).uppercase(), fontWeight = FontWeight.Bold)
@@ -97,11 +97,11 @@ fun ProfileScreen(vm: AppVM) {
             }
         }
         if (vm.s.profiles.size < 4) {
-            Row(Modifier.padding(bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).height(44.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = 18.dp),
+            Row(Modifier.padding(bottom = Sp.S24), horizontalArrangement = Arrangement.spacedBy(Sp.S12), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).height(44.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = Sp.S16),
                     contentAlignment = Alignment.CenterStart) {
                     BasicTextField(name, { if (it.length <= 12) name = it }, singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 15.sp), cursorBrush = SolidColor(Color.White),
+                        textStyle = TextStyle(color = Color.White, fontSize = Ty.Subtitle), cursorBrush = SolidColor(Color.White),
                         decorationBox = { inner -> if (name.isEmpty()) Text("New profile", color = NavOff); inner() })
                 }
                 Chip("Add") {
@@ -111,18 +111,18 @@ fun ProfileScreen(vm: AppVM) {
         }
 
 
-        if (acc == null) CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(120)) {
-            Column(Modifier.padding(20.dp)) {
-                Text("Sign in to Onimeku", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text("Save your watchlist and pick up where you left off on any device.", Modifier.padding(top = 6.dp), color = InkSoft, fontSize = 14.sp)
-                Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (acc == null) CardBox(Modifier.padding(top = Sp.S20).fadeSlideIn(120)) {
+            Column(Modifier.padding(Sp.S20)) {
+                Text("Sign in to Onimeku", fontSize = Ty.Title2, fontWeight = FontWeight.SemiBold)
+                Text("Save your watchlist and pick up where you left off on any device.", Modifier.padding(top = Sp.S8), color = InkSoft, fontSize = Ty.Body)
+                Row(Modifier.padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(false)) }
                     Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(true)) }
                 }
             }
-        } else Box(Modifier.padding(top = 20.dp)) {
+        } else Box(Modifier.padding(top = Sp.S20)) {
             var confirmDel by remember { mutableStateOf(false) }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 Btn("Sign out", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.signOut() }
                 Btn("Delete account", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { confirmDel = true }
             }
@@ -135,33 +135,33 @@ fun ProfileScreen(vm: AppVM) {
             )
         }
 
-        CardBox(Modifier.padding(top = 20.dp).fadeSlideIn(160)) {
-            Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Downloads) }.padding(horizontal = 18.dp, vertical = 17.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        CardBox(Modifier.padding(top = Sp.S20).fadeSlideIn(160)) {
+            Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Downloads) }.padding(horizontal = Sp.S16, vertical = Sp.S16),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 Box(Modifier.size(34.dp).clip(CircleShape).background(Red.copy(alpha = 0.28f)), contentAlignment = Alignment.Center) {
                     Icon(AppIcons.Download, null, Modifier.size(18.dp), tint = RedText)
                 }
-                Column(Modifier.weight(1f).padding(start = 2.dp)) {
-                    Text(I18n.t("tab_download", "Download"), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Column(Modifier.weight(1f).padding(start = Sp.S2)) {
+                    Text(I18n.t("tab_download", "Download"), fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium)
                     Text(
                         if (vm.s.downloads.isEmpty()) I18n.t("dl_profile_empty", "Watch offline") else "${vm.s.downloads.size} ${I18n.t("dl_saved", "episodes saved")}",
-                        fontSize = 12.5.sp, color = NavOff,
+                        fontSize = Ty.Small, color = NavOff,
                     )
                 }
                 Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
             }
         }
 
-        CardBox(Modifier.padding(top = 16.dp).fadeSlideIn(200)) {
+        CardBox(Modifier.padding(top = Sp.S16).fadeSlideIn(200)) {
             listOf("settings" to I18n.t("settings", "Settings"), "language" to I18n.t("language", "Language"), "help" to I18n.t("help", "Help Center"), "about" to I18n.t("about", "About Onimeku")).forEachIndexed { i, (k, label) ->
                 if (i > 0) HLine()
-                Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = 18.dp, vertical = 17.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = Sp.S16, vertical = Sp.S16),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x14FFFFFF)), contentAlignment = Alignment.Center) {
                         Icon(when (k) { "settings" -> AppIcons.Settings; "language" -> AppIcons.Globe; "help" -> AppIcons.Help; else -> AppIcons.Info }, null, Modifier.size(18.dp), tint = InkSoft)
                     }
-                    Text(label, Modifier.weight(1f).padding(start = 2.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    if (k == "language") Text(if (vm.s.settings.lang == "id") "Bahasa Indonesia" else "English", color = NavOff, fontSize = 14.sp)
+                    Text(label, Modifier.weight(1f).padding(start = Sp.S2), fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium)
+                    if (k == "language") Text(if (vm.s.settings.lang == "id") "Bahasa Indonesia" else "English", color = NavOff, fontSize = Ty.Body)
                     Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
                 }
             }
@@ -171,15 +171,15 @@ fun ProfileScreen(vm: AppVM) {
 
 @Composable
 private fun Grp(text: String) =
-    Text(text.uppercase(), Modifier.padding(start = 2.dp, top = 22.dp, bottom = 8.dp), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = NavOff, letterSpacing = 1.sp)
+    Text(text.uppercase(), Modifier.padding(start = Sp.S2, top = Sp.S24, bottom = Sp.S8), fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = NavOff, letterSpacing = 1.sp)
 
 @Composable
 private fun SwitchRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S12), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(desc, fontSize = 12.5.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp))
+            Text(title, fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium)
+            Text(desc, fontSize = Ty.Small, color = NavOff, modifier = Modifier.padding(top = Sp.S2))
         }
         Switch(checked, onChange, colors = SwitchDefaults.colors(
             checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
@@ -190,13 +190,13 @@ private fun SwitchRow(title: String, desc: String, checked: Boolean, onChange: (
 @Composable
 private fun EngineRow(value: String, onChange: (String) -> Unit) {
     var t by remember { mutableStateOf(value) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp)) {
-        Text(I18n.t("sub_engine_t", "Translation server (optional)"), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-        Text(I18n.t("sub_engine_d", "Your own endpoint for higher-quality translation. Leave empty to use the built-in server, or this device if it is unavailable."), fontSize = 12.5.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp))
+    Column(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S12)) {
+        Text(I18n.t("sub_engine_t", "Translation server (optional)"), fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium)
+        Text(I18n.t("sub_engine_d", "Your own endpoint for higher-quality translation. Leave empty to use the built-in server, or this device if it is unavailable."), fontSize = Ty.Small, color = NavOff, modifier = Modifier.padding(top = Sp.S2))
         BasicTextField(
             t, { t = it; onChange(it.trim()) }, singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp), cursorBrush = SolidColor(Red),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1E2130)).padding(horizontal = 12.dp, vertical = 10.dp),
+            textStyle = TextStyle(color = Color.White, fontSize = Ty.Body), cursorBrush = SolidColor(Red),
+            modifier = Modifier.fillMaxWidth().padding(top = Sp.S8).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1E2130)).padding(horizontal = Sp.S12, vertical = Sp.S12),
         )
     }
 }
@@ -243,27 +243,27 @@ fun SubScreen(vm: AppVM, key: String) {
                 }
             }
             "language" -> {
-                Text(I18n.t("choose_language", "Choose the language used in the app."), Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
+                Text(I18n.t("choose_language", "Choose the language used in the app."), Modifier.padding(start = Sp.S4, bottom = Sp.S16), color = InkSoft)
                 CardBox {
                     // Bahasa Indonesia kini BENAR-BENAR berfungsi;
                     // pilihan tersimpan di Settings.lang dan seluruh
                     // antarmuka utama mengikuti lewat I18n.
                     listOf("en" to "English", "id" to "Bahasa Indonesia").forEachIndexed { i, (code, label) ->
                         if (i > 0) HLine()
-                        Row(Modifier.fillMaxWidth().clickable { vm.setSettings { st -> st.copy(lang = code) } }.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(label, Modifier.weight(1f), fontSize = 16.sp)
+                        Row(Modifier.fillMaxWidth().clickable { vm.setSettings { st -> st.copy(lang = code) } }.padding(horizontal = Sp.S16, vertical = Sp.S16), verticalAlignment = Alignment.CenterVertically) {
+                            Text(label, Modifier.weight(1f), fontSize = Ty.Subtitle)
                             if (vm.s.settings.lang == code) Icon(AppIcons.Check, null, Modifier.size(20.dp), tint = RedText)
                         }
                     }
                     HLine()
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("日本語", Modifier.weight(1f), fontSize = 16.sp, color = Color(0xA6FFFFFF))
-                        Text(I18n.t("coming_soon", "Coming soon"), fontSize = 13.sp, color = NavOff)
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S16), verticalAlignment = Alignment.CenterVertically) {
+                        Text("日本語", Modifier.weight(1f), fontSize = Ty.Subtitle, color = Color(0xA6FFFFFF))
+                        Text(I18n.t("coming_soon", "Coming soon"), fontSize = Ty.Small, color = NavOff)
                     }
                 }
             }
             "help" -> {
-                Text("Quick answers to common questions.", Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
+                Text("Quick answers to common questions.", Modifier.padding(start = Sp.S4, bottom = Sp.S16), color = InkSoft)
                 CardBox {
                     val faq = listOf(
                         "How do I watch an episode offline?" to "Open the Download tab and save an episode while you are online. Saved episodes stay there until you remove them.",
@@ -275,26 +275,26 @@ fun SubScreen(vm: AppVM, key: String) {
                     faq.forEachIndexed { i, (qq, aa) ->
                         if (i > 0) HLine()
                         var open by rememberSaveable { mutableStateOf(false) }
-                        Column(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 18.dp, vertical = 16.dp)) {
+                        Column(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = Sp.S16, vertical = Sp.S16)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(qq, Modifier.weight(1f), fontWeight = FontWeight.Medium)
-                                Text(if (open) "−" else "+", fontSize = 22.sp, color = NavOff)
+                                Text(if (open) "−" else "+", fontSize = Ty.Head, color = NavOff)
                             }
-                            if (open) Text(aa, Modifier.padding(top = 10.dp), color = InkSoft, fontSize = 14.sp)
+                            if (open) Text(aa, Modifier.padding(top = Sp.S12), color = InkSoft, fontSize = Ty.Body)
                         }
                     }
                 }
             }
             "about" -> {
-                Row(Modifier.padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.padding(bottom = Sp.S16), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
                     Logo(56.dp)
                     Column {
-                        Text("Onimeku", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Onimeku", fontSize = Ty.Head, fontWeight = FontWeight.SemiBold)
                         Text("Version ${com.onimeku.app.BuildConfig.VERSION_NAME}", color = NavOff)
                     }
                 }
                 Text("Onimeku is a place to watch anime online. Browse top hits, follow new episodes, and keep a list of what you want to watch next.",
-                    Modifier.padding(start = 4.dp, bottom = 18.dp), color = InkSoft)
+                    Modifier.padding(start = Sp.S4, bottom = Sp.S16), color = InkSoft)
                 CardBox {
                     val ctxA = androidx.compose.ui.platform.LocalContext.current
                     Row(Modifier.fillMaxWidth().clickable {
@@ -305,16 +305,16 @@ fun SubScreen(vm: AppVM, key: String) {
                             putExtra(android.content.Intent.EXTRA_TEXT, com.onimeku.app.data.CrashLog.read())
                         }
                         ctxA.startActivity(android.content.Intent.createChooser(send, "Send diagnostics").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                    }.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Send diagnostics", Modifier.weight(1f), fontSize = 16.sp)
+                    }.padding(horizontal = Sp.S16, vertical = Sp.S16), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Send diagnostics", Modifier.weight(1f), fontSize = Ty.Subtitle)
                         Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
                     }
                     HLine()
                     listOf("terms" to "Terms of Service", "privacy" to "Privacy Policy", "licenses" to "Licenses").forEachIndexed { i, (k2, l) ->
                         if (i > 0) HLine()
-                        Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k2)) }.padding(horizontal = 18.dp, vertical = 16.dp),
+                        Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k2)) }.padding(horizontal = Sp.S16, vertical = Sp.S16),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text(l, Modifier.weight(1f), fontSize = 16.sp)
+                            Text(l, Modifier.weight(1f), fontSize = Ty.Subtitle)
                             Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
                         }
                     }
@@ -328,9 +328,9 @@ fun SubScreen(vm: AppVM, key: String) {
 @Composable
 private fun StatCell(value: String, label: String, modifier: Modifier = Modifier) {
     Column(
-        modifier.clip(RoundedCornerShape(14.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier.clip(RoundedCornerShape(14.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = Sp.S16, vertical = Sp.S12),
     ) {
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-        Text(label, Modifier.padding(top = 2.dp), fontSize = 12.sp, color = NavOff, maxLines = 2)
+        Text(value, fontSize = Ty.Title2, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(label, Modifier.padding(top = Sp.S2), fontSize = Ty.Caption, color = NavOff, maxLines = 2)
     }
 }

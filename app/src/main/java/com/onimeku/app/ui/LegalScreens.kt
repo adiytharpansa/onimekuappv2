@@ -42,13 +42,13 @@ private val licenses = listOf(
 fun LegalContent(key: String) {
     val secs = when (key) { "terms" -> terms; "privacy" -> privacy; else -> licenses }
     Text(if (key == "licenses") "Onimeku is built with these open-source projects." else "Last updated: October 2026",
-        Modifier.padding(start = 4.dp, bottom = 12.dp), color = InkSoft, fontSize = 13.sp)
+        Modifier.padding(start = Sp.S4, bottom = Sp.S12), color = InkSoft, fontSize = Ty.Small)
     CardBox {
         secs.forEachIndexed { i, s ->
             if (i > 0) HLine()
-            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp)) {
-                Text(s.h, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp)
-                Text(s.body, Modifier.padding(top = 6.dp), color = InkSoft, fontSize = 14.sp, lineHeight = 21.sp)
+            Column(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S16)) {
+                Text(s.h, fontWeight = FontWeight.SemiBold, fontSize = Ty.Subtitle)
+                Text(s.body, Modifier.padding(top = Sp.S8), color = InkSoft, fontSize = Ty.Body, lineHeight = 21.sp)
             }
         }
     }

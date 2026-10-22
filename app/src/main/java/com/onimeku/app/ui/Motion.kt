@@ -167,27 +167,27 @@ private fun HomeSkeletonBody(heroHeight: Dp, posterWidth: Dp, bottomPad: Dp) {
         Box(Modifier.fillMaxWidth().height(heroHeight)) {
             Box(Modifier.fillMaxSize().shimmer())
             // Bayangan isi hero: lencana, judul, sinopsis, tombol Play, titik indikator.
-            Column(Modifier.align(androidx.compose.ui.Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 44.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.align(androidx.compose.ui.Alignment.BottomStart).padding(start = Sp.S20, end = Sp.S20, bottom = 44.dp),
+                verticalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 val ink = Color(0x40000000)
                 Box(Modifier.width(90.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(ink))
                 Box(Modifier.fillMaxWidth(0.75f).height(30.dp).clip(RoundedCornerShape(8.dp)).background(ink))
                 Box(Modifier.fillMaxWidth(0.9f).height(13.dp).clip(RoundedCornerShape(6.dp)).background(ink))
-                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.padding(top = Sp.S8), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     Box(Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(18.dp)).background(ink))
                     Box(Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(ink))
                 }
             }
         }
         repeat(3) {
-            Spacer(Modifier.height(26.dp))
-            SkeletonBox(Modifier.padding(horizontal = 16.dp).width(170.dp).height(22.dp), 8.dp)
-            Spacer(Modifier.height(14.dp))
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Spacer(Modifier.height(Sp.S24))
+            SkeletonBox(Modifier.padding(horizontal = Sp.S16).width(170.dp).height(22.dp), 8.dp)
+            Spacer(Modifier.height(Sp.S16))
+            Row(Modifier.padding(horizontal = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 repeat(3) {
                     Column(Modifier.width(posterWidth)) {
                         SkeletonBox(Modifier.fillMaxWidth().aspectRatio(232f / 311f), 18.dp)
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(Sp.S8))
                         SkeletonBox(Modifier.fillMaxWidth(0.8f).height(12.dp), 6.dp)
                     }
                 }
@@ -203,9 +203,9 @@ fun SkeletonRows(count: Int = 4) = ProvideShimmer { SkeletonRowsBody(count) }
 @Composable
 private fun SkeletonRowsBody(count: Int) {
     repeat(count) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = Sp.S12), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
             SkeletonBox(Modifier.width(96.dp).aspectRatio(16f / 10f), 12.dp)
-            Column(Modifier.weight(1f).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f).padding(top = Sp.S4), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
                 SkeletonBox(Modifier.fillMaxWidth(0.85f).height(14.dp), 6.dp)
                 SkeletonBox(Modifier.fillMaxWidth(0.5f).height(11.dp), 6.dp)
             }
@@ -417,7 +417,7 @@ fun GenreMarquee(genres: List<String>, onClick: (String) -> Unit) {
     if (genres.isEmpty()) return
     val half = genres.size / 2
     val rows = listOf(genres.take(maxOf(half, 1)) to 1, genres.drop(maxOf(half, 1)).ifEmpty { genres.reversed() } to -1)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Sp.S12)) {
         rows.forEachIndexed { r, (list, dir) -> MarqueeRow(list, dir, 26f + r * 8f, onClick) }
     }
 }
@@ -441,19 +441,19 @@ private fun MarqueeRow(list: List<String>, dir: Int, dpPerSec: Float, onClick: (
     }
     androidx.compose.foundation.lazy.LazyRow(
         state = state, userScrollEnabled = false,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Sp.S12),
         modifier = Modifier.fillMaxWidth(),
     ) {
         items(Int.MAX_VALUE) { i ->
             val g = list[i % n]
             Row(
                 Modifier.clip(RoundedCornerShape(50)).background(Bg2).border(1.dp, Line, RoundedCornerShape(50))
-                    .pressable { onClick(g) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                    .pressable { onClick(g) }.padding(horizontal = Sp.S16, vertical = Sp.S12),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Sp.S8),
             ) {
                 Box(Modifier.size(6.dp).clip(androidx.compose.foundation.shape.CircleShape).background(RedText))
-                androidx.compose.material3.Text(g, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = Color.White, maxLines = 1)
+                androidx.compose.material3.Text(g, fontSize = Ty.Body, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = Color.White, maxLines = 1)
             }
         }
     }

@@ -126,7 +126,7 @@ fun ProvideImageShimmer(content: @Composable () -> Unit) {
 @Composable
 fun TextSkeleton(lines: Int = 3, modifier: Modifier = Modifier) {
     ProvideShimmer {
-        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
             repeat(lines) { i ->
                 SkeletonBox(Modifier.fillMaxWidth(if (i == lines - 1) 0.6f else 1f).height(13.dp), 6.dp)
             }
@@ -138,11 +138,11 @@ fun TextSkeleton(lines: Int = 3, modifier: Modifier = Modifier) {
 @Composable
 fun CommentSkeleton(count: Int = 3, modifier: Modifier = Modifier) {
     ProvideShimmer {
-        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Sp.S16)) {
             repeat(count) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     SkeletonBox(Modifier.size(36.dp), 18.dp)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
                         SkeletonBox(Modifier.width(110.dp).height(12.dp), 6.dp)
                         SkeletonBox(Modifier.fillMaxWidth().height(12.dp), 6.dp)
                         SkeletonBox(Modifier.fillMaxWidth(0.7f).height(12.dp), 6.dp)
@@ -157,15 +157,15 @@ fun CommentSkeleton(count: Int = 3, modifier: Modifier = Modifier) {
 @Composable
 fun PosterGridSkeleton(rows: Int = 4, modifier: Modifier = Modifier, hPad: androidx.compose.ui.unit.Dp = 16.dp) {
     ProvideShimmer {
-        Column(modifier.fillMaxWidth().padding(horizontal = hPad), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(modifier.fillMaxWidth().padding(horizontal = hPad), verticalArrangement = Arrangement.spacedBy(Sp.S16)) {
             repeat(rows) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     repeat(3) {
                         Column(Modifier.weight(1f)) {
                             SkeletonBox(Modifier.fillMaxWidth().aspectRatio(232f / 311f), 12.dp)
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(Sp.S8))
                             SkeletonBox(Modifier.fillMaxWidth(0.9f).height(11.dp), 6.dp)
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(Sp.S8))
                             SkeletonBox(Modifier.fillMaxWidth(0.55f).height(10.dp), 6.dp)
                         }
                     }
@@ -298,7 +298,7 @@ fun StreamLoading() {
             Box(Modifier.graphicsLayer { scaleX = pulse; scaleY = pulse }) { Logo(30.dp) }
         }
         AnimatedContent(targetState = stage, transitionSpec = { fadeIn(tween(320)) togetherWith fadeOut(tween(200)) }, label = "streamStage") { s ->
-            Text(msgs[s], Modifier.padding(top = 14.dp), fontSize = 13.sp, color = InkSoft)
+            Text(msgs[s], Modifier.padding(top = Sp.S16), fontSize = Ty.Small, color = InkSoft)
         }
     }
 }

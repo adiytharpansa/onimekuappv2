@@ -95,12 +95,12 @@ object SubLang {
 @Composable
 private fun SubOpt(label: String, sub: String?, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 22.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Sp.S24, vertical = Sp.S16),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 16.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) RedText else androidx.compose.ui.graphics.Color.White)
-            if (sub != null) Text(sub, fontSize = 12.5.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp))
+            Text(label, fontSize = Ty.Subtitle, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) RedText else androidx.compose.ui.graphics.Color.White)
+            if (sub != null) Text(sub, fontSize = Ty.Small, color = NavOff, modifier = Modifier.padding(top = Sp.S2))
         }
         if (selected) Icon(AppIcons.Check, null, Modifier.size(20.dp), tint = RedText)
     }
@@ -114,8 +114,8 @@ fun SubtitleDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         val shape = RoundedCornerShape(22.dp)
-        Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(shape).background(Bg2).border(1.dp, Line, shape).padding(vertical = 12.dp)) {
-            Text(I18n.t("subtitles", "Subtitles"), Modifier.padding(horizontal = 22.dp, vertical = 8.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(shape).background(Bg2).border(1.dp, Line, shape).padding(vertical = Sp.S12)) {
+            Text(I18n.t("subtitles", "Subtitles"), Modifier.padding(horizontal = Sp.S24, vertical = Sp.S8), fontSize = Ty.Title, fontWeight = FontWeight.Bold)
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 val autoSub = if (pref == "auto" && current >= 0) tracks.getOrNull(current)?.let { SubLang.display(it, current) } else null
                 SubLang.menu(tracks).forEach { e ->

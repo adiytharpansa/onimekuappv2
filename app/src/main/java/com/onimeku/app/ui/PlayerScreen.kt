@@ -145,10 +145,10 @@ private fun subScaleOf(size: String): Float = when (size) { "small" -> 0.8f; "la
 fun PlayerScreen(vm: AppVM, r: Route.Player) {
     val ctx = LocalContext.current
     if (vm.s.settings.wifi && !onWifi(ctx)) {
-        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Bg).statusBarsPadding().padding(Sp.S16)) {
             SubHead(I18n.t("wifi_only_title", "Wi-Fi only is on"), vm)
             Text(I18n.t("wifi_only_body", "Streaming over mobile data is turned off in Settings. Connect to Wi-Fi or turn the option off."), color = InkSoft)
-            Box(Modifier.padding(top = 16.dp)) { Btn(I18n.t("open_settings", "Open Settings"), BtnStyle.Solid) { vm.openSettings() } }
+            Box(Modifier.padding(top = Sp.S16)) { Btn(I18n.t("open_settings", "Open Settings"), BtnStyle.Solid) { vm.openSettings() } }
         }
         return
     }
@@ -1332,28 +1332,28 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             // Skip intro HANYA bila API memberi posisi intro episode ini (introStart/introEnd, detik).
             val introEnd = playback.introEnd
             if (vm.s.settings.skipIntro && introEnd != null && introEnd > 0 && pos >= (playback.introStart ?: 0) && pos < introEnd) {
-                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 66.dp).clip(CircleShape)
+                Text(I18n.t("skip_intro", "Skip intro"), Modifier.align(Alignment.BottomEnd).padding(end = Sp.S16, bottom = 66.dp).clip(CircleShape)
                     .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(introEnd * 1000L) }
-                    .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
             }
             val outroStart = playback.outroStart
             if (vm.s.settings.skipIntro && outroStart != null && outroStart > 0 && pos >= outroStart && (playback.outroEnd ?: dur) > pos) {
-                Text(I18n.t("skip_outro", "Skip outro"), Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 66.dp).clip(CircleShape)
+                Text(I18n.t("skip_outro", "Skip outro"), Modifier.align(Alignment.BottomEnd).padding(end = Sp.S16, bottom = 66.dp).clip(CircleShape)
                     .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape).clickable { player.seekTo(((playback.outroEnd ?: dur) * 1000L)) }
-                    .padding(horizontal = 14.dp, vertical = 7.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
             }
             hud?.let {
                 Text(it, Modifier.align(Alignment.Center).offset(y = (-58).dp).clip(RoundedCornerShape(14.dp)).background(Color(0xB3000000))
-                    .padding(horizontal = 14.dp, vertical = 6.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Body, fontWeight = FontWeight.SemiBold)
             }
             val remain = dur - pos.toInt()
             if (nextEp != null && dur > 60 && remain in 1..20 && !failed) {
-                Row(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 66.dp).clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.align(Alignment.BottomStart).padding(start = Sp.S16, bottom = 66.dp).clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xCC0A0B10)).border(1.dp, Line, RoundedCornerShape(14.dp)).padding(start = Sp.S16, end = Sp.S8, top = Sp.S8, bottom = Sp.S8),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     Column {
-                        Text(I18n.t("up_next", "Up next"), fontSize = 11.sp, color = InkSoft)
-                        Text(if (vm.s.settings.autoplay && !autoCancel) "Episode $nextEp · ${remain}s" else "Episode $nextEp", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(I18n.t("up_next", "Up next"), fontSize = Ty.Micro, color = InkSoft)
+                        Text(if (vm.s.settings.autoplay && !autoCancel) "Episode $nextEp · ${remain}s" else "Episode $nextEp", fontSize = Ty.Small, fontWeight = FontWeight.SemiBold)
                     }
                     Chip(I18n.t("play_now", "Play now")) { vm.replaceTop(Route.Player(r.id, nextEp)) }
                     if (vm.s.settings.autoplay && !autoCancel) Chip(I18n.t("cancel", "Cancel")) { autoCancel = true }
@@ -1362,7 +1362,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             // Layar penuh landscape: kontrol dijauhkan dari notch/kamera & sudut membulat (edge-to-edge membuatnya tertutup).
             val cutPad = if (full) Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)) else Modifier
             if (locked && showUi) {
-                Box(Modifier.align(Alignment.CenterStart).then(cutPad).padding(start = 16.dp).size(44.dp).clip(CircleShape).background(Color(0x99000000))
+                Box(Modifier.align(Alignment.CenterStart).then(cutPad).padding(start = Sp.S16).size(48.dp).clip(CircleShape).background(Color(0x99000000))
                     .clickable { locked = false; uiTick++ }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.LockOpen, "Unlock controls")
                 }
@@ -1374,22 +1374,22 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     .background(Color(0x4D000000)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(if (left) Icons.Filled.FastRewind else Icons.Filled.FastForward, null, Modifier.size(34.dp), tint = Color.White)
-                        Text("$dtSecs ${I18n.t("seconds", "seconds")}", Modifier.padding(top = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text("$dtSecs ${I18n.t("seconds", "seconds")}", Modifier.padding(top = Sp.S4), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = Color.White)
                     }
                 }
             }
             if (boost) {
-                Row(Modifier.align(Alignment.TopCenter).padding(top = 14.dp).clip(CircleShape).background(Color(0x99000000)).padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("2×", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Row(Modifier.align(Alignment.TopCenter).padding(top = Sp.S16).clip(CircleShape).background(Color(0x99000000)).padding(horizontal = Sp.S12, vertical = Sp.S8),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+                    Text("2×", fontSize = Ty.Small, fontWeight = FontWeight.Bold, color = Color.White)
                     Icon(Icons.Filled.FastForward, null, Modifier.size(16.dp), tint = Color.White)
                 }
             }
             if (barKind != 0) {
                 val bl = barLevel.coerceIn(0f, 1f)
-                Column(Modifier.align(if (barKind == 1) Alignment.CenterStart else Alignment.CenterEnd).then(cutPad).padding(horizontal = 24.dp)
-                    .clip(RoundedCornerShape(18.dp)).background(Color(0x99000000)).padding(vertical = 12.dp, horizontal = 11.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.align(if (barKind == 1) Alignment.CenterStart else Alignment.CenterEnd).then(cutPad).padding(horizontal = Sp.S24)
+                    .clip(RoundedCornerShape(18.dp)).background(Color(0x99000000)).padding(vertical = Sp.S12, horizontal = Sp.S12),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
                     Icon(
                         when { barKind == 1 -> Icons.Filled.BrightnessMedium; bl <= 0f -> Icons.AutoMirrored.Filled.VolumeOff; else -> Icons.AutoMirrored.Filled.VolumeUp },
                         null, Modifier.size(20.dp), tint = Color.White,
@@ -1397,7 +1397,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Box(Modifier.width(6.dp).height(120.dp).clip(CircleShape).background(Color(0x40FFFFFF)), contentAlignment = Alignment.BottomCenter) {
                         Box(Modifier.fillMaxWidth().fillMaxHeight(bl.coerceAtLeast(0.03f)).clip(CircleShape).background(Color.White))
                     }
-                    Text("${(bl * 100).roundToInt()}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text("${(bl * 100).roundToInt()}", fontSize = Ty.Micro, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
             androidx.compose.animation.AnimatedVisibility(
@@ -1406,11 +1406,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
                 exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 },
             ) {
-                Row(Modifier.clip(CircleShape).background(Color(0xCC0A0B10)).border(1.dp, Line, CircleShape).padding(start = 14.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("${I18n.t("resuming_from", "Resuming from")} ${fmt(resumeStart)}", fontSize = 12.5.sp, color = Color.White)
+                Row(Modifier.clip(CircleShape).background(Color(0xCC0A0B10)).border(1.dp, Line, CircleShape).padding(start = Sp.S16, end = Sp.S4),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+                    Text("${I18n.t("resuming_from", "Resuming from")} ${fmt(resumeStart)}", fontSize = Ty.Small, color = Color.White)
                     Text(I18n.t("from_start", "Start over"), Modifier.clip(CircleShape).clickable { player.seekTo(0L); resumeChip = false }
-                        .padding(horizontal = 12.dp, vertical = 9.dp), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = RedText)
+                        .padding(horizontal = Sp.S12, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = RedText)
                 }
             }
             val uiVisible = !locked && (showUi || !wantPlay || failed || buffering)
@@ -1419,18 +1419,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0xB3080910), 0.32f to Color(0x33080910), 0.6f to Color(0x33080910), 1f to Color(0xD9080910))))
 
                 // ---- Bar atas: kembali · judul · CC · roda gigi ----
-                Row(Modifier.align(Alignment.TopStart).graphicsLayer { translationY = -(1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = 6.dp, end = 8.dp, top = if (full) 12.dp else 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(42.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
+                Row(Modifier.align(Alignment.TopStart).graphicsLayer { translationY = -(1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = Sp.S8, end = Sp.S8, top = if (full) Sp.S12 else Sp.S8), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(48.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                     }
-                    if (!full) Spacer(Modifier.weight(1f)) else Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                        Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Text("Episode ${r.ep}", fontSize = 12.sp, color = Color(0xFFE6E8F0))
+                    if (!full) Spacer(Modifier.weight(1f)) else Column(Modifier.weight(1f).padding(start = Sp.S4)) {
+                        Text(a.title, fontSize = Ty.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("Episode ${r.ep}", fontSize = Ty.Caption, color = Color(0xFFE6E8F0))
                     }
-                    if (full) Box(Modifier.size(42.dp).clip(CircleShape).clickable { epPanel = !epPanel; uiTick++ }, contentAlignment = Alignment.Center) {
+                    if (full) Box(Modifier.size(48.dp).clip(CircleShape).clickable { epPanel = !epPanel; uiTick++ }, contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.VideoLibrary, I18n.t("episodes", "Episodes"), tint = Color.White)
                     }
-                    if (subTracks.isNotEmpty()) Box(Modifier.size(42.dp).clip(CircleShape).clickable {
+                    if (subTracks.isNotEmpty()) Box(Modifier.size(48.dp).clip(CircleShape).clickable {
                         // Tombol CC: hidupkan/matikan subtitle sekali ketuk (seperti YouTube).
                         if (subIdx >= 0) {
                             applySub(-1); vm.setSettings { it.copy(subLang = "off") }; vm.toast("Subtitles: ${I18n.t("ctl_off", "Off")}")
@@ -1443,7 +1443,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }, contentAlignment = Alignment.Center) {
                         Icon(if (subIdx >= 0) Icons.Filled.ClosedCaption else Icons.Filled.ClosedCaptionOff, "Subtitles", tint = Color.White)
                     }
-                    Box(Modifier.size(42.dp).clip(CircleShape).clickable { sheet = "main"; uiTick++ }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).clip(CircleShape).clickable { sheet = "main"; uiTick++ }, contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Settings, "Settings", tint = Color.White)
                     }
                 }
@@ -1452,11 +1452,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 if (failed) {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(30.dp), tint = RedText)
-                        Text(I18n.t("cant_play", "Can’t play this video"), Modifier.padding(top = 6.dp), fontWeight = FontWeight.SemiBold)
-                        Text(friendlyPlayError(errMsg), Modifier.padding(top = 4.dp, start = 28.dp, end = 28.dp), fontSize = 12.sp, color = InkSoft,
+                        Text(I18n.t("cant_play", "Can’t play this video"), Modifier.padding(top = Sp.S8), fontWeight = FontWeight.SemiBold)
+                        Text(friendlyPlayError(errMsg), Modifier.padding(top = Sp.S4, start = Sp.S28, end = Sp.S28), fontSize = Ty.Caption, color = InkSoft,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 16.sp)
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(Modifier.height(Sp.S12))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                             Chip(I18n.t("retry", "Retry"), icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
                             val lowerQ = lowerQuality(vm.s.settings.quality)
                             if (lowerQ != null) Chip(I18n.t("lower_quality", "Lower quality")) {
@@ -1466,18 +1466,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             }
                         }
                         Text(I18n.t("report_problem", "Report a problem"),
-                            Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable {
+                            Modifier.padding(top = Sp.S8).clip(RoundedCornerShape(8.dp)).clickable {
                                 com.onimeku.app.data.GudangStore.report(ctx, a.anilistId, r.id, r.ep, "Galat putar di pemutar: ${errMsg ?: "-"}")
                                 vm.toast(I18n.t("report_sent", "Thanks — your report was sent"))
-                            }.padding(horizontal = 10.dp, vertical = 6.dp),
-                            fontSize = 12.sp, fontWeight = FontWeight.Medium, color = RedText)
+                            }.padding(horizontal = Sp.S12, vertical = Sp.S8),
+                            fontSize = Ty.Caption, fontWeight = FontWeight.Medium, color = RedText)
                     }
                 } else {
                     var rotB by remember { mutableStateOf(0f) }
                     var rotF by remember { mutableStateOf(0f) }
                     val rb by animateFloatAsState(rotB, tween(380), label = "rotBack")
                     val rf by animateFloatAsState(rotF, tween(380), label = "rotFwd")
-                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
                         if (hasPrev) Box(Modifier.size(44.dp).clip(CircleShape).pressable { step(-1); uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.SkipPrevious, "Previous episode", Modifier.size(30.dp), tint = Color.White)
                         } else Spacer(Modifier.size(44.dp))
@@ -1503,20 +1503,20 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
 
                 // ---- Bawah: waktu + layar penuh (kanan), bilah seek tipis dengan buffer ----
-                Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = if (full) 28.dp else 14.dp, end = if (full) 28.dp else 14.dp, bottom = if (full) 10.dp else 0.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(fmt(pos.toInt()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text(" / ${if (dur > 0) fmt(dur) else "--:--"}", fontSize = 12.5.sp, color = Color(0xB3FFFFFF))
+                Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { translationY = (1f - uiA) * 28.dp.toPx() }.fillMaxWidth().then(cutPad).padding(start = if (full) Sp.S28 else Sp.S16, end = if (full) Sp.S28 else Sp.S16, bottom = if (full) Sp.S12 else 0.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S2), verticalAlignment = Alignment.CenterVertically) {
+                        Text(fmt(pos.toInt()), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(" / ${if (dur > 0) fmt(dur) else "--:--"}", fontSize = Ty.Small, color = Color(0xB3FFFFFF))
                         Spacer(Modifier.weight(1f))
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { fillMode = !fillMode; hud = if (fillMode) "Fill" else "Fit"; hudTick++; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(48.dp).clip(CircleShape).clickable { fillMode = !fillMode; hud = if (fillMode) "Fill" else "Fit"; hudTick++; uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.AspectRatio, I18n.t("fit_fill", "Fit / fill"), tint = Color.White)
                         }
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { full = !full; fullByRot = false; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(48.dp).clip(CircleShape).clickable { full = !full; fullByRot = false; uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen", tint = Color.White)
                         }
                     }
                     YtSeekBar(
-                        pos = pos, dur = dur.toFloat(), buffered = buffered, marks = marks, modifier = Modifier.padding(bottom = 4.dp),
+                        pos = pos, dur = dur.toFloat(), buffered = buffered, marks = marks, modifier = Modifier.padding(bottom = Sp.S4),
                         onPreview = { dragging = true; pos = it; uiTick++ },
                         onDone = { player.seekTo((it * 1000).toLong()); pos = it; dragging = false; uiTick++ },
                     )
@@ -1529,19 +1529,21 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 exit = androidx.compose.animation.slideOutHorizontally { it } + androidx.compose.animation.fadeOut(),
             ) {
                 val fls = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(curIdx - 2, 0))
-                Column(Modifier.fillMaxHeight().width(290.dp).background(Color(0xF20A0B10)).then(cutPad).padding(top = 10.dp)) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(I18n.t("episodes", "Episodes"), Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Icon(Icons.Filled.Close, "Close", Modifier.size(26.dp).clip(CircleShape).clickable { epPanel = false }.padding(2.dp), tint = Color.White)
+                Column(Modifier.fillMaxHeight().width(290.dp).background(Color(0xF20A0B10)).then(cutPad).padding(top = Sp.S12)) {
+                    Row(Modifier.padding(horizontal = Sp.S16, vertical = Sp.S8), verticalAlignment = Alignment.CenterVertically) {
+                        Text(I18n.t("episodes", "Episodes"), Modifier.weight(1f), fontSize = Ty.Subtitle, fontWeight = FontWeight.Bold)
+                        Box(Modifier.size(48.dp).clip(CircleShape).clickable { epPanel = false }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Close, "Close", Modifier.size(22.dp), tint = Color.White)
+                        }
                     }
-                    LazyColumn(state = fls, contentPadding = PaddingValues(bottom = 16.dp)) {
+                    LazyColumn(state = fls, contentPadding = PaddingValues(bottom = Sp.S16)) {
                         items(epList, key = { "fp$it" }) { n ->
                             val isCur = n == r.ep
                             val seenEp = "${r.id}:$n" in vm.p.seen
                             Row(Modifier.fillMaxWidth().clickable { epPanel = false; if (!isCur) vm.replaceTop(Route.Player(r.id, n)) }
-                                .background(if (isCur) Color(0x33E5484D) else Color.Transparent).padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("Episode $n", Modifier.weight(1f), fontSize = 14.sp, fontWeight = if (isCur) FontWeight.SemiBold else FontWeight.Medium,
+                                .background(if (isCur) Color(0x33E5484D) else Color.Transparent).padding(horizontal = Sp.S16, vertical = Sp.S16),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
+                                Text("Episode $n", Modifier.weight(1f), fontSize = Ty.Body, fontWeight = if (isCur) FontWeight.SemiBold else FontWeight.Medium,
                                     color = if (isCur) RedText else Color.White)
                                 if (isCur) Icon(Icons.Filled.GraphicEq, null, Modifier.size(18.dp), tint = RedText)
                                 else if (seenEp) Icon(Icons.Filled.CheckCircle, null, Modifier.size(16.dp), tint = Color(0xFF3DDC97))
@@ -1557,25 +1559,25 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         // ===== Panel di bawah video: info, navigasi episode, kontrol, komentar =====
         LazyColumn(
             Modifier.weight(1f).fillMaxWidth().imePadding(), state = epListState,
-            contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
+            contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + Sp.S24),
         ) {
             item(key = "info") {
-                Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(horizontal = Gutter).padding(top = Sp.S16)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                         Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
                         if (offline) Tag("OFFLINE", Color(0x33FFFFFF), Color.White, small = true)
                     }
-                    Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp,
+                    Text(a.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp,
                         letterSpacing = (-0.3).sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.genres.take(2).joinToString(", ").ifBlank { null }, statusText(a.status)).joinToString("  ·  "),
-                        Modifier.padding(top = 4.dp), fontSize = 13.sp, color = InkSoft, maxLines = 1)
+                        Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = InkSoft, maxLines = 1)
 
-                    if (hasPrev || hasNext) Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (hasPrev || hasNext) Row(Modifier.fillMaxWidth().padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                         if (hasPrev) Btn(I18n.t("previous", "Previous"), BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { step(-1) }
                         if (hasNext) Btn(I18n.t("next_episode", "Next episode"), BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { step(1) }
                     }
 
-                    Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                         val onList = r.id in vm.p.myList
                         ActionTile(Icons.Filled.Add, if (onList) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
                             Modifier.weight(1f), on = onList, iconOn = Icons.Filled.Check) { vm.toggleML(r.id) }
@@ -1590,14 +1592,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                     if (a.synopsis.isNotBlank()) {
                         var more by remember(r.id) { mutableStateOf(false) }
-                        Text(a.synopsis, Modifier.padding(top = 14.dp).clickable { more = !more }, fontSize = 13.sp, color = InkSoft, lineHeight = 19.sp,
+                        Text(a.synopsis, Modifier.padding(top = Sp.S16).clickable { more = !more }, fontSize = Ty.Small, color = InkSoft, lineHeight = 19.sp,
                             maxLines = if (more) 24 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
-                    if (!vm.s.settings.gestureHintSeen) Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (!vm.s.settings.gestureHintSeen) Row(Modifier.padding(top = Sp.S16).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = Sp.S12, vertical = Sp.S2),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                         Icon(Icons.Filled.TouchApp, null, Modifier.size(16.dp), tint = NavOff)
-                        Text(I18n.t("swipe_hint", "Swipe left: brightness · right: volume · double-tap sides: ±10s · hold: 2× speed · swipe sideways: seek · pinch: fill"), Modifier.weight(1f), fontSize = 11.5.sp, color = InkSoft, lineHeight = 16.sp)
-                        Icon(Icons.Filled.Close, "Dismiss", Modifier.size(18.dp).clip(CircleShape).clickable { vm.setSettings { it.copy(gestureHintSeen = true) } }, tint = NavOff)
+                        Text(I18n.t("swipe_hint", "Swipe left: brightness · right: volume · double-tap sides: ±10s · hold: 2× speed · swipe sideways: seek · pinch: fill"), Modifier.weight(1f), fontSize = Ty.Caption, color = InkSoft, lineHeight = 16.sp)
+                        Box(Modifier.size(48.dp).clip(CircleShape).clickable { vm.setSettings { it.copy(gestureHintSeen = true) } }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Close, "Dismiss", Modifier.size(18.dp), tint = NavOff)
+                        }
                     }
                 }
             }
@@ -1677,13 +1681,13 @@ private fun ControlTile(t: CtlTile, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier.height(78.dp).pressable(t.action).clip(shape).background(Bg2)
-            .border(1.dp, if (t.on) Red.copy(alpha = 0.7f) else Line, shape).padding(horizontal = 4.dp),
+            .border(1.dp, if (t.on) Red.copy(alpha = 0.7f) else Line, shape).padding(horizontal = Sp.S4),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         Icon(t.icon, null, Modifier.size(22.dp), tint = if (t.on) RedText else Color.White)
-        Text(t.value, Modifier.padding(top = 6.dp), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+        Text(t.value, Modifier.padding(top = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold,
             color = if (t.on) RedText else Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-        Text(t.label, fontSize = 10.5.sp, color = NavOff, maxLines = 1)
+        Text(t.label, fontSize = Ty.Micro, color = NavOff, maxLines = 1)
     }
 }
 
@@ -1695,22 +1699,22 @@ private fun PlayerStatus(vm: AppVM, a: com.onimeku.app.data.Anime, r: Route.Play
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                 RealImage(a, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Color(0xCC080910)))
-                Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
+                Box(Modifier.align(Alignment.TopStart).padding(Sp.S8)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (loading) {
                         StreamLoading()
                     } else {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(34.dp), tint = RedText)
-                        Text(I18n.t("stream_unavail", "Stream unavailable"), Modifier.padding(top = 8.dp), fontWeight = FontWeight.SemiBold)
+                        Text(I18n.t("stream_unavail", "Stream unavailable"), Modifier.padding(top = Sp.S8), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         }
-        Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
+        Column(Modifier.padding(horizontal = Gutter).padding(top = Sp.S16)) {
             Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
-            Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
-            if (message != null) Text(message, Modifier.padding(top = 10.dp), color = InkSoft, fontSize = 14.sp, lineHeight = 20.sp)
-            if (onRetry != null) Box(Modifier.padding(top = 18.dp)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Play, Icons.Filled.Refresh, height = 48.dp, onClick = onRetry) }
+            Text(a.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
+            if (message != null) Text(message, Modifier.padding(top = Sp.S12), color = InkSoft, fontSize = Ty.Body, lineHeight = 20.sp)
+            if (onRetry != null) Box(Modifier.padding(top = Sp.S16)) { Btn(I18n.t("try_again", "Try again"), BtnStyle.Play, Icons.Filled.Refresh, height = 48.dp, onClick = onRetry) }
         }
     }
 }
@@ -1827,24 +1831,24 @@ private fun EmbedPlayer(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     update = { wv -> if (wv.url != null && wv.url != url) wv.loadUrl(url) },
                     modifier = Modifier.fillMaxSize(),
                 )
-                Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
+                Box(Modifier.align(Alignment.TopStart).padding(Sp.S8)) { GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() } }
             }
         }
         androidx.compose.foundation.lazy.LazyColumn(
             Modifier.weight(1f).fillMaxWidth().imePadding(),
-            contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
+            contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + Sp.S24),
         ) {
             item(key = "info") {
-            Column(Modifier.padding(horizontal = Gutter).padding(top = 18.dp)) {
+            Column(Modifier.padding(horizontal = Gutter).padding(top = Sp.S16)) {
                 Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
-            Text(a.title, Modifier.padding(top = 8.dp), fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
-            if (idx > 0 || (idx >= 0 && idx < nums.size - 1)) Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(a.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp, maxLines = 2)
+            if (idx > 0 || (idx >= 0 && idx < nums.size - 1)) Row(Modifier.fillMaxWidth().padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                 if (idx > 0) Btn(I18n.t("previous", "Previous"), BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx - 1])) }
                 if (idx >= 0 && idx < nums.size - 1) Btn("Next episode", BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { vm.replaceTop(Route.Player(r.id, nums[idx + 1])) }
             }
             Text(
                 "Judul ini diputar lewat pemutar resmi sumbernya. Ketuk tombol putar di dalam video.",
-                Modifier.padding(top = 14.dp), fontSize = 12.sp, color = InkSoft,
+                Modifier.padding(top = Sp.S16), fontSize = Ty.Caption, color = InkSoft,
             )
 
                 }

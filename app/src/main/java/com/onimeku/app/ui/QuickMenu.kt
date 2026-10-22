@@ -52,20 +52,20 @@ fun QuickMenuSheet(vm: AppVM, id: String) {
 
     @Composable fun row(icon: ImageVector, label: String, on: Boolean = false, action: () -> Unit) {
         Row(
-            Modifier.fillMaxWidth().clickable { vm.quick = null; action() }.padding(horizontal = 4.dp, vertical = 15.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().clickable { vm.quick = null; action() }.padding(horizontal = Sp.S4, vertical = Sp.S16),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16),
         ) {
             Icon(icon, null, Modifier.size(24.dp), tint = if (on) RedText else Color.White)
-            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = if (on) RedText else Color.White)
+            Text(label, fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium, color = if (on) RedText else Color.White)
         }
     }
 
     ModalBottomSheet(onDismissRequest = { vm.quick = null }, sheetState = sheet, containerColor = Bg2, contentColor = Color.White) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 20.dp).navigationBarsPadding()) {
-            Text(a.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.padding(horizontal = Sp.S20).padding(bottom = Sp.S20).navigationBarsPadding()) {
+            Text(a.title, fontSize = Ty.Title, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = a.genres.take(3).joinToString("  ·  ")
-            if (meta.isNotBlank()) Text(meta, Modifier.padding(top = 3.dp), fontSize = 13.sp, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(10.dp))
+            if (meta.isNotBlank()) Text(meta, Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(Sp.S12))
             HLine()
             row(if (inList) AppIcons.Check else AppIcons.Plus,
                 if (inList) I18n.t("qm_in_list", "Remove from My List") else I18n.t("qm_add_list", "Add to My List"), on = inList) { vm.toggleML(id) }

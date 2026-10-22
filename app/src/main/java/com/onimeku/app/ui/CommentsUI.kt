@@ -89,16 +89,16 @@ private fun Avatar(name: String, highlight: Boolean, size: Dp = 36.dp) {
 fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
     // ---- Judul ----
     item(key = "c_head") {
-        Column(Modifier.padding(top = 22.dp)) {
+        Column(Modifier.padding(top = Sp.S24)) {
             Box(Modifier.padding(horizontal = Gutter)) { HLine() }
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 18.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = Sp.S16),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8),
             ) {
-                Text(I18n.t("comments", "Comments"), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(I18n.t("comments", "Comments"), fontSize = Ty.Title, fontWeight = FontWeight.Bold)
                 if (vm.comments.isNotEmpty()) Text(
-                    "${vm.comments.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = InkSoft,
-                    modifier = Modifier.clip(CircleShape).background(Solid).padding(horizontal = 8.dp, vertical = 2.dp),
+                    "${vm.comments.size}", fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = InkSoft,
+                    modifier = Modifier.clip(CircleShape).background(Solid).padding(horizontal = Sp.S8, vertical = Sp.S2),
                 )
             }
         }
@@ -111,17 +111,17 @@ fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
     val list = vm.comments
     when {
         vm.commentsBusy && list.isEmpty() -> item(key = "c_busy") {
-            CommentSkeleton(3, Modifier.padding(horizontal = Gutter, vertical = 14.dp))
+            CommentSkeleton(3, Modifier.padding(horizontal = Gutter, vertical = Sp.S16))
         }
         list.isEmpty() -> item(key = "c_empty") {
             Column(
-                Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 28.dp),
+                Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = Sp.S28),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(AppIcons.Message, null, Modifier.size(32.dp), tint = NavOff)
-                Text(I18n.t("comment_empty_t", "No comments yet"), Modifier.padding(top = 10.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text(I18n.t("comment_empty_s", "Be the first to share what you think."), Modifier.padding(top = 3.dp),
-                    fontSize = 13.sp, color = NavOff, textAlign = TextAlign.Center)
+                Text(I18n.t("comment_empty_t", "No comments yet"), Modifier.padding(top = Sp.S12), fontSize = Ty.Body, fontWeight = FontWeight.SemiBold)
+                Text(I18n.t("comment_empty_s", "Be the first to share what you think."), Modifier.padding(top = Sp.S4),
+                    fontSize = Ty.Small, color = NavOff, textAlign = TextAlign.Center)
             }
         }
         else -> {
@@ -133,13 +133,13 @@ fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
             if (list.size > PREVIEW_COUNT) item(key = "c_more") {
                 val open = ui.expanded.value
                 Box(
-                    Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 10.dp).height(42.dp)
+                    Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = Sp.S12).height(42.dp)
                         .clip(CircleShape).border(1.dp, Line, CircleShape).clickable { ui.expanded.value = !open },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         if (open) I18n.t("comments_less", "Show less") else "${I18n.t("comments_all", "View all comments")} (${list.size})",
-                        fontSize = 13.sp, fontWeight = FontWeight.Medium, color = InkSoft,
+                        fontSize = Ty.Small, fontWeight = FontWeight.Medium, color = InkSoft,
                     )
                 }
             }
@@ -151,18 +151,18 @@ fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
 private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
     val acc = vm.s.account
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 14.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = Sp.S16, bottom = Sp.S8),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
     ) {
         if (acc == null) {
             Avatar("?", false)
             Row(
                 Modifier.weight(1f).height(42.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
-                    .clickable { vm.go(Route.Auth(false)) }.padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .clickable { vm.go(Route.Auth(false)) }.padding(horizontal = Sp.S16),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8),
             ) {
                 Icon(AppIcons.Lock, null, Modifier.size(16.dp), tint = NavOff)
-                Text(I18n.t("sign_in_to_comment", "Sign in to comment"), fontSize = 14.sp, color = NavOff)
+                Text(I18n.t("sign_in_to_comment", "Sign in to comment"), fontSize = Ty.Body, color = NavOff)
             }
             return@Row
         }
@@ -176,21 +176,21 @@ private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
                 .border(1.dp, if (focused) RedText else Line, RoundedCornerShape(21.dp)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.weight(1f).padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 8.dp)) {
+            Box(Modifier.weight(1f).padding(start = Sp.S16, top = Sp.S12, bottom = Sp.S12, end = Sp.S8)) {
                 BasicTextField(
                     text, { if (it.length <= MAX_LEN) text = it },
                     modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
                     maxLines = 4,
-                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp),
+                    textStyle = TextStyle(color = Color.White, fontSize = Ty.Body, lineHeight = 20.sp),
                     cursorBrush = SolidColor(RedText),
                     decorationBox = { inner ->
-                        if (text.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = 14.sp)
+                        if (text.isEmpty()) Text(I18n.t("comment_hint", "Write a comment…"), color = NavOff, fontSize = Ty.Body)
                         inner()
                     },
                 )
             }
             if (canSend) Box(
-                Modifier.padding(end = 5.dp).size(32.dp).clip(CircleShape).background(Red)
+                Modifier.padding(end = Sp.S4).size(32.dp).clip(CircleShape).background(Red)
                     .clickable { vm.postComment(animeId, text); text = ""; focus.clearFocus() },
                 contentAlignment = Alignment.Center,
             ) { Icon(AppIcons.Send, I18n.t("comment_post", "Post"), Modifier.size(16.dp), tint = Color.White) }
@@ -201,31 +201,31 @@ private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
 @Composable
 private fun CommentItem(c: CommentRow, mine: Boolean, onDelete: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = Sp.S16),
+        horizontalArrangement = Arrangement.spacedBy(Sp.S12),
     ) {
         Avatar(c.author, mine)
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                 Text(
-                    c.author.ifBlank { "User" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    c.author.ifBlank { "User" }, fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, color = if (mine) RedText else Color.White,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (mine) Text(
-                    I18n.t("comment_you", "You"), fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = RedText,
-                    modifier = Modifier.clip(CircleShape).background(Color(0x26E8566F)).padding(horizontal = 7.dp, vertical = 1.dp),
+                    I18n.t("comment_you", "You"), fontSize = Ty.Micro, fontWeight = FontWeight.SemiBold, color = RedText,
+                    modifier = Modifier.clip(CircleShape).background(Color(0x26E8566F)).padding(horizontal = Sp.S8, vertical = 1.dp),
                 )
                 // Parse ISO + buat DateTimeFormatter dulu terjadi pada SETIAP rekomposisi tiap komentar; kini sekali per komentar.
                 val time = remember(c.created_at) { commentTime(c.created_at) }
-                Text(time, fontSize = 12.sp, color = NavOff, maxLines = 1)
+                Text(time, fontSize = Ty.Caption, color = NavOff, maxLines = 1)
                 Spacer(Modifier.weight(1f))
                 if (mine) Box(
-                    Modifier.size(28.dp).clip(CircleShape).clickable(onClick = onDelete),
+                    Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onDelete),
                     contentAlignment = Alignment.Center,
                 ) { Icon(AppIcons.Trash, I18n.t("comment_delete", "Delete"), Modifier.size(17.dp), tint = NavOff) }
             }
-            Text(c.body, Modifier.padding(top = 4.dp), fontSize = 14.sp, color = InkSoft, lineHeight = 21.sp)
+            Text(c.body, Modifier.padding(top = Sp.S4), fontSize = Ty.Body, color = InkSoft, lineHeight = 21.sp)
         }
     }
 }

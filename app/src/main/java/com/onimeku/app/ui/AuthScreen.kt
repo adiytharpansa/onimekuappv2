@@ -46,26 +46,26 @@ private fun AuthField(
 ) {
     var show by rememberSaveable { mutableStateOf(false) }
     val bd by animateColorAsState(if (error != null) RedText else Line, label = "fieldBd")
-    Column(Modifier.padding(bottom = 14.dp)) {
-        Text(label, fontSize = 13.sp, color = InkSoft, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
+    Column(Modifier.padding(bottom = Sp.S16)) {
+        Text(label, fontSize = Ty.Small, color = InkSoft, modifier = Modifier.padding(start = Sp.S4, bottom = Sp.S8))
         Row(
             Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(16.dp)).background(Bg2)
-                .border(1.dp, bd, RoundedCornerShape(16.dp)).padding(start = 16.dp, end = 8.dp),
+                .border(1.dp, bd, RoundedCornerShape(16.dp)).padding(start = Sp.S16, end = Sp.S8),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
                 value, onChange, Modifier.weight(1f), singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
+                textStyle = TextStyle(color = Color.White, fontSize = Ty.Subtitle), cursorBrush = SolidColor(Color.White),
                 visualTransformation = if (password && !show) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard, imeAction = ime),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone() }, onNext = { }),
             )
-            if (password) Box(Modifier.size(40.dp).clip(CircleShape).clickable { show = !show }, contentAlignment = Alignment.Center) {
+            if (password) Box(Modifier.size(48.dp).clip(CircleShape).clickable { show = !show }, contentAlignment = Alignment.Center) {
                 Icon(if (show) AppIcons.EyeOff else AppIcons.Eye, if (show) "Hide password" else "Show password",
                     Modifier.size(20.dp), tint = NavOff)
             }
         }
-        if (error != null) Text(error, fontSize = 12.sp, color = RedText, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+        if (error != null) Text(error, fontSize = Ty.Caption, color = RedText, modifier = Modifier.padding(start = Sp.S4, top = Sp.S4))
     }
 }
 
@@ -90,15 +90,15 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
 
     Page(extraTop = 8.dp) {
         SubHead("", vm)
-        Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp, bottom = 14.dp)) { Logo(64.dp) }
-        Text(if (signUp) I18n.t("create_account_t", "Create your account") else I18n.t("welcome_back", "Welcome back"), Modifier.fillMaxWidth(), fontSize = 28.sp,
+        Box(Modifier.align(Alignment.CenterHorizontally).padding(top = Sp.S4, bottom = Sp.S16)) { Logo(64.dp) }
+        Text(if (signUp) I18n.t("create_account_t", "Create your account") else I18n.t("welcome_back", "Welcome back"), Modifier.fillMaxWidth(), fontSize = Ty.Display,
             fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(Sp.S28))
 
         if (!AuthClient.configured) {
-            CardBox(Modifier.padding(bottom = 18.dp)) {
+            CardBox(Modifier.padding(bottom = Sp.S16)) {
                 Text("Accounts aren't available yet.",
-                    Modifier.padding(16.dp), color = InkSoft, fontSize = 13.5.sp)
+                    Modifier.padding(Sp.S16), color = InkSoft, fontSize = Ty.Body)
             }
         }
 
@@ -109,41 +109,41 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
             password = true, onDone = { submit() })
 
         vm.authError?.let {
-            Text(it, color = RedText, fontSize = 13.5.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
+            Text(it, color = RedText, fontSize = Ty.Body, modifier = Modifier.padding(start = Sp.S4, bottom = Sp.S12))
         }
 
         if (!signUp) {
             Text(I18n.t("forgot_password", "Forgot password?"), Modifier.align(Alignment.End).offset(y = (-6).dp).clip(RoundedCornerShape(8.dp))
                 .clickable {
                     if (!EmailRx.matches(email.trim())) { tried = true; vm.toast("Enter your email first") } else vm.resetPassword(email)
-                }.padding(horizontal = 8.dp, vertical = 6.dp), color = RedText, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+                }.padding(horizontal = Sp.S8, vertical = Sp.S8), color = RedText, fontSize = Ty.Body, fontWeight = FontWeight.Medium)
         }
 
-        Box(Modifier.padding(top = if (signUp) 6.dp else 2.dp)) {
+        Box(Modifier.padding(top = if (signUp) Sp.S8 else Sp.S2)) {
             Btn(if (vm.authBusy) I18n.t("please_wait", "Please wait…") else if (signUp) I18n.t("create_account_b", "Create account") else I18n.t("sign_in", "Sign in"), BtnStyle.Play,
                 modifier = Modifier.fillMaxWidth(), height = 54.dp, loading = vm.authBusy) { submit() }
         }
 
         // Pemisah + masuk/daftar dengan akun sosial (tepat di bawah tombol utama).
-        Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(top = Sp.S24, bottom = Sp.S16), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).height(1.dp).background(Line))
-            Text(I18n.t("or", "or"), Modifier.padding(horizontal = 14.dp), color = NavOff, fontSize = 12.5.sp)
+            Text(I18n.t("or", "or"), Modifier.padding(horizontal = Sp.S16), color = NavOff, fontSize = Ty.Small)
             Box(Modifier.weight(1f).height(1.dp).background(Line))
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
             SocialButton("Google", Modifier.weight(1f), enabled = !vm.authBusy, icon = { GoogleIcon(20.dp) }) { vm.socialSignIn("google") }
             SocialButton("Facebook", Modifier.weight(1f), enabled = !vm.authBusy, icon = { FacebookIcon(20.dp) }) { vm.socialSignIn("facebook") }
         }
 
-        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 28.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (signUp) "Already have an account? " else "New to Onimeku? ", color = InkSoft, fontSize = 14.sp)
-            Text(if (signUp) I18n.t("sign_in", "Sign in") else I18n.t("sign_up", "Sign up"), color = RedText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { signUp = !signUp; tried = false; vm.authError = null }.padding(6.dp))
+        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = Sp.S28), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (signUp) "Already have an account? " else "New to Onimeku? ", color = InkSoft, fontSize = Ty.Body)
+            Text(if (signUp) I18n.t("sign_in", "Sign in") else I18n.t("sign_up", "Sign up"), color = RedText, fontSize = Ty.Body, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { signUp = !signUp; tried = false; vm.authError = null }.padding(Sp.S8))
         }
 
-        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Text("Terms", color = RedText, fontSize = 12.5.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("terms")) }.padding(8.dp))
-            Text("Privacy", color = RedText, fontSize = 12.5.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("privacy")) }.padding(8.dp))
+        Row(Modifier.align(Alignment.CenterHorizontally).padding(top = Sp.S12, bottom = Sp.S8), horizontalArrangement = Arrangement.spacedBy(Sp.S20)) {
+            Text("Terms", color = RedText, fontSize = Ty.Small, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("terms")) }.padding(Sp.S8))
+            Text("Privacy", color = RedText, fontSize = Ty.Small, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("privacy")) }.padding(Sp.S8))
         }
     }
 }
@@ -154,11 +154,11 @@ private fun SocialButton(label: String, modifier: Modifier, enabled: Boolean, ic
     Row(
         modifier.height(52.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape)
             .alpha(if (enabled) 1f else 0.5f)
-            .pressable { if (enabled) onClick() }.padding(horizontal = 14.dp),
+            .pressable { if (enabled) onClick() }.padding(horizontal = Sp.S16),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(Sp.S12, Alignment.CenterHorizontally),
     ) {
         icon()
-        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(label, color = Color.White, fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }

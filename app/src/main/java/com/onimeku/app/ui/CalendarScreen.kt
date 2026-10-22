@@ -101,8 +101,8 @@ fun CalendarScreen(vm: AppVM) {
 
     Page {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f).padding(end = 10.dp)) {
-                Text(I18n.t("calendar_t", "Release Calendar"), fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+            Column(Modifier.weight(1f).padding(end = Sp.S12)) {
+                Text(I18n.t("calendar_t", "Release Calendar"), fontSize = Ty.Display, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
                 val mins = ((nowSec * 1000 - vm.scheduleUpdatedAt) / 60_000).coerceAtLeast(0)
                 Text(
                     when {
@@ -110,14 +110,14 @@ fun CalendarScreen(vm: AppVM) {
                         mins < 1 -> I18n.t("cal_updated_now", "Updated just now")
                         else -> I18n.t("cal_updated", "Updated %d min ago").format(mins)
                     },
-                    Modifier.padding(top = 4.dp), fontSize = 13.sp, color = NavOff,
+                    Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = NavOff,
                 )
             }
             ListFilter(onlyList) { onlyList = !onlyList }
         }
 
         // Chip tanggal: hari, tanggal, dan maksimal tiga titik penanda jumlah episode.
-        Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = Sp.S16, bottom = Sp.S20), horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
             days.forEachIndexed { k, d ->
                 val sel = k == vm.calDay
                 val n = perDay[k].size
@@ -128,11 +128,11 @@ fun CalendarScreen(vm: AppVM) {
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, uiLocale()), fontSize = 11.5.sp, fontWeight = FontWeight.Medium,
+                        d.dayOfWeek.getDisplayName(DateTextStyle.SHORT, uiLocale()), fontSize = Ty.Caption, fontWeight = FontWeight.Medium,
                         color = if (sel) Color(0xFFFFD3DB) else if (k == 0) RedText else NavOff,
                     )
-                    Text("${d.dayOfMonth}", Modifier.padding(top = 2.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Row(Modifier.padding(top = 5.dp).height(5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("${d.dayOfMonth}", Modifier.padding(top = Sp.S2), fontSize = Ty.Title, fontWeight = FontWeight.Bold)
+                    Row(Modifier.padding(top = Sp.S4).height(5.dp), horizontalArrangement = Arrangement.spacedBy(Sp.S4)) {
                         repeat(minOf(n, 3)) { Box(Modifier.size(4.dp).clip(CircleShape).background(if (sel) Color.White else DotIdle)) }
                     }
                 }
@@ -158,8 +158,8 @@ fun CalendarScreen(vm: AppVM) {
                         val today = vm.calDay == 0
                         list.groupBy { periodOf(it, nowSec, today) }.forEach { (period, slots) ->
                             Text(
-                                periodLabel(period), Modifier.padding(start = TIME_W + RAIL, top = 8.dp, bottom = 10.dp),
-                                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NavOff,
+                                periodLabel(period), Modifier.padding(start = TIME_W + RAIL, top = Sp.S8, bottom = Sp.S12),
+                                fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = NavOff,
                             )
                             slots.forEachIndexed { i, s ->
                                 TimelineRow(s, i == 0, i == slots.lastIndex, next = today && s === list.first(), nowSec, vm, ensure)
@@ -201,8 +201,8 @@ private fun TimelineRow(
     val reminded = vm.p.remindEp.any { it.startsWith("${a.id}|${s.item.ep}|") }
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         Text(
-            s.at.format(DateTimeFormatter.ofPattern("HH:mm")), Modifier.width(TIME_W).padding(top = 7.dp),
-            fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TimeInk, textAlign = TextAlign.End, style = Tnum,
+            s.at.format(DateTimeFormatter.ofPattern("HH:mm")), Modifier.width(TIME_W).padding(top = Sp.S8),
+            fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = TimeInk, textAlign = TextAlign.End, style = Tnum,
         )
         // Rel timeline: garis vertikal + titik; titik episode berikutnya menyala merah.
         Box(Modifier.width(RAIL).fillMaxHeight().drawBehind {
@@ -211,7 +211,7 @@ private fun TimelineRow(
             if (next) drawCircle(Red.copy(alpha = 0.3f), 8.dp.toPx(), Offset(x, y))
             drawCircle(if (next) RedText else DotIdle, 4.5.dp.toPx(), Offset(x, y))
         })
-        Box(Modifier.weight(1f).padding(bottom = 10.dp)) {
+        Box(Modifier.weight(1f).padding(bottom = Sp.S12)) {
             EpisodeCard(s, next, reminded, nowSec, onOpen = { vm.go(Route.Detail(a.id)) }) {
                 vm.toggleRemindEpisode(a.id, s.item.ep, s.item.airingAt, ensure)
             }
@@ -227,22 +227,22 @@ private fun EpisodeCard(s: Slot, next: Boolean, reminded: Boolean, nowSec: Long,
     val today = s.at.toLocalDate() == LocalDate.now()
     Row(
         Modifier.fillMaxWidth().clip(shape).background(if (next) NextBg else Bg2)
-            .border(1.dp, if (next) NextBorder else Line, shape).clickable(onClick = onOpen).padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .border(1.dp, if (next) NextBorder else Line, shape).clickable(onClick = onOpen).padding(Sp.S12),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12),
     ) {
         Box(Modifier.size(62.dp, 86.dp).clip(RoundedCornerShape(13.dp)).artBackground(a)) {
             LoadedImage(PosterHealer.posterFor(a) ?: PosterHealer.coverFor(a), a.title, Modifier.fillMaxSize(), pending = !a.poster.isNullOrBlank())
         }
         Column(Modifier.weight(1f)) {
-            Text(a.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Row(Modifier.padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Episode ${s.item.ep}", fontSize = 12.5.sp, color = NavOff)
+            Text(a.title, fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = Sp.S4), verticalAlignment = Alignment.CenterVertically) {
+                Text("Episode ${s.item.ep}", fontSize = Ty.Small, color = NavOff)
                 a.genres.firstOrNull()?.let { g ->
-                    Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(11.dp).background(Line))
-                    Text(g, fontSize = 12.5.sp, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Box(Modifier.padding(horizontal = Sp.S8).width(1.dp).height(11.dp).background(Line))
+                    Text(g, fontSize = Ty.Small, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(Modifier.padding(top = Sp.S8), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
                 if (next) CountdownPill(s.item.airingAt)
                 else if (today) Pill(etaText(s.item.airingAt - nowSec), Color(0xFF1D2033), Color(0xFFA3A7C0))
                 if (s.item.ep == 1) Pill(I18n.t("cal_premiere", "Premiere"), Color(0x298B5CF6), Color(0xFFC4B5FD))
@@ -269,8 +269,8 @@ private fun CountdownPill(airingAt: Long) {
 @Composable
 private fun Pill(text: String, bg: Color, fg: Color) {
     Text(
-        text, Modifier.clip(CircleShape).background(bg).padding(horizontal = 9.dp, vertical = 3.dp),
-        fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = fg, style = Tnum,
+        text, Modifier.clip(CircleShape).background(bg).padding(horizontal = Sp.S8, vertical = Sp.S4),
+        fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = fg, style = Tnum,
     )
 }
 
@@ -278,10 +278,10 @@ private fun Pill(text: String, bg: Color, fg: Color) {
 private fun ListFilter(on: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.clip(CircleShape).background(if (on) Red else Bg2).border(1.dp, if (on) Red else Line, CircleShape)
-            .pressable(onClick).padding(horizontal = 13.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .pressable(onClick).padding(horizontal = Sp.S12, vertical = Sp.S8),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8),
     ) {
         Icon(if (on) AppIcons.BookmarkFill else AppIcons.Bookmark, null, Modifier.size(16.dp), tint = if (on) Color.White else NavOff)
-        Text("My List", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else TimeInk)
+        Text("My List", fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else TimeInk)
     }
 }

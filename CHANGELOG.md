@@ -1,3 +1,12 @@
+# v1.0.0-debug.71 (belum dikompilasi): Standar tata letak
+**Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu, lalu periksa tiap layar di HP: banyak nilai bergeser 1-2dp.
+- `ui/Spacing.kt` (`Sp`, kisi 4dp) dan `ui/Type.kt` (`Ty`, 10 ukuran huruf) baru. Sekitar 550 padding/jarak/Spacer dan 200 `fontSize` di `ui/*.kt` kini memakai token.
+- Pembulatan spasi: 3,5→4; 6,7,9→8; 10,11,13→12; 14,17,18→16; 22,26→24. Huruf: 10-11→11; 11,5-12→12; 12,5-13→13; 13,5-14,5→14; 15-16→16; 17-18→18; 19-20→20; 21-22→22; 24 dan 28 tetap.
+- Area ketuk 48dp: tombol mata (Auth), hapus komentar, kembali (Components dan pemutar), tombol atas pemutar, kunci, penutup panel episode, penutup petunjuk gestur, lonceng pengingat Beranda, `GlassButton`, hapus teks pencarian.
+- Dibiarkan: tombol tambah di kartu poster (30dp), tombol kirim komentar (32dp), jarak bersih bilah bawah.
+- Dokumen agen: ditambah bagian "Aturan tata letak".
+- Rollback cepat: kembalikan `ui/*.kt` dari `debug.70` dan hapus `Spacing.kt`/`Type.kt`.
+
 # v1.0.0-debug.70 (belum dikompilasi): Ikon pintasan merah, dokumen disesuaikan
 **Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu.
 - Ikon pintasan (Lanjutkan, Cari): lingkaran merah `#F20A17` + glif putih bergaris, tanpa tepi gelap — senada ikon launcher dan `Logo()`.

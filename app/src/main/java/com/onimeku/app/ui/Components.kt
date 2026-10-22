@@ -97,9 +97,9 @@ fun Logo(size: Dp) {
 
 @Composable
 fun Tag(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier, small: Boolean = false) {
-    Text(text, color = fg, fontSize = if (small) 11.sp else 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
+    Text(text, color = fg, fontSize = if (small) Ty.Micro else Ty.Caption, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
         modifier = modifier.clip(RoundedCornerShape(if (small) 6.dp else 7.dp)).background(bg)
-            .padding(horizontal = if (small) 7.dp else 9.dp, vertical = if (small) 2.dp else 3.dp))
+            .padding(horizontal = Sp.S8, vertical = if (small) Sp.S2 else Sp.S4))
 }
 
 @Composable
@@ -107,12 +107,12 @@ fun Chip(text: String, on: Boolean = false, minW: Dp = 0.dp, icon: ImageVector? 
     val fg = Color.White
     Row(
         Modifier.height(height).widthIn(min = minW).clip(CircleShape).background(if (on) Red else Bg2)
-            .border(1.dp, if (on) Red else Line, CircleShape).clickable(onClick = onClick).padding(horizontal = 14.dp),
+            .border(1.dp, if (on) Red else Line, CircleShape).clickable(onClick = onClick).padding(horizontal = Sp.S16),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(Sp.S8, Alignment.CenterHorizontally),
     ) {
         if (icon != null) Icon(icon, null, Modifier.size(16.dp), tint = fg)
-        Text(text, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        Text(text, color = fg, fontSize = Ty.Small, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -139,13 +139,13 @@ fun Btn(text: String, style: BtnStyle, icon: ImageVector? = null, modifier: Modi
     }
     Row(
         modifier.pressable { if (!loading) onClick() }.height(height).clip(CircleShape).background(bg).border(1.5.dp, bd, CircleShape)
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = Sp.S24),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(Sp.S8, Alignment.CenterHorizontally),
     ) {
         if (loading) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = fg, strokeWidth = 2.dp)
         else if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = fg)
-        Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(text, color = fg, fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -189,11 +189,11 @@ fun ScoreBadge(score: String, modifier: Modifier = Modifier, small: Boolean = fa
     val sh = RoundedCornerShape(8.dp)
     Row(
         modifier.clip(sh).background(Color(0xB30A0B10)).border(0.5.dp, Color(0x33FFFFFF), sh)
-            .padding(horizontal = if (small) 6.dp else 8.dp, vertical = if (small) 3.dp else 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+            .padding(horizontal = Sp.S8, vertical = Sp.S4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4),
     ) {
         Icon(Icons.Filled.Star, null, Modifier.size(if (small) 11.dp else 13.dp), tint = Gold)
-        Text(score.replace("★", "").trim(), fontSize = if (small) 11.sp else 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(score.replace("★", "").trim(), fontSize = if (small) Ty.Micro else Ty.Caption, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
 
@@ -203,11 +203,11 @@ fun LiveBadge(modifier: Modifier = Modifier, small: Boolean = false) {
     val sh = RoundedCornerShape(8.dp)
     Row(
         modifier.clip(sh).background(Color(0xB30A0B10)).border(0.5.dp, Color(0x33FFFFFF), sh)
-            .padding(horizontal = if (small) 6.dp else 8.dp, vertical = if (small) 3.dp else 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(horizontal = Sp.S8, vertical = Sp.S4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4),
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF3DDC97)))
-        Text(statusText("Airing"), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, softWrap = false)
+        Text(statusText("Airing"), fontSize = Ty.Micro, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, softWrap = false)
     }
 }
 
@@ -243,11 +243,11 @@ fun Poster(
         LoadedImage(img, a.title, Modifier.fillMaxSize(), pending = !a.poster.isNullOrBlank())
         if (badges) {
             val rt = a.rating
-            if (rt != null) ScoreBadge(rt, Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 10.dp), small = compact)
-            else if (a.status == "Airing") LiveBadge(Modifier.align(Alignment.TopStart).padding(if (compact) 6.dp else 10.dp), small = compact)
+            if (rt != null) ScoreBadge(rt, Modifier.align(Alignment.TopStart).padding(if (compact) Sp.S8 else Sp.S12), small = compact)
+            else if (a.status == "Airing") LiveBadge(Modifier.align(Alignment.TopStart).padding(if (compact) Sp.S8 else Sp.S12), small = compact)
             if (a.hd || newBadge) Column(
-                Modifier.align(Alignment.TopEnd).padding(if (compact) 6.dp else 10.dp),
-                horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp),
+                Modifier.align(Alignment.TopEnd).padding(if (compact) Sp.S8 else Sp.S12),
+                horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Sp.S4),
             ) {
                 if (newBadge) Tag(I18n.t("badge_new", "NEW"), Gold, Bg, small = true)
                 if (a.hd) Tag("HD", Red, Color.White, small = compact)
@@ -255,7 +255,7 @@ fun Poster(
         }
         if (rank != null) {
             val big = 60.sp
-            Box(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 2.dp).popIn(120 + rank * 70)) {
+            Box(Modifier.align(Alignment.BottomStart).padding(start = Sp.S12, bottom = Sp.S2).popIn(120 + rank * 70)) {
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Bg,
                     style = TextStyle(drawStyle = Stroke(width = 14f)), lineHeight = big)
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Color.White, lineHeight = big)
@@ -265,10 +265,10 @@ fun Poster(
             Column(
                 Modifier.align(Alignment.BottomStart).fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD90A0B10))))
-                    .padding(start = 12.dp, end = 12.dp, top = 26.dp, bottom = 10.dp),
+                    .padding(start = Sp.S12, end = Sp.S12, top = Sp.S24, bottom = Sp.S12),
             ) {
-                Text(meta.first, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(meta.second, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta.first, fontWeight = FontWeight.SemiBold, fontSize = Ty.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta.second, fontSize = Ty.Small, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (playIcon) {
@@ -290,10 +290,10 @@ fun Poster(
 fun PosterCard(a: Anime, w: Dp, rank: Int? = null, sharedKey: String? = null, index: Int = 0, onClick: () -> Unit) {
     Column(Modifier.width(w).let { m -> if (sharedKey != null) m.staggerIn(sharedKey, index) else m }) {
         Poster(a, w, badges = true, rank = rank, sharedKey = sharedKey, onClick = onClick)
-        Text(cleanTitle(a.title), Modifier.padding(top = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
+        Text(cleanTitle(a.title), Modifier.padding(top = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
         // Baris meta selalu memesan tinggi: struktur kartu rail = kartu grid (judul 2 baris + meta 1 baris).
-        Text(cardMeta(a).ifBlank { " " }, Modifier.padding(top = 2.dp), fontSize = 11.5.sp, color = NavOff,
+        Text(cardMeta(a).ifBlank { " " }, Modifier.padding(top = Sp.S2), fontSize = Ty.Caption, color = NavOff,
             minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -303,10 +303,10 @@ fun PosterCard(a: Anime, w: Dp, rank: Int? = null, sharedKey: String? = null, in
 fun Tile(a: Anime, vm: AppVM, index: Int = 0) {
     Column(Modifier.staggerIn("grid:${a.id}", index)) {
         Poster(a, null, badges = true, compact = true, sharedKey = "grid:${a.id}") { vm.go(Route.Detail(a.id)) }
-        Text(cleanTitle(a.title), Modifier.padding(top = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
+        Text(cleanTitle(a.title), Modifier.padding(top = Sp.S8), fontSize = Ty.Caption, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
         // Baris meta selalu memesan tinggi (genre, atau cadangan tahun · eps) supaya kartu di satu baris grid sama tinggi.
-        Text(cardMeta(a).ifBlank { " " }, fontSize = 11.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp),
+        Text(cardMeta(a).ifBlank { " " }, fontSize = Ty.Micro, color = NavOff, modifier = Modifier.padding(top = Sp.S2),
             minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -329,9 +329,9 @@ fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(100.dp),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = bottomContentPadding()),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(start = Sp.S16, end = Sp.S16, top = top + Sp.S16, bottom = bottomContentPadding()),
+        horizontalArrangement = Arrangement.spacedBy(Sp.S12),
+        verticalArrangement = Arrangement.spacedBy(Sp.S16),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
         itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(motionGridItem()) { Tile(a, vm, i % 9) } }
@@ -340,24 +340,24 @@ fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
 
 @Composable
 fun Rail(content: LazyListScope.() -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = 16.dp), content = content)
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(Sp.S12), contentPadding = PaddingValues(horizontal = Sp.S16), content = content)
 }
 
 @Composable
 fun SectionHead(title: String, subtitle: String? = null, onAll: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.padding(end = 10.dp).width(4.dp).height(if (subtitle != null) 38.dp else 20.dp).growIn().clip(CircleShape).background(Red))
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+    Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S16).padding(bottom = Sp.S12), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.padding(end = Sp.S12).width(4.dp).height(if (subtitle != null) 38.dp else 20.dp).growIn().clip(CircleShape).background(Red))
+        Column(Modifier.weight(1f).padding(end = Sp.S12)) {
+            Text(title, fontSize = Ty.Title2, fontWeight = FontWeight.SemiBold,
                 letterSpacing = (-0.2).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle != null) Text(subtitle, Modifier.padding(top = 2.dp), fontSize = 14.sp, color = InkSoft,
+            if (subtitle != null) Text(subtitle, Modifier.padding(top = Sp.S2), fontSize = Ty.Body, color = InkSoft,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (onAll != null) Row(
-            Modifier.clip(CircleShape).clickable(onClick = onAll).padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            Modifier.clip(CircleShape).clickable(onClick = onAll).padding(start = Sp.S12, end = Sp.S4, top = Sp.S4, bottom = Sp.S4),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(I18n.t("see_all", "See all"), color = RedText, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            Text(I18n.t("see_all", "See all"), color = RedText, fontWeight = FontWeight.Medium, fontSize = Ty.Body)
             Icon(AppIcons.ChevronRight, null, Modifier.size(18.dp), tint = RedText)
         }
     }
@@ -368,40 +368,40 @@ fun Page(extraTop: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = top + extraTop, bottom = bottomContentPadding()),
+            .padding(start = Sp.S16, end = Sp.S16, top = top + extraTop, bottom = bottomContentPadding()),
         content = content,
     )
 }
 
 @Composable
 fun SubHead(title: String, vm: AppVM) {
-    Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
+    Row(Modifier.fillMaxWidth().padding(bottom = Sp.S12), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(48.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
             Icon(AppIcons.ArrowLeft, "Back")
         }
-        Spacer(Modifier.width(6.dp))
-        Text(title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.width(Sp.S8))
+        Text(title, fontSize = Ty.Head2, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
 fun RootTitle(title: String, lead: String? = null) {
-    Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
-    if (lead != null) Text(lead, color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
+    Text(title, fontSize = Ty.Display, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+    if (lead != null) Text(lead, color = InkSoft, modifier = Modifier.padding(top = Sp.S4, bottom = Sp.S8))
 }
 
 @Composable
 fun EmptyBox(title: String, text: String, action: (@Composable () -> Unit)? = null) {
     val shape = RoundedCornerShape(22.dp)
     Column(
-        Modifier.padding(top = 28.dp).fillMaxWidth().clip(shape).background(Bg2).border(1.dp, Line, shape).padding(28.dp),
+        Modifier.padding(top = Sp.S28).fillMaxWidth().clip(shape).background(Bg2).border(1.dp, Line, shape).padding(Sp.S28),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.padding(bottom = 14.dp).size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(bottom = Sp.S16).size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
             Icon(AppIcons.Inbox, null, Modifier.size(28.dp), tint = RedText)
         }
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        Text(text, color = InkSoft, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp))
+        Text(title, fontSize = Ty.Title, fontWeight = FontWeight.SemiBold)
+        Text(text, color = InkSoft, fontSize = Ty.Body, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Sp.S8, bottom = Sp.S16))
         action?.invoke()
     }
 }

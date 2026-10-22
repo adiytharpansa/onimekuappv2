@@ -158,8 +158,8 @@ internal fun YtSeekBar(
                 Modifier.offset {
                     val tw = 48.dp.roundToPx()
                     IntOffset((widthPx * (pos / d).coerceIn(0f, 1f) - tw / 2f).toInt().coerceIn(0, (widthPx - tw).toInt().coerceAtLeast(0)), -36.dp.roundToPx())
-                }.clip(RoundedCornerShape(8.dp)).background(Color(0xCC000000)).padding(horizontal = 8.dp, vertical = 3.dp),
-                fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                }.clip(RoundedCornerShape(8.dp)).background(Color(0xCC000000)).padding(horizontal = Sp.S8, vertical = Sp.S4),
+                fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = Color.White,
             )
         }
     }
@@ -199,7 +199,7 @@ internal fun PlayerSettingsSheet(
         ) {
             val shape = if (full) RoundedCornerShape(18.dp) else RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
             Column(
-                (if (full) Modifier.width(340.dp).padding(end = 16.dp, bottom = 12.dp) else Modifier.fillMaxWidth())
+                (if (full) Modifier.width(340.dp).padding(end = Sp.S16, bottom = Sp.S12) else Modifier.fillMaxWidth())
                     .heightIn(max = if (full) 300.dp else 520.dp)
                     .clip(shape).background(Bg2).border(1.dp, Line, shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
@@ -212,7 +212,7 @@ internal fun PlayerSettingsSheet(
                     },
                     contentAlignment = Alignment.Center,
                 ) { Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Color(0x55FFFFFF))) }
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 6.dp, bottom = if (full) 6.dp else 18.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(top = Sp.S8, bottom = if (full) Sp.S8 else Sp.S16)) {
                     when (held) {
                         "quality" -> {
                             SheetHeader(I18n.t("quality", "Quality")) { onPage("main") }
@@ -231,15 +231,15 @@ internal fun PlayerSettingsSheet(
                                     SubMenuEntry.Off -> SheetOption(I18n.t("ctl_off", "Off"), subPref == "off" || (subCurrent < 0 && subPref != "auto")) { onSubOff() }
                                 }
                             }
-                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
+                            Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
                             SheetRowItem(Icons.Filled.FormatSize, "Subtitle style", sizeNames.firstOrNull { it.first == subSize }?.second ?: "Normal") { onPage("substyle") }
                         }
                         "substyle" -> {
                             SheetHeader("Subtitle style") { onPage("subs") }
                             sizeNames.forEach { (k, label) -> SheetOption(label, subSize == k) { onSubSize(k) } }
-                            Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Line))
-                            Row(Modifier.fillMaxWidth().clickable { onSubBg(!subBg) }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Black background", Modifier.weight(1f), fontSize = 15.sp, color = Color.White)
+                            Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
+                            Row(Modifier.fillMaxWidth().clickable { onSubBg(!subBg) }.padding(horizontal = Sp.S20, vertical = Sp.S8), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Black background", Modifier.weight(1f), fontSize = Ty.Subtitle, color = Color.White)
                                 Switch(subBg, { onSubBg(it) }, colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
                                     uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50)))
@@ -279,30 +279,30 @@ internal fun PlayerSettingsSheet(
 
 @Composable
 internal fun SheetRowItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Sp.S20, vertical = Sp.S16), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, Modifier.size(22.dp), tint = Color.White)
-        Text(label, Modifier.weight(1f).padding(start = 16.dp), fontSize = 15.sp, color = Color.White)
+        Text(label, Modifier.weight(1f).padding(start = Sp.S16), fontSize = Ty.Subtitle, color = Color.White)
         if (value.isNotEmpty()) {
-            Text(value, fontSize = 13.5.sp, color = NavOff, maxLines = 1)
-            Icon(Icons.Filled.ChevronRight, null, Modifier.padding(start = 4.dp).size(20.dp), tint = NavOff)
+            Text(value, fontSize = Ty.Body, color = NavOff, maxLines = 1)
+            Icon(Icons.Filled.ChevronRight, null, Modifier.padding(start = Sp.S4).size(20.dp), tint = NavOff)
         }
     }
 }
 
 @Composable
 internal fun SheetHeader(title: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onBack).padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onBack).padding(horizontal = Sp.S16, vertical = Sp.S12), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(22.dp), tint = Color.White)
-        Text(title, Modifier.padding(start = 14.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(title, Modifier.padding(start = Sp.S16), fontSize = Ty.Subtitle, fontWeight = FontWeight.SemiBold, color = Color.White)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
 }
 
 @Composable
 internal fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Sp.S20, vertical = Sp.S12), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { if (selected) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText) }
-        Text(label, Modifier.padding(start = 16.dp), fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        Text(label, Modifier.padding(start = Sp.S16), fontSize = Ty.Subtitle, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (selected) RedText else Color.White)
     }
 }

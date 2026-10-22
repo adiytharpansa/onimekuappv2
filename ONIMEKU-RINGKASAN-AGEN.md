@@ -196,3 +196,7 @@ gradle :app:bundleRelease \
 CI: `build.yml` (debug APK), `emulator-test.yml` (hook uji: intent extra `test_id`, `test_ep`, `test_home`), `release.yml` (uji unit + AAB bertanda tangan; secret `ONIMEKU_STORE_B64`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS`, `ONIMEKU_KEY_PASS`, `ONIMEKU_SUPABASE_URL`, `ONIMEKU_SUPABASE_KEY`).
 
 ---
+
+
+## Tata letak (debug.71)
+Spasi pakai `Sp.S*` (kisi 4dp, `ui/Spacing.kt`), huruf pakai `Ty.*` (`ui/Type.kt`), area ketuk ikon minimal 48dp. Jangan menulis angka dp/sp lepas di layar baru.

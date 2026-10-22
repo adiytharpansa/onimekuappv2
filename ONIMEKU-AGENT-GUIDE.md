@@ -291,3 +291,10 @@ Belum dikompilasi/diuji. Titik rawan kompilasi: API Media3 session (`MediaSessio
 - `Catalog.similar` menyaring franchise yang sama (`franchiseKey`) dan butuh overlap genre >= 2 bila memungkinkan.
 - `Poster(playIcon = true)` untuk kartu Continue Watching. Home "All Anime" dibatasi 24 judul + chip genre + tombol Browse all.
 - Belum dikompilasi di lingkungan ini; jalankan `gradle :app:testDebugUnitTest :app:assembleDebug` sebelum rilis (ada `CatalogTest` baru).
+
+
+## Aturan tata letak (debug.71)
+- Spasi: hanya token `Sp.S2/S4/S8/S12/S16/S20/S24/S28/S32` (`ui/Spacing.kt`, kisi 4dp) untuk padding, `spacedBy`, dan `Spacer`. Jangan menulis angka lepas (3, 5, 6, 7, 9, 10, 11, 13, 14, 17, 18, 22, 26).
+- Huruf: hanya token `Ty.Micro/Caption/Small/Body/Subtitle/Title/Title2/Head/Head2/Display` (`ui/Type.kt`: 11/12/13/14/16/18/20/22/24/28sp). Tanpa sp pecahan. Angka hero di atas 28sp boleh lepas.
+- Area ketuk: kontrol ikon yang bisa diketuk minimal 48dp (ikon boleh lebih kecil di dalam Box 48dp).
+- Pengecualian sengaja: tombol tambah di kartu poster (30dp), tombol kirim komentar (32dp), dan jarak bersih bilah bawah (44/62/64/66/96dp).

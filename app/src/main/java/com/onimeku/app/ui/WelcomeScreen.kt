@@ -78,11 +78,11 @@ fun WelcomeScreen(vm: AppVM) {
             },
         ) { Logo(88.dp) }
 
-        Text(I18n.t("skip_for_now", "Skip for now"), Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp).clip(CircleShape)
-            .background(Color(0x8C14161F)).clickable { vm.closeWelcome() }.padding(horizontal = 14.dp, vertical = 8.dp),
-            fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(I18n.t("skip_for_now", "Skip for now"), Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Sp.S16).clip(CircleShape)
+            .background(Color(0x8C14161F)).clickable { vm.closeWelcome() }.padding(horizontal = Sp.S16, vertical = Sp.S8),
+            fontSize = Ty.Small, fontWeight = FontWeight.Medium)
 
-        Column(Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp).navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+        Column(Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp).navigationBarsPadding().padding(horizontal = Sp.S24).padding(bottom = Sp.S32)) {
             // Teks slide berganti dengan fade + geser halus.
             AnimatedContent(
                 targetState = idx,
@@ -94,18 +94,18 @@ fun WelcomeScreen(vm: AppVM) {
                     Text(buildAnnotatedString {
                         append(pl); withStyle(SpanStyle(color = Red)) { append(e) }
                     }, fontSize = 46.sp, fontWeight = FontWeight.Bold, lineHeight = 50.sp, letterSpacing = (-1.5).sp)
-                    Text(sb, Modifier.padding(top = 16.dp), fontSize = 20.sp, lineHeight = 29.sp, color = Color(0xFFF2F2F6))
+                    Text(sb, Modifier.padding(top = Sp.S16), fontSize = Ty.Title2, lineHeight = 29.sp, color = Color(0xFFF2F2F6))
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = Sp.S24), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 slides.indices.forEach { i ->
                     val dotW by animateDpAsState(if (i == idx) 42.dp else 10.dp, tween(300), label = "dotW")
                     val dotC by animateColorAsState(if (i == idx) Red else Color(0xFF5A5F6E), tween(300), label = "dotC")
-                    Box(Modifier.padding(start = 9.dp).height(10.dp).width(dotW).clip(CircleShape)
+                    Box(Modifier.padding(start = Sp.S8).height(10.dp).width(dotW).clip(CircleShape)
                         .background(dotC).clickable { idx = i; tick++ })
                 }
             }
-            Row(Modifier.padding(top = 22.dp).fadeSlideIn(150), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.padding(top = Sp.S24).fadeSlideIn(150), horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
                 Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(false)) }
                 Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f), height = 58.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(true)) }
             }
