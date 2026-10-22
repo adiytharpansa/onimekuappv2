@@ -715,7 +715,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun addHist(v: String) {
         val q = v.trim(); if (q.length < 2) return
-        upd { it.copy(hist = (listOf(q) + it.hist.filter { x -> x != q }).take(6)) }
+        upd { it.copy(hist = (listOf(q) + it.hist.filter { x -> x != q && !q.startsWith(x, ignoreCase = true) }).take(6)) }
     }
     fun clearHist() = upd { it.copy(hist = emptyList()) }
 

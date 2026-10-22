@@ -1265,9 +1265,12 @@ fun SearchScreen(vm: AppVM) {
     // berubah, bukan setiap ketukan.
     var appliedQ by remember { mutableStateOf("") }
     LaunchedEffect(q) { kotlinx.coroutines.delay(500); appliedQ = q }
-    var gs by remember { mutableStateOf(listOf<String>()) }
-    var yr by remember { mutableStateOf("") }
-    var st by remember { mutableStateOf("") }
+    // Filter bertahan saat layar diputar/dibuat ulang.
+    var gs by rememberSaveable { mutableStateOf(listOf<String>()) }
+    var yr by rememberSaveable { mutableStateOf("") }
+    var st by rememberSaveable { mutableStateOf("") }
+    var sortBy by rememberSaveable { mutableStateOf(com.onimeku.app.data.SearchLogic.Sort.RELEVANCE) }
+    val focusMgr = androidx.compose.ui.platform.LocalFocusManager.current
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { fr.requestFocus() }
     val voiceCtx = androidx.compose.ui.platform.LocalContext.current
@@ -1317,20 +1320,18 @@ fun SearchScreen(vm: AppVM) {
     // Dulu: tiap perubahan kata/filter memanggil lowercase() + joinToString() untuk SELURUH katalog di main thread
     // (ribuan alokasi string -> ketukan chip genre terasa tersendat). Kini teks huruf-kecil dihitung SEKALI per katalog
     // dan penyaringan berjalan di thread latar; hasil lama tetap tampil sampai hasil baru siap (tidak berkedip kosong).
-    val searchIndex by produceState(initialValue = emptyList<Pair<Anime, String>>(), Catalog.all) {
+    val searchIndex by produceState(initialValue = emptyList<com.onimeku.app.data.SearchLogic.Entry>(), Catalog.all) {
         val all = Catalog.all
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            all.map { it to (it.title.lowercase() + "\n" + it.genres.joinToString(" ").lowercase()) }
-        }
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.onimeku.app.data.SearchLogic.index(all) }
     }
-    val results by produceState(initialValue = emptyList<Anime>(), query, gs, yr, st, any, searchIndex) {
+    // Peringkat relevansi: semua kata cocok (urutan bebas, tanpa aksen/tanda baca), judul berawalan kueri paling atas.
+    val results by produceState(initialValue = emptyList<Anime>(), appliedQ, gs, yr, st, any, searchIndex, sortBy) {
         value = if (query.isEmpty() && !any) emptyList()
-        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            searchIndex.filter { (c, text) ->
-                (query.isEmpty() || text.contains(query)) &&
-                    gs.all { it in c.genres } && (yr.isEmpty() || c.year.toString() == yr) && (st.isEmpty() || c.status == st)
-            }.map { it.first }
-        }
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.onimeku.app.data.SearchLogic.search(searchIndex, appliedQ, gs, yr, st, sortBy) }
+    }
+    // Simpan ke riwayat setelah kueri stabil 1,5 dtk dan ada hasil (dulu hanya bila menekan tombol cari di keyboard).
+    LaunchedEffect(query, results.isNotEmpty()) {
+        if (query.length >= 2 && results.isNotEmpty()) { kotlinx.coroutines.delay(1500); vm.addHist(appliedQ) }
     }
 
     // Hasil memakai grid lazy: mengetik di katalog besar tidak lagi menggambar ratusan kartu sekaligus.
@@ -1344,16 +1345,16 @@ fun SearchScreen(vm: AppVM) {
             BasicTextField(q, { q = it }, Modifier.weight(1f).focusRequester(fr), singleLine = true,
                 textStyle = TextStyle(color = Color.White, fontSize = Ty.Subtitle), cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { vm.addHist(q) }),
+                keyboardActions = KeyboardActions(onSearch = { vm.addHist(q); focusMgr.clearFocus() }),
                 decorationBox = { inner -> if (q.isEmpty()) Text(I18n.t("search_hint2", "Search anime or genre"), color = NavOff); inner() })
             if (q.isNotEmpty()) Box(Modifier.size(48.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
-                Icon(AppIcons.Close, "Clear", Modifier.size(18.dp), tint = InkSoft)
+                Icon(AppIcons.Close, I18n.t("clear", "Clear"), Modifier.size(18.dp), tint = InkSoft)
             } else if (voiceOk) Box(Modifier.size(48.dp).clip(CircleShape).clickable { showVoice = true }, contentAlignment = Alignment.Center) {
                 Icon(AppIcons.Mic, I18n.t("voice_search", "Voice search"), Modifier.size(22.dp), tint = InkSoft)
             }
         }
         group("Genre") { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }
-        group("Status") { Catalog.statuses.forEach { v -> Chip(v, st == v) { st = if (st == v) "" else v } } }
+        group("Status") { Catalog.statuses.forEach { v -> Chip(statusText(v), st == v) { st = if (st == v) "" else v } } }
         group(I18n.t("f_year", "Year")) {
             Catalog.years.forEach { v -> Chip(v, yr == v) { yr = if (yr == v) "" else v } }
         }
@@ -1412,9 +1413,21 @@ fun SearchScreen(vm: AppVM) {
                 }
             }
         } else if (results.isEmpty()) {
-            EmptyBox(I18n.t("no_results_t", "No results"), I18n.t("no_results_b", "Nothing matches. Try fewer filters or check the spelling."))
+            EmptyBox(I18n.t("no_results_t", "No results"), I18n.t("no_results_b", "Nothing matches. Try fewer filters or check the spelling.")) {
+                if (any || q.isNotEmpty()) Chip(I18n.t("search_reset_all", "Clear search & filters")) { q = ""; gs = emptyList(); yr = ""; st = "" }
+            }
         } else {
-            Text("${results.size} ${I18n.t("n_results", "result")}${if (results.size > 1 && I18n.lang != "id") "s" else ""}", Modifier.padding(bottom = Sp.S2), color = NavOff, fontSize = Ty.Small)
+            Text("${results.size} ${I18n.t("n_results", "result")}${if (results.size > 1 && I18n.lang != "id") "s" else ""}", Modifier.padding(bottom = Sp.S8), color = NavOff, fontSize = Ty.Small)
+            if (results.size > 1) Row(Modifier.fillMaxWidth().padding(bottom = Sp.S4).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+                com.onimeku.app.data.SearchLogic.Sort.values().forEach { o ->
+                    Chip(when (o) {
+                        com.onimeku.app.data.SearchLogic.Sort.RELEVANCE -> I18n.t("sort_best", "Best match")
+                        com.onimeku.app.data.SearchLogic.Sort.RATING -> I18n.t("sort_rating", "Rating")
+                        com.onimeku.app.data.SearchLogic.Sort.NEWEST -> I18n.t("sort_newest", "Newest")
+                        com.onimeku.app.data.SearchLogic.Sort.TITLE -> I18n.t("sort_az", "A–Z")
+                    }, on = sortBy == o) { sortBy = o }
+                }
+            }
         }
     }
 }

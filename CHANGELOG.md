@@ -1,3 +1,11 @@
+# Penyempurnaan layar Search (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/Screens.kt`, `AppVM.kt`, `I18n.kt`, berkas baru `data/SearchLogic.kt` + tes `SearchLogicTest.kt`.
+- **Pencarian lebih pintar:** semua kata kueri harus cocok tetapi urutan bebas ("titan attack" menemukan "Attack on Titan"); aksen dan tanda baca diabaikan ("pokemon" = "Pokémon", "rezero" = "Re:Zero"); genre ikut dicari. Dulu hanya pencocokan substring persis.
+- **Peringkat relevansi:** judul berawalan kueri paling atas, lalu kata awal, lalu cocok di dalam; tanpa kueri diurut rating. Chip urutan: Paling cocok / Rating / Terbaru / A-Z.
+- **Riwayat otomatis:** kueri disimpan setelah stabil 1,5 dtk dan ada hasil (dulu hanya saat menekan tombol cari di keyboard). Awalan kueri yang sama ("att", "attack") digantikan versi terlengkap.
+- **Filter bertahan** saat layar diputar (rememberSaveable); label status dilokalisasi; keyboard menutup saat menekan cari; "No results" menawarkan tombol hapus pencarian & filter.
+- Rollback cepat: kembalikan `ui/Screens.kt`, `AppVM.kt`, `I18n.kt`; hapus `SearchLogic.kt` dan `SearchLogicTest.kt`.
+
 # Penyempurnaan layar My List (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/Screens.kt`, `AppVM.kt`, `I18n.kt`, berkas baru `data/MyListView.kt` + tes `MyListViewTest.kt`.
 - **Bug: "Your list is empty" muncul palsu saat katalog belum termuat.** Daftar dipetakan lewat katalog, jadi sebelum katalog tiba (atau saat offline) pengguna yang punya daftar melihat layar kosong. Kini tampil indikator memuat, atau pesan "judulmu belum bisa ditampilkan" bila katalog gagal; daftar tersimpan tidak disentuh.
