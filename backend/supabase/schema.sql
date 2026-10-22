@@ -51,3 +51,20 @@ create policy "comments: insert own" on public.comments
 drop policy if exists "comments: delete own" on public.comments;
 create policy "comments: delete own" on public.comments
   for delete using (auth.uid() = user_id);
+
+-- Nama penulis ditetapkan server dari metadata akun; klien tidak bisa memalsukannya.
+-- Bila akun tak punya nama, pakai nilai kiriman klien yang sudah dibersihkan (tanpa email).
+create or replace function public.comments_set_author() returns trigger
+language plpgsql security definer set search_path = public, auth as $$
+declare nm text;
+begin
+  select coalesce(nullif(trim(raw_user_meta_data->>'full_name'), ''),
+                  nullif(trim(raw_user_meta_data->>'name'), ''))
+    into nm from auth.users where id = new.user_id;
+  new.author := left(coalesce(nm, nullif(trim(new.author), ''), 'User'), 40);
+  return new;
+end $$;
+
+drop trigger if exists comments_author on public.comments;
+create trigger comments_author before insert on public.comments
+  for each row execute function public.comments_set_author();

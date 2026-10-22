@@ -9,8 +9,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="onimeku_secure.xml" />
+        <exclude domain="sharedpref" path="onimeku_acc_fallback.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="onimeku_secure.xml" />
+        <exclude domain="sharedpref" path="onimeku_acc_fallback.xml" />
     </device-transfer>
 </data-extraction-rules>

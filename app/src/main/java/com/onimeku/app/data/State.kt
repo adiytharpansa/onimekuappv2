@@ -32,7 +32,18 @@ data class Profile(
     val remindEp: List<String> = emptyList(),
     // Detik menonton per hari ("yyyy-MM-dd" -> detik), untuk statistik Profil. Lokal saja, tidak disinkronkan.
     val days: Map<String, Int> = emptyMap(),
+    // Cap waktu (epoch ms) perubahan terakhir tiap id (ditambah ATAU dihapus), untuk penggabungan sinkron.
+    val myListTs: Map<String, Long> = emptyMap(),
+    val seenTs: Map<String, Long> = emptyMap(),
 )
+
+/** Beri cap [now] pada [ids]; dibatasi 1500 entri terbaru agar tidak membengkak. */
+fun Map<String, Long>.stamped(ids: Collection<String>, now: Long): Map<String, Long> {
+    val m = LinkedHashMap(this)
+    ids.forEach { m[it] = now }
+    return if (m.size <= 1500) m
+    else m.entries.sortedByDescending { it.value }.take(1500).associate { it.key to it.value }
+}
 
 @Serializable
 data class Settings(
@@ -96,6 +107,13 @@ class Store(ctx: Context) {
     private var lastAcc: Account? = null
     private var accWritten = false
 
+    // Cadangan penyimpanan akun HANYA bila Keystore gagal. Berkas ini dikecualikan dari backup.
+    private val accPlain = appCtx.getSharedPreferences("onimeku_acc_fallback", Context.MODE_PRIVATE)
+
+    private fun plainAcc(): Account? = try {
+        accPlain.getString("account", null)?.let { json.decodeFromString<Account>(it) }
+    } catch (e: Exception) { null }
+
     // Penulisan state: JSON di-encode + ditulis di thread latar tunggal. Sebelumnya tiap upd() (termasuk
     // simpan progres tonton berkala) meng-encode SELURUH AppState di main thread. Simpan beruntun digabung:
     // hanya state terbaru yang ditulis. Eksekutor tunggal menjaga urutan tulis.
@@ -128,13 +146,20 @@ class Store(ctx: Context) {
     }
 
     fun load(): AppState {
-        val base = try {
-            sp.getString("state", null)?.let { json.decodeFromString<AppState>(it) } ?: AppState()
-        } catch (e: Exception) { AppState() }
-        val sec = secure ?: return base
-        val acc = try { sec.getString("account", null)?.let { json.decodeFromString<Account>(it) } } catch (e: Exception) { null }
-        // Migrasi: akun lama yang masih di JSON biasa dipindah ke penyimpanan terenkripsi.
-        return base.copy(account = acc ?: base.account)
+        val raw = sp.getString("state", null)
+        val base = if (raw == null) AppState() else try {
+            json.decodeFromString<AppState>(raw)
+        } catch (e: Exception) {
+            // Jangan hilangkan data yang gagal dibaca: simpan salinan mentah untuk pemulihan/diagnostik.
+            sp.edit().putString("state_corrupt_backup", raw).apply()
+            AppState()
+        }
+        val sec = secure
+        val acc = if (sec != null) {
+            try { sec.getString("account", null)?.let { json.decodeFromString<Account>(it) } } catch (e: Exception) { null }
+        } else null
+        // Urutan: terenkripsi -> cadangan polos (Keystore gagal) -> JSON lama (migrasi).
+        return base.copy(account = acc ?: plainAcc() ?: base.account)
     }
 
     fun save(s: AppState) {
@@ -143,13 +168,15 @@ class Store(ctx: Context) {
     }
 
     private fun write(s: AppState) {
-        val sec = secure
-        if (sec == null) { sp.edit().putString("state", json.encodeToString(s.copy(account = null))).apply(); return }
         // Tulis token hanya saat berubah (enkripsi Keystore tidak murah; save() dipanggil tiap simpan progres).
         if (!accWritten || s.account != lastAcc) {
-            val e = sec.edit()
+            val sec = secure
+            val e = (sec ?: accPlain).edit()
             if (s.account != null) e.putString("account", json.encodeToString(s.account)) else e.remove("account")
-            e.apply(); lastAcc = s.account; accWritten = true
+            e.apply()
+            // Keystore pulih: buang salinan polos supaya token tidak tersisa tanpa enkripsi.
+            if (sec != null) accPlain.edit().remove("account").apply()
+            lastAcc = s.account; accWritten = true
         }
         sp.edit().putString("state", json.encodeToString(s.copy(account = null))).apply()
     }

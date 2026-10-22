@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadHelper
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadService
+import androidx.media3.exoplayer.scheduler.PlatformScheduler
 import androidx.media3.exoplayer.scheduler.Scheduler
 import com.onimeku.app.R
 import java.io.File
@@ -262,7 +263,8 @@ class OnimekuDownloadService : DownloadService(
     R.string.dl_channel_desc,
 ) {
     override fun getDownloadManager(): DownloadManager = Downloads.manager(this)
-    override fun getScheduler(): Scheduler? = null
+    // Bangunkan layanan lagi saat syarat (Wi-Fi/jaringan) terpenuhi, juga setelah proses dimatikan.
+    override fun getScheduler(): Scheduler? = PlatformScheduler(this, JOB_ID)
     override fun getForegroundNotification(
         downloads: MutableList<Download>, notMetRequirements: Int,
     ): android.app.Notification =
@@ -270,4 +272,6 @@ class OnimekuDownloadService : DownloadService(
             .buildProgressNotification(
                 this, android.R.drawable.stat_sys_download, null, null, downloads, notMetRequirements,
             )
+
+    private companion object { const val JOB_ID = 1002 }
 }

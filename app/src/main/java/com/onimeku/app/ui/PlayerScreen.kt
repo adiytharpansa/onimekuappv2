@@ -1807,7 +1807,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         subOffsetMs = subOffsetNow,
         onSubAlign = { alignSubs() },
         onSubOffset = { v -> vm.setSettings { it.copy(subOffsetByTitle = SubSync.remember(it.subOffsetByTitle, r.id, v)) } },
-        autoplay = vm.s.settings.autoplay, onAutoplay = { v -> vm.setSettings { it.copy(autoplay = v) }; vm.toast("${I18n.t("autoplay_next", "Autoplay next")}: ${if (v) "On" else "Off"}") },
+        autoplay = vm.s.settings.autoplay, onAutoplay = { v -> vm.setSettings { it.copy(autoplay = v) }; vm.toast("${I18n.t("autoplay_next", "Autoplay next")}: ${if (v) I18n.t("ctl_on", "On") else I18n.t("ctl_off", "Off")}") },
         speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
         audioLabels = audioLabels, audioKeys = audioKeys, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}") },
         sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(when (m) { 0 -> "Sleep timer: Off"; -1 -> "Sleep timer: ${I18n.t("sleep_end", "End of episode")}"; else -> "Sleep timer: $m min" }) },

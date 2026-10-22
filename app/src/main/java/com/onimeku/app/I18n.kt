@@ -376,7 +376,7 @@ object I18n {
         "wifi_only_body" to "Streaming lewat data seluler dimatikan di Pengaturan. Sambungkan ke Wi-Fi atau matikan opsi itu.",
         "open_settings" to "Buka Pengaturan",
         // Kalender
-        "remind_me" to "Ingatkan aku",
+
         "reminded" to "Diingatkan",
         "no_releases" to "Tidak ada rilis pada hari ini.",
         // Unduhan
@@ -439,5 +439,31 @@ object I18n {
         "auto_skip_t" to "Lewati intro otomatis",
         "autoplay_next" to "Putar berikutnya otomatis",
         "auto_skip_d" to "Langsung melompati lagu pembuka bila episode punya penanda intro.",
+        // --- kunci yang dipakai kode tetapi belum ada di kamus ---
+        "forgot_password" to "Lupa kata sandi?",
+        "or" to "atau",
+        "report_sent" to "Terima kasih — laporanmu terkirim",
+        "sub_auto_d" to "Inggris / Indonesia, otomatis",
+        // --- toast & pesan yang sebelumnya tertulis Inggris langsung ---
+        "dl_failed" to "Unduhan gagal: Episode %d",
+        "remind_removed" to "Pengingat dihapus",
+        "remind_soon" to "Kami akan memberi tahu saat sudah rilis",
+        "remind_ok" to "Kami akan mengingatkanmu",
+        "remind_set_t" to "Pengingat aktif",
+        "remind_body_soon" to "Kami akan memberi tahu saat %s dirilis",
+        "remind_body_air" to "%s tayang %s",
+        "marked_seen_range" to "Episode %d–%d ditandai sudah ditonton",
+        "marked_unseen" to "Episode %d ditandai belum ditonton",
+        "comment_failed" to "Komentar gagal terkirim",
+        "enter_email_first" to "Isi emailmu dulu",
+        "ctl_on" to "Nyala",
+        "auth_unavailable" to "Masuk belum tersedia. Coba lagi nanti.",
+        "auth_failed" to "Gagal masuk. Silakan coba lagi.",
+        "auth_expired" to "Sesi berakhir. Silakan masuk lagi.",
+        "acct_unavailable" to "Layanan akun belum tersedia.",
+        "acct_delete_failed" to "Gagal menghapus akun (kode %d). Silakan coba lagi.",
+        // --- pesan sinkronisasi akun ---
+        "sync_relogin" to "Sesi berakhir. Masuk lagi agar sinkronisasi berjalan.",
+        "sync_failed" to "Sinkronisasi tidak berjalan. Datamu tetap aman di perangkat ini.",
     )
 }

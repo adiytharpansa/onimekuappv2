@@ -191,6 +191,7 @@ fun App(vm: AppVM) {
         if (hostActivity == null) return@DisposableEffect onDispose { }
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
             if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refreshIfStale()
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) vm.syncNow()
         }
         hostActivity.lifecycle.addObserver(obs)
         onDispose { hostActivity.lifecycle.removeObserver(obs) }

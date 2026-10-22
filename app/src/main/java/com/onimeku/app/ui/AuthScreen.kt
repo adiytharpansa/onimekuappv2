@@ -115,7 +115,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
         if (!signUp) {
             Text(I18n.t("forgot_password", "Forgot password?"), Modifier.align(Alignment.End).offset(y = (-6).dp).clip(RoundedCornerShape(8.dp))
                 .clickable {
-                    if (!EmailRx.matches(email.trim())) { tried = true; vm.toast("Enter your email first") } else vm.resetPassword(email)
+                    if (!EmailRx.matches(email.trim())) { tried = true; vm.toast(I18n.t("enter_email_first", "Enter your email first")) } else vm.resetPassword(email)
                 }.padding(horizontal = Sp.S8, vertical = Sp.S8), color = RedText, fontSize = Ty.Body, fontWeight = FontWeight.Medium)
         }
 

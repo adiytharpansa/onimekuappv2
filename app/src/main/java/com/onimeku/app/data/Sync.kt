@@ -16,8 +16,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 /**
  * Sinkronisasi My List + progres tonton ke Supabase (tabel `user_state`,
  * RLS per auth.uid(); skema di backend/supabase/schema.sql). Satu baris per
- * pengguna berisi daftar profil. Penggabungan bersifat gabung-tambah
- * (union): item yang dihapus di satu perangkat bisa muncul lagi dari perangkat lain.
+ * pengguna berisi daftar profil. Penggabungan myList/seen memakai cap waktu
+ * per id (lihat [mergeStamped]): penghapusan yang lebih baru menang; tanpa cap
+ * (data lama) tetap union seperti dulu.
  */
 object Sync {
     class Unauthorized : Exception("unauthorized")
@@ -55,7 +56,35 @@ object Sync {
             .post(body.toRequestBody(JSON)).build()
         Net.client.newCall(rq).execute().use { r ->
             if (r.code == 401) throw Unauthorized()
+            if (!r.isSuccessful) throw java.io.IOException("sync push gagal: ${r.code}")
         }
+    }
+
+    /**
+     * Gabung satu himpunan ber-cap: sisi dengan cap lebih baru menentukan apakah id ada.
+     * Cap sama/tanpa cap -> union (perilaku lama).
+     */
+    internal fun mergeStamped(
+        lList: List<String>, lTs: Map<String, Long>,
+        rList: List<String>, rTs: Map<String, Long>,
+    ): Pair<List<String>, Map<String, Long>> {
+        val lSet = lList.toHashSet(); val rSet = rList.toHashSet()
+        val ts = HashMap<String, Long>()
+        val kept = HashSet<String>()
+        for (id in (lList + rList + lTs.keys + rTs.keys).distinct()) {
+            val lt = lTs[id] ?: 0L; val rt = rTs[id] ?: 0L
+            ts[id] = maxOf(lt, rt)
+            val present = when {
+                lt > rt -> id in lSet
+                rt > lt -> id in rSet
+                else -> id in lSet || id in rSet
+            }
+            if (present) kept += id
+        }
+        val order = (lList + rList).distinct().filter { it in kept }
+        val pruned = ts.filterValues { it > 0 }.entries
+            .sortedByDescending { it.value }.take(1500).associate { it.key to it.value }
+        return order to pruned
     }
 
     /** Gabungkan profil lokal dengan profil jarak jauh (cocok per nama, maks 4 profil). */
@@ -64,15 +93,17 @@ object Sync {
         val byName = remote.associateBy { it.name }
         val merged = local.map { l ->
             val r = byName[l.name] ?: return@map l
-            val seen = (l.seen + r.seen).distinct()
+            val (seen, seenTs) = mergeStamped(l.seen, l.seenTs, r.seen, r.seenTs)
+            val (myList, myListTs) = mergeStamped(l.myList, l.myListTs, r.myList, r.myListTs)
+            val seenSet = seen.toHashSet()
             val prog = (l.prog.keys + r.prog.keys)
-                .filter { it !in seen }
+                .filter { it !in seenSet }
                 .associateWith { k -> maxOf(l.prog[k] ?: 0, r.prog[k] ?: 0) }
             val watch = (l.watch + r.watch).groupBy { it.id }.values
                 .map { g -> g.maxBy { it.at } }.sortedByDescending { it.at }.take(24)
             l.copy(
-                myList = (l.myList + r.myList).distinct(),
-                prog = prog, seen = seen, watch = watch,
+                myList = myList, myListTs = myListTs,
+                prog = prog, seen = seen, seenTs = seenTs, watch = watch,
                 remind = (l.remind + r.remind).distinct(),
                 last = l.last ?: r.last, base = l.base ?: r.base,
             )

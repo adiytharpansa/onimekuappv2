@@ -36,7 +36,11 @@ object Net {
 
         override fun loadForRequest(url: HttpUrl): List<Cookie> {
             val list = store[url.host] ?: return emptyList()
-            return synchronized(list) { list.filter { it.matches(url) } }
+            val now = System.currentTimeMillis()
+            return synchronized(list) {
+                list.removeAll { it.expiresAt < now }
+                list.filter { it.matches(url) }
+            }
         }
     }
 

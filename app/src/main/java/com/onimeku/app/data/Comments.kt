@@ -66,7 +66,8 @@ object Comments {
             val rq = req("/rest/v1/comments", acc.accessToken)
                 .header("Prefer", "return=minimal")
                 .post(payload.toRequestBody(JSON)).build()
-            Net.client.newCall(rq).execute().use { r -> r.isSuccessful }
+            val c = Net.client.newBuilder().retryOnConnectionFailure(false).build()  // hindari komentar ganda
+            c.newCall(rq).execute().use { r -> r.isSuccessful }
         } catch (e: Exception) {
             false
         }

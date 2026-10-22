@@ -1,6 +1,7 @@
 package com.onimeku.app.data
 
 import com.onimeku.app.BuildConfig
+import com.onimeku.app.I18n
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -31,7 +32,7 @@ object AuthClient {
     val configured: Boolean get() = BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_KEY.isNotBlank()
 
     private suspend fun call(path: String, body: String, bearer: String? = null): JsonObject = withContext(Dispatchers.IO) {
-        if (!configured) throw AuthException("Sign in is not available yet. Please try again later.")
+        if (!configured) throw AuthException(I18n.t("auth_unavailable", "Sign in is not available yet. Please try again later."))
         val rb = Request.Builder()
             .url(BuildConfig.SUPABASE_URL.trimEnd('/') + path)
             .header("apikey", BuildConfig.SUPABASE_KEY)
@@ -81,7 +82,7 @@ object AuthClient {
 
     suspend fun signIn(email: String, password: String): Account =
         session(call("/auth/v1/token?grant_type=password", creds(email, password)))
-            ?: throw AuthException("Sign in failed. Please try again.")
+            ?: throw AuthException(I18n.t("auth_failed", "Sign in failed. Please try again."))
 
     /** null = akun dibuat tetapi perlu konfirmasi email dulu. */
     suspend fun signUp(email: String, password: String): Account? =
@@ -100,7 +101,7 @@ object AuthClient {
 
     /** Lengkapi akun dari token hasil login sosial (ambil id + email lewat /auth/v1/user). */
     suspend fun fromTokens(accessToken: String, refreshToken: String): Account = withContext(Dispatchers.IO) {
-        if (!configured) throw AuthException("Sign in is not available yet. Please try again later.")
+        if (!configured) throw AuthException(I18n.t("auth_unavailable", "Sign in is not available yet. Please try again later."))
         val rb = Request.Builder()
             .url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/auth/v1/user")
             .header("apikey", BuildConfig.SUPABASE_KEY)
@@ -108,8 +109,8 @@ object AuthClient {
             .get().build()
         http.newCall(rb).execute().use { r ->
             val text = r.body?.string().orEmpty()
-            if (!r.isSuccessful) throw AuthException("Sign in failed. Please try again.")
-            val u = try { json.parseToJsonElement(text).jsonObject } catch (e: Exception) { throw AuthException("Sign in failed. Please try again.") }
+            if (!r.isSuccessful) throw AuthException(I18n.t("auth_failed", "Sign in failed. Please try again."))
+            val u = try { json.parseToJsonElement(text).jsonObject } catch (e: Exception) { throw AuthException(I18n.t("auth_failed", "Sign in failed. Please try again.")) }
             Account(
                 u["id"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 u["email"]?.jsonPrimitive?.contentOrNull.orEmpty(),
@@ -125,21 +126,21 @@ object AuthClient {
     suspend fun refresh(refreshToken: String): Account =
         session(call("/auth/v1/token?grant_type=refresh_token", kotlinx.serialization.json.buildJsonObject {
             put("refresh_token", kotlinx.serialization.json.JsonPrimitive(refreshToken))
-        }.toString())) ?: throw AuthException("Session expired. Please sign in again.")
+        }.toString())) ?: throw AuthException(I18n.t("auth_expired", "Session expired. Please sign in again."))
 
     /**
      * Hapus akun permanen lewat Edge Function `delete-account`
      * (backend/supabase/functions/delete-account). Klien tidak pernah memegang service_role.
      */
     suspend fun deleteAccount(accessToken: String) = withContext(Dispatchers.IO) {
-        if (!configured) throw AuthException("Account service is not available yet.")
+        if (!configured) throw AuthException(I18n.t("acct_unavailable", "Account service is not available yet."))
         val rb = Request.Builder()
             .url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/delete-account")
             .header("apikey", BuildConfig.SUPABASE_KEY)
             .header("Authorization", "Bearer $accessToken")
             .post("{}".toRequestBody(JSON)).build()
         http.newCall(rb).execute().use { r ->
-            if (!r.isSuccessful) throw AuthException("Could not delete the account (code ${r.code}). Please try again.")
+            if (!r.isSuccessful) throw AuthException(String.format(I18n.t("acct_delete_failed", "Could not delete the account (code %d). Please try again."), r.code))
         }
     }
 }

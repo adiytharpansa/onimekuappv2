@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
@@ -72,5 +73,10 @@
             android:name=".data.OnimekuDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- Penjadwal unduhan Media3 (PlatformScheduler): membangunkan layanan unduh saat syarat jaringan terpenuhi -->
+        <service
+            android:name="androidx.media3.exoplayer.scheduler.PlatformScheduler$PlatformSchedulerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

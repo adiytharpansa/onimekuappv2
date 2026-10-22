@@ -13,9 +13,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.onimeku.app.data.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
 import kotlin.random.Random
 
@@ -251,13 +254,13 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                     androidx.media3.exoplayer.offline.Download.STATE_COMPLETED -> {
                         downloading.remove(k)
                         if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
-                        toast("Episode $ep saved for offline watching")
+                        toast(String.format(I18n.t("dl_saved", "Episode %d saved for offline watching"), ep))
                     }
                     androidx.media3.exoplayer.offline.Download.STATE_FAILED -> {
                         downloading.remove(k)
                         if (hasDl(id, ep)) {
                             upd { st -> st.copy(downloads = st.downloads.filterNot { it.id == id && it.ep == ep }) }
-                            toast("Download failed: Episode $ep")
+                            toast(String.format(I18n.t("dl_failed", "Download failed: Episode %d"), ep))
                         }
                     }
                     androidx.media3.exoplayer.offline.Download.STATE_REMOVING -> downloading.remove(k)
@@ -374,24 +377,80 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---------- sinkronisasi akun ----------
     private var syncJob: Job? = null
+    private var syncDirty = false
+    private var syncFails = 0
+    /** true bila sinkron bermasalah (sesi habis / gagal berulang); bisa dipakai UI untuk lencana di Profil. */
+    var syncProblem by mutableStateOf(false)
+        private set
+    private val authMutex = Mutex()
+
+    /**
+     * Throttle, bukan debounce: bila sudah ada jadwal, jangan dibatalkan. Saat jatuh tempo yang didorong
+     * adalah state TERBARU, jadi selama menonton push tetap terkirim tiap ~15 dtk.
+     */
     private fun scheduleSync() {
         if (s.account == null || !Sync.enabled) return
-        syncJob?.cancel()
+        syncDirty = true
+        if (syncJob?.isActive == true) return
         syncJob = viewModelScope.launch {
-            delay(15_000)
-            try { withAccount { Sync.push(it, s.profiles) } } catch (_: Exception) {}
+            do {
+                delay(15_000)
+                syncDirty = false
+                pushNow()
+            } while (syncDirty)   // ada perubahan saat push berjalan -> putaran lagi
         }
     }
 
-    /** Jalankan [block]; bila token kedaluwarsa (401) tukar refresh token sekali lalu ulangi. */
+    /** Dorong sekarang tanpa menunggu (dipanggil saat aplikasi ke latar, ON_STOP). */
+    fun syncNow() {
+        if (s.account == null || !Sync.enabled) return
+        syncJob?.cancel()
+        syncDirty = false
+        syncJob = viewModelScope.launch { pushNow() }
+    }
+
+    private suspend fun pushNow() {
+        try {
+            withAccount { Sync.push(it, s.profiles) }
+            syncFails = 0; syncProblem = false
+        } catch (e: Exception) { onSyncError(e) }
+    }
+
+    private fun onSyncError(e: Exception) {
+        if (e is CancellationException) throw e   // jangan telan pembatalan coroutine
+        if (e is AuthException) {
+            // Refresh token ditolak: pengguna harus login ulang; jangan gagal diam-diam.
+            if (!syncProblem) {
+                syncProblem = true
+                toast(I18n.t("sync_relogin", "Session expired. Sign in again to keep syncing."))
+            }
+        } else if (++syncFails >= 3 && !syncProblem) {
+            syncProblem = true
+            toast(I18n.t("sync_failed", "Sync is not working. Your data is still safe on this device."))
+        }
+    }
+
+    /**
+     * Segarkan token SEKALI untuk semua pemanggil serentak. [stale] = akun yang ditolak server.
+     * Bila pemanggil lain sudah menyegarkan saat kita antre, pakai hasilnya (refresh token dirotasi
+     * Supabase; memakai token lama dua kali bisa mencabut sesi).
+     */
+    private suspend fun refreshSession(stale: Account): Account? = authMutex.withLock {
+        val cur = s.account ?: return@withLock null
+        if (cur.accessToken != stale.accessToken) return@withLock cur
+        val n = AuthClient.refresh(cur.refreshToken)
+        val acc = n.copy(avatarUrl = n.avatarUrl.ifBlank { cur.avatarUrl }, name = n.name.ifBlank { cur.name })
+        s = s.copy(account = acc); store.save(s)
+        acc
+    }
+
+    /** Jalankan [block]; bila token kedaluwarsa (401) segarkan lewat [refreshSession] lalu ulangi sekali. */
     private suspend fun <T> withAccount(block: suspend (Account) -> T): T? {
-        var acc = s.account ?: return null
+        val acc = s.account ?: return null
         return try {
             block(acc)
         } catch (e: Sync.Unauthorized) {
-            acc = AuthClient.refresh(acc.refreshToken)
-            s = s.copy(account = acc); store.save(s)
-            block(acc)
+            block(refreshSession(acc) ?: return null)
         }
     }
 
@@ -401,7 +460,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             try {
                 val remote = withAccount { Sync.pull(it) } ?: return@launch
                 upd { st -> st.copy(profiles = Sync.merge(st.profiles, remote, st.goneProfiles)) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) { onSyncError(e) }
         }
     }
     private fun updP(f: (Profile) -> Profile) =
@@ -409,7 +468,11 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun toggleML(id: String) {
         val on = id in p.myList
-        updP { it.copy(myList = if (on) it.myList - id else listOf(id) + it.myList) }
+        val now = System.currentTimeMillis()
+        updP { it.copy(
+            myList = if (on) it.myList - id else listOf(id) + it.myList,
+            myListTs = it.myListTs.stamped(listOf(id), now),
+        ) }
         toast(if (on) I18n.t("ml_removed", "Removed from My List") else I18n.t("ml_added", "Added to My List"))
     }
 
@@ -417,11 +480,16 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val on = id in p.remind
         updP { it.copy(remind = if (on) it.remind - id else it.remind + id) }
         if (on) Reminders.cancel(app, s.pi, id) else Reminders.schedule(app, s.pi, id)
-        if (on) toast("Reminder removed") else {
+        if (on) toast(I18n.t("remind_removed", "Reminder removed")) else {
             val c = Catalog.byId[id] ?: return
             val soon = c.apiStatus == "NOT_YET_RELEASED"
-            toast(if (soon) "We will notify you when it is out" else "We will remind you")
-            ensure { g -> if (g) Notifier.show(app, "Reminder set", if (soon) "We’ll notify you when ${c.title} is released" else "${c.title} airs at ${c.time}") }
+            toast(if (soon) I18n.t("remind_soon", "We will notify you when it is out") else I18n.t("remind_ok", "We will remind you"))
+            ensure { g -> if (g) Notifier.show(
+                app,
+                I18n.t("remind_set_t", "Reminder set"),
+                if (soon) String.format(I18n.t("remind_body_soon", "We’ll notify you when %s is released"), c.title)
+                else String.format(I18n.t("remind_body_air", "%s airs at %s"), c.title, c.time),
+            ) }
         }
     }
 
@@ -605,9 +673,10 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val acc = s.account ?: return
         val text = body.trim()
         if (text.isEmpty()) return
+        val author = acc.name.ifBlank { p.name }
         viewModelScope.launch {
-            if (com.onimeku.app.data.Comments.post(acc, id, p.name, text)) loadComments(id)
-            else toast("Comment failed to send")
+            if (com.onimeku.app.data.Comments.post(acc, id, author, text)) loadComments(id)
+            else toast(I18n.t("comment_failed", "Comment failed to send"))
         }
     }
     fun deleteComment(id: String, commentId: Long) {
@@ -627,13 +696,17 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         statKey = k; statT = t
         updP { pr ->
             var base = pr.base; var prog = pr.prog; var seen = pr.seen; var last = pr.last; var watch = pr.watch
+            var seenTs = pr.seenTs
             if (t >= 5) base = id
-            if (dur > 0 && t >= dur * 0.9) { prog = prog - k; if (k !in seen) seen = seen + k }
+            if (dur > 0 && t >= dur * 0.9) {
+                prog = prog - k
+                if (k !in seen) { seen = seen + k; seenTs = seenTs.stamped(listOf(k), System.currentTimeMillis()) }
+            }
             else if (t >= 5) { prog = prog + (k to t); last = Last(id, ep) }
             // Catatan tontonan (untuk Continue Watching): hanya putar yang
             // benar-benar berjalan (>=5 dtk), terbaru di depan, maks 24 judul.
             if (t >= 5) watch = (listOf(Watch(id, ep, System.currentTimeMillis(), dur)) + watch.filter { it.id != id }).take(24)
-            pr.copy(base = base, prog = prog, seen = seen, last = last, watch = watch, days = Stats.addSeconds(pr.days, delta))
+            pr.copy(base = base, prog = prog, seen = seen, seenTs = seenTs, last = last, watch = watch, days = Stats.addSeconds(pr.days, delta))
         }
         if (s.settings.autoDlNext && dur > 0 && t >= dur * 0.6) maybeAutoDownloadNext(id, ep)
         refreshWidget(force = dur > 0 && t >= dur * 0.9)
@@ -696,6 +769,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         updP { pr ->
             pr.copy(
                 seen = pr.seen + keys.filter { it !in pr.seen },
+                seenTs = pr.seenTs.stamped(keys, System.currentTimeMillis()),
                 prog = pr.prog - keys.toSet(),
                 base = pr.base ?: id,
                 last = Last(id, next),
@@ -703,14 +777,15 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             )
         }
         refreshWidget(force = true)
-        toast("Episodes ${nums.first()}–${nums.last()} marked as watched")
+        toast(String.format(I18n.t("marked_seen_range", "Episodes %d–%d marked as watched"), nums.first(), nums.last()))
     }
 
     /** Batalkan tanda ditonton satu episode. */
     fun unmarkSeen(id: String, ep: Int) {
         val k = "$id:$ep"
-        updP { pr -> pr.copy(seen = pr.seen - k, prog = pr.prog - k) }
-        toast("Episode $ep marked as unwatched")
+        val now = System.currentTimeMillis()
+        updP { pr -> pr.copy(seen = pr.seen - k, prog = pr.prog - k, seenTs = pr.seenTs.stamped(listOf(k), now)) }
+        toast(String.format(I18n.t("marked_unseen", "Episode %d marked as unwatched"), ep))
     }
 
     fun addHist(v: String) {
@@ -722,10 +797,11 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun markAllRead() = upd { it.copy(notifRead = true) }
 
     fun setSettings(f: (Settings) -> Settings) {
-        val old = s.settings.alerts
+        val oldAlerts = s.settings.alerts
+        val oldWifi = s.settings.wifi
         upd { it.copy(settings = f(it.settings)) }
-        if (old != s.settings.alerts) Reminders.rescheduleAll(app, s)
-        Downloads.setWifiOnly(app, s.settings.wifi)
+        if (oldAlerts != s.settings.alerts) Reminders.rescheduleAll(app, s)
+        if (oldWifi != s.settings.wifi) Downloads.setWifiOnly(app, s.settings.wifi)
     }
 
     /** Kembalikan pengaturan ke bawaan; bahasa antarmuka, petunjuk gestur, dan dubbing per judul dipertahankan. */
@@ -861,7 +937,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val got = try { AuthClient.fromTokens(acc.accessToken, acc.refreshToken) }
-                catch (e: AuthException) { val f = AuthClient.refresh(acc.refreshToken); AuthClient.fromTokens(f.accessToken, f.refreshToken) }
+                catch (e: AuthException) { val f = refreshSession(acc) ?: throw e; AuthClient.fromTokens(f.accessToken, f.refreshToken) }
                 upd { st -> st.account?.let { cur -> st.copy(account = cur.copy(accessToken = got.accessToken, refreshToken = got.refreshToken, avatarUrl = got.avatarUrl, name = got.name)) } ?: st }
             } catch (_: Exception) {}
         }
