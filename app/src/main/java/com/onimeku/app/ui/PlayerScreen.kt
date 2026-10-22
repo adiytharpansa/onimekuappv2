@@ -309,7 +309,7 @@ private suspend fun withSubOffset(
             if (!src.exists()) return@map s
             val tf = java.io.File(target)
             if (offsetMs != 0 && (!tf.exists() || tf.length() == 0L)) {
-                val shifted = SubSync.shift(src.readText(Charsets.UTF_8), ".${src.extension}", offsetMs)
+                val shifted = SubSync.shift(SubSync.decode(src.readBytes()), ".${src.extension}", offsetMs)
                 val tmp = java.io.File("$target.tmp")
                 tmp.writeText(shifted, Charsets.UTF_8)
                 if (!tmp.renameTo(tf)) { tf.writeText(shifted, Charsets.UTF_8); tmp.delete() }
@@ -765,6 +765,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // debug.60: apakah pilihan subIdx saat ini sudah diterapkan ke trek
     // samping lokal (bukan ke grup teks manifest yang tak bisa dirender)?
     var subLocalApplied by remember(r) { mutableStateOf(false) }
+    // Sinkronisasi subtitle: daftar trek yang sedang terpasang (null = sama dengan playback.subtitles) dan apakah gudang
+    // daring sedang memakai trek samping lokal (hanya saat geseran != 0). nativeNow() = gudang daring yang masih memakai
+    // trek teks manifest HLS (dibaca saat dipanggil, jadi tidak basi di dalam listener).
+    var liveSubs by remember(r) { mutableStateOf<List<com.onimeku.app.data.ApiSubtitle>?>(null) }
+    var gudangSide by remember(r) { mutableStateOf(false) }
+    fun nativeNow(): Boolean = playback.source == "gudang" && !offline && !gudangSide
     // Daftar trek subtitle berubah saat video sudah berjalan (mis. efek pemulihan trek): pasang ulang
     // konfigurasinya ke item yang sama, lanjut dari posisi terakhir, lalu pilih ulang sesuai preferensi.
     val subCount = playback.subtitles.count { it.url.isNotBlank() }
@@ -775,12 +781,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             // Opsi 2: putar gudang daring tidak memasang ulang
             // konfigurasi samping — trek teksnya berasal dari
             // manifest; daftar payload di sini hanya model menu.
-            if (playback.source == "gudang" && !offline) return@LaunchedEffect
+            if (nativeNow()) return@LaunchedEffect
             val cur = player.currentMediaItem
             if (cur != null) {
                 val pos = player.currentPosition
                 val play = player.playWhenReady
-                val item = cur.buildUpon().setSubtitleConfigurations(subConfigs(playback)).build()
+                val item = cur.buildUpon().setSubtitleConfigurations(subConfigs(playback.copy(subtitles = liveSubs ?: playback.subtitles))).build()
                 val sf = srcFactory[0]
                 if (sf != null) player.setMediaSource(sf.createMediaSource(item), pos) else player.setMediaItem(item, pos)
                 player.prepare()
@@ -790,27 +796,74 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
     // Geseran waktu subtitle per judul (menu Subtitle -> Sinkronisasi). Berkas lokal ditulis ulang oleh [withSubOffset],
-    // lalu trek dipasang ulang ke item yang sama dari posisi yang sama. Putar gudang daring memakai trek manifest HLS
-    // yang tidak bisa ditulis ulang, jadi dilewati (menu tetap menyimpan nilainya untuk putar lain).
+    // lalu trek dipasang ulang ke item yang sama dari posisi yang sama (ketukan beruntun digabung 0,4 dtk).
+    // Gudang daring: trek teks manifest HLS tidak bisa ditulis ulang, jadi saat geseran != 0 trek payload (en/id) diunduh
+    // ke berkas lokal, digeser, dan dipasang sebagai trek samping (jalur yang sama dengan putar non-gudang); saat kembali
+    // ke 0 trek samping dilepas dan trek manifest dipakai lagi.
     val subOffsetNow = vm.s.settings.subOffsetByTitle[r.id] ?: 0
-    var appliedOffset by remember(r) { mutableIntStateOf(subOffsetNow) }
-    LaunchedEffect(subOffsetNow) {
-        if (subOffsetNow == appliedOffset) return@LaunchedEffect
-        delay(400) // ketukan beruntun digabung: pasang ulang sekali saja
-        appliedOffset = subOffsetNow
-        if (playback.source == "gudang" && !offline) return@LaunchedEffect
-        val shifted = withSubOffset(playback.subtitles, subOffsetNow)
-        if (shifted.map { it.url } == playback.subtitles.map { it.url }) return@LaunchedEffect
-        val next = playback.copy(subtitles = shifted)
-        val cur = player.currentMediaItem ?: return@LaunchedEffect
+    var appliedOffset by remember(r) { mutableIntStateOf(if (playback.source == "gudang" && !offline) 0 else subOffsetNow) }
+    fun reattachSubs(configs: List<MediaItem.SubtitleConfiguration>) {
+        val cur = player.currentMediaItem ?: return
         val pos = player.currentPosition
         val play = player.playWhenReady
-        val item = cur.buildUpon().setSubtitleConfigurations(subConfigs(next)).build()
+        val item = cur.buildUpon().setSubtitleConfigurations(configs).build()
         val sf = srcFactory[0]
         if (sf != null) player.setMediaSource(sf.createMediaSource(item), pos) else player.setMediaItem(item, pos)
         player.prepare()
         player.playWhenReady = play
         subReady = false
+    }
+    LaunchedEffect(subOffsetNow) {
+        if (subOffsetNow == appliedOffset) return@LaunchedEffect
+        delay(400)
+        if (playback.source == "gudang" && !offline) {
+            if (subOffsetNow == 0) {
+                if (gudangSide) { gudangSide = false; liveSubs = null; reattachSubs(emptyList()) }
+            } else {
+                val got = localizeSubtitles(ctx, r, playback, budgetMs = 20_000L, offsetMs = subOffsetNow).subtitles
+                if (got.none { it.url.startsWith("file:") }) {
+                    vm.toast(I18n.t("sub_sync_fail", "Couldn't shift subtitles for this source"))
+                } else {
+                    liveSubs = got; gudangSide = true
+                    reattachSubs(subConfigs(playback.copy(subtitles = got)))
+                }
+            }
+        } else {
+            val base = liveSubs ?: playback.subtitles
+            val shifted = withSubOffset(base, subOffsetNow)
+            if (shifted.map { it.url } != base.map { it.url }) {
+                liveSubs = shifted
+                reattachSubs(subConfigs(playback.copy(subtitles = shifted)))
+            }
+        }
+        appliedOffset = subOffsetNow
+    }
+    // "Sinkronkan ke ucapan sekarang": geseran dihitung dari baris subtitle terdekat dengan posisi tayang saat tombol ditekan.
+    val subScope = androidx.compose.runtime.rememberCoroutineScope()
+    fun alignSubs() {
+        val t = (liveSubs ?: playback.subtitles).filter { it.url.isNotBlank() }.getOrNull(subIdx)
+        val posMs = player.currentPosition
+        val curOff = vm.s.settings.subOffsetByTitle[r.id] ?: 0
+        subScope.launch {
+            val ms: Int? = kotlinx.coroutines.withContext<Int?>(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val path = t?.url?.let { android.net.Uri.parse(it) }?.takeIf { it.scheme == "file" }?.path
+                    if (path == null) return@withContext null
+                    val src = java.io.File(SubSync.originalPath(path))
+                    if (!src.exists()) return@withContext null
+                    val starts = SubSync.cueStartsMs(SubSync.decode(src.readBytes()), ".${src.extension}")
+                    SubSync.alignOffset(starts, curOff, posMs)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (ms == null) {
+                vm.toast(I18n.t("sub_sync_none", "No subtitle line near this moment. Try again while someone is speaking"))
+            } else {
+                vm.setSettings { it.copy(subOffsetByTitle = SubSync.remember(it.subOffsetByTitle, r.id, ms)) }
+                vm.toast(I18n.t("sub_sync_done", "Synced: %s").format(SubSync.label(ms)))
+            }
+        }
     }
     // Menu pengaturan ala YouTube (roda gigi): null = tertutup, "main" | "quality" | "subs" | "speed" | "audio".
     var sheet by remember { mutableStateOf<String?>(null) }
@@ -853,7 +906,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         // penonaktifan tipe trek teks. Tidak ada trek samping, unduhan
         // lokal, atau penundaan di cabang ini. Putar luring TIDAK
         // masuk cabang ini (perilakunya tidak berubah).
-        if (playback.source == "gudang" && !offline) {
+        if (nativeNow()) {
             val nb = player.trackSelectionParameters.buildUpon()
             if (i < 0) {
                 nb.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
@@ -1752,7 +1805,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onSubColor = { v -> vm.setSettings { it.copy(subColor = v) } },
         onSubSystem = { v -> vm.setSettings { it.copy(subSystem = v) } },
         subOffsetMs = subOffsetNow,
-        subSyncSupported = !(playback.source == "gudang" && !offline),
+        onSubAlign = { alignSubs() },
         onSubOffset = { v -> vm.setSettings { it.copy(subOffsetByTitle = SubSync.remember(it.subOffsetByTitle, r.id, v)) } },
         autoplay = vm.s.settings.autoplay, onAutoplay = { v -> vm.setSettings { it.copy(autoplay = v) }; vm.toast("${I18n.t("autoplay_next", "Autoplay next")}: ${if (v) "On" else "Off"}") },
         speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },

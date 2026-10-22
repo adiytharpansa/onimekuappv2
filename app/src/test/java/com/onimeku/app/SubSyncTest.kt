@@ -2,6 +2,7 @@ package com.onimeku.app
 
 import com.onimeku.app.ui.SubSync
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -73,5 +74,32 @@ class SubSyncTest {
         var big = emptyMap<String, Int>()
         for (i in 1..5) big = SubSync.remember(big, "t$i", 100, max = 3)
         assertEquals(listOf("t3", "t4", "t5"), big.keys.toList())
+    }
+
+    @Test fun decodeUsesUtf8WhenValidElseWindows1252AndStripsBom() {
+        val utf8 = "caf\u00e9".toByteArray(Charsets.UTF_8)
+        assertEquals("caf\u00e9", SubSync.decode(utf8))
+        val latin = byteArrayOf(0x63, 0x61, 0x66, 0xE9.toByte())   // "café" dalam Windows-1252 (bukan UTF-8 sahih)
+        assertEquals("caf\u00e9", SubSync.decode(latin))
+        val bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + "WEBVTT".toByteArray()
+        assertEquals("WEBVTT", SubSync.decode(bom))
+    }
+
+    @Test fun cueStartsForSrtVttAndAss() {
+        assertEquals(listOf(1000L, 62500L), SubSync.cueStartsMs("1\n00:00:01,000 --> 00:00:02,000\nA\n\n2\n00:01:02,500 --> 00:01:04,000\nB\n", ".srt"))
+        assertEquals(listOf(1500L), SubSync.cueStartsMs("WEBVTT\n\n00:01.500 --> 00:03.000\nA\n", ".vtt"))
+        val ass = "Dialogue: 0,0:00:01.50,0:00:03.00,Default,,0,0,0,,Halo\nDialogue: 0,0:01:00.00,0:01:02.00,Default,,0,0,0,,Dunia\n"
+        assertEquals(listOf(1500L, 60000L), SubSync.cueStartsMs(ass, ".ass"))
+    }
+
+    @Test fun alignPicksNearestDisplayedLineAndComputesOffset() {
+        val starts = listOf(10_000L, 20_000L, 30_000L)
+        // Pengguna mendengar ucapan di 21,2 dtk; baris terdekat (20 dtk, geseran 0) -> geseran +1,2 dtk.
+        assertEquals(1200, SubSync.alignOffset(starts, 0, 21_200))
+        // Sudah bergeser +1,0 dtk (baris tampil di 21 dtk); ucapan di 20,4 dtk -> geseran baru +0,4 dtk.
+        assertEquals(400, SubSync.alignOffset(starts, 1000, 20_400))
+        // Tak ada baris dalam jendela 20 dtk -> null.
+        assertNull(SubSync.alignOffset(starts, 0, 120_000))
+        assertNull(SubSync.alignOffset(emptyList(), 0, 5_000))
     }
 }
