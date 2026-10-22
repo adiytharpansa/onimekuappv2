@@ -1589,10 +1589,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                         Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
                         if (offline) Tag("OFFLINE", Color(0x33FFFFFF), Color.White, small = true)
-                        // Pemilih dubbing: rata kanan sebaris dengan badge episode; ketuk membuka lembar pilihan.
+                        // Pemilih dubbing: pil bahasa rata kanan sebaris dengan badge episode; satu ketuk langsung ganti dubbing.
                         if (audioLabels.isNotEmpty()) {
-                            Spacer(Modifier.weight(1f))
-                            DubChip(audioLabels.getOrElse(audioIdx) { audioLabels[0] }, dubFlag(audioKeys.getOrNull(audioIdx)), canPick = audioLabels.size > 1) { sheet = "audio" }
+                            DubSwitcher(audioLabels, audioKeys, audioIdx, Modifier.weight(1f)) { n ->
+                                applyAudio(n); vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}")
+                            }
                         }
                     }
                     Text(a.title, fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp,

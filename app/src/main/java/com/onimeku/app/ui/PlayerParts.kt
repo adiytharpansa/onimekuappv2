@@ -12,6 +12,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -427,3 +428,39 @@ internal fun DubOption(label: String, flag: String?, selected: Boolean, onClick:
 }
 
 internal fun spdLabel(f: Float): String = if (f == f.toInt().toFloat()) f.toInt().toString() else f.toString()
+
+/**
+ * Pemilih dubbing satu ketuk, rata kanan sejajar badge episode (seperti pilihan bahasa audio di Crunchyroll/Netflix):
+ * tiap trek jadi pil bendera + nama; pil aktif bertepi merah. Trek tunggal tampil sebagai satu pil tanpa aksi.
+ * Deretan menggeser bila trek banyak dan otomatis memperlihatkan pil aktif.
+ */
+@Composable
+internal fun DubSwitcher(labels: List<String>, keys: List<String>, current: Int, modifier: Modifier = Modifier, onPick: (Int) -> Unit) {
+    val st = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(current, labels.size) { if (labels.size > 2) st.scrollToItem(current.coerceIn(0, labels.lastIndex)) }
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier, state = st,
+        horizontalArrangement = Arrangement.spacedBy(Sp.S8, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        itemsIndexed(labels) { i, label ->
+            val sel = i == current
+            val flag = dubFlag(keys.getOrNull(i))
+            val shape = RoundedCornerShape(20.dp)
+            val desc = "${I18n.t("dubbing", "Dubbing")}: $label"
+            Box(Modifier.heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = desc; stateDescription = if (sel) I18n.t("dub_selected", "Selected") else "" }
+                .then(if (labels.size > 1) Modifier.clickable(role = Role.RadioButton, onClickLabel = I18n.t("dub_pick", "Choose dubbing")) { if (!sel) onPick(i) } else Modifier),
+                contentAlignment = Alignment.Center) {
+                Row(Modifier.height(32.dp).clip(shape)
+                    .background(if (sel) Color(0x33E8566F) else Color(0xCC1B1E2A))
+                    .border(1.dp, if (sel) Red else Line, shape)
+                    .padding(horizontal = Sp.S12),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (flag != null) Text(flag, fontSize = 13.sp) else Icon(Icons.Filled.Audiotrack, null, Modifier.size(14.dp), tint = InkSoft)
+                    Text(label, Modifier.widthIn(max = 110.dp), fontSize = Ty.Caption, fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                        color = if (sel) Color.White else InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
