@@ -1,3 +1,18 @@
+# v1.0.0-debug.70 (belum dikompilasi): Ikon pintasan merah, dokumen disesuaikan
+**Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu.
+- Ikon pintasan (Lanjutkan, Cari): lingkaran merah `#F20A17` + glif putih bergaris, tanpa tepi gelap — senada ikon launcher dan `Logo()`.
+- `ONIMEKU-AGENT-GUIDE.md` dan `ONIMEKU-RINGKASAN-AGEN.md`: logo dikeluarkan dari pemakaian `Red` (`#A6122D`) dan ditambah baris `LogoRed` (`#F20A17`).
+- Tema antarmuka tetap crimson `Red`; hanya logo dan ikon turunannya memakai `LogoRed` (aturan di `Theme.kt`).
+- Rollback cepat: kembalikan dua XML `ic_shortcut_*` dari `debug.69`.
+
+# v1.0.0-debug.69 (belum dikompilasi): Ikon garis seragam, tahap 2
+**Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu.
+- `ui/AppIcons.kt`: ditambah Check, Plus, Close, ChevronRight/Up/Down, ArrowLeft, Send, Swap, Mic, MicOff, serta versi aktif `BellFill` dan `BookmarkFill` (bentuk garis yang sama, badan terisi). Ikon berarah (ChevronRight, ArrowLeft, Send) otomatis dicerminkan pada bahasa kanan-ke-kiri.
+- Dipakai menggantikan Material di luar pemutar: `Screens.kt`, `Components.kt`, `CalendarScreen.kt`, `CommentsUI.kt`, `QuickMenu.kt`, `VoiceSheet.kt`, `ProfileScreens.kt`, `Subtitles.kt` (tombol My List, X, panah, buka-tutup, urut, mikrofon, kembali, kirim, lonceng/penanda aktif).
+- Sengaja tetap Material Filled: bintang rating, segitiga putar, `CheckCircle`, dan semua kontrol di `PlayerScreen.kt`/`PlayerParts.kt`.
+- Ikon pintasan tidak diubah.
+- Rollback cepat: kembalikan `AppIcons.kt` dan delapan file di atas dari `debug.68`.
+
 # v1.0.0-debug.68 (belum dikompilasi): Ikon launcher merah + logo seragam
 **Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu.
 - Ikon launcher: huruf "O" putih tetap, latar diganti merah `#F20A17` (`values/colors.xml` → `ic_bg`). `play-store-icon-512.png` diwarnai ulang sama.

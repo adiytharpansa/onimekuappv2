@@ -102,7 +102,7 @@ private fun SubOpt(label: String, sub: String?, selected: Boolean, onClick: () -
             Text(label, fontSize = 16.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) RedText else androidx.compose.ui.graphics.Color.White)
             if (sub != null) Text(sub, fontSize = 12.5.sp, color = NavOff, modifier = Modifier.padding(top = 2.dp))
         }
-        if (selected) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText)
+        if (selected) Icon(AppIcons.Check, null, Modifier.size(20.dp), tint = RedText)
     }
 }
 

@@ -193,7 +193,7 @@ private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
                 Modifier.padding(end = 5.dp).size(32.dp).clip(CircleShape).background(Red)
                     .clickable { vm.postComment(animeId, text); text = ""; focus.clearFocus() },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Filled.Send, I18n.t("comment_post", "Post"), Modifier.size(16.dp), tint = Color.White) }
+            ) { Icon(AppIcons.Send, I18n.t("comment_post", "Post"), Modifier.size(16.dp), tint = Color.White) }
         }
     }
 }

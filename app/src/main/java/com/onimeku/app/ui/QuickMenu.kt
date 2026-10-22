@@ -67,9 +67,9 @@ fun QuickMenuSheet(vm: AppVM, id: String) {
             if (meta.isNotBlank()) Text(meta, Modifier.padding(top = 3.dp), fontSize = 13.sp, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(10.dp))
             HLine()
-            row(if (inList) Icons.Filled.Check else Icons.Filled.Add,
+            row(if (inList) AppIcons.Check else AppIcons.Plus,
                 if (inList) I18n.t("qm_in_list", "Remove from My List") else I18n.t("qm_add_list", "Add to My List"), on = inList) { vm.toggleML(id) }
-            if (canRemind) row(if (reminded) Icons.Filled.NotificationsActive else AppIcons.Bell,
+            if (canRemind) row(if (reminded) AppIcons.BellFill else AppIcons.Bell,
                 if (reminded) I18n.t("qm_unremind", "Remove reminder") else I18n.t("qm_remind", "Remind me"), on = reminded) { vm.toggleRemind(id, ensure) }
             if (canDownload) row(AppIcons.Download, "${I18n.t("qm_download", "Download episode")} $firstEp") { vm.download(id, firstEp) }
             row(AppIcons.Share, I18n.t("share", "Share")) {

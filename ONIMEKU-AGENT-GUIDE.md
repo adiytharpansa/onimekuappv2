@@ -136,7 +136,8 @@ Catatan:
 
 | Token | Hex | Pakai untuk |
 |---|---|---|
-| `Red` | `#A6122D` | Tombol Play, indikator aktif, chip aktif, switch, slider, badge HD, avatar, logo |
+| `Red` | `#A6122D` | Tombol Play, indikator aktif, chip aktif, switch, slider, badge HD, avatar |
+| `LogoRed` | `#F20A17` | Khusus logo: `Logo()` (lingkaran + "O" putih), latar ikon launcher (`ic_bg`), ikon pintasan, `play-store-icon-512.png` |
 | `RedDeep` | `#6E0F1F` | Gradasi/aksen gelap |
 | `RedText` | `#E8566F` | Teks dan ikon merah di atas latar gelap ("See all", tab aktif, error) |
 | `Bg` | `#14161F` | Latar utama |

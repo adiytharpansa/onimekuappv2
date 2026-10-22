@@ -358,7 +358,7 @@ fun SectionHead(title: String, subtitle: String? = null, onAll: (() -> Unit)? = 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(I18n.t("see_all", "See all"), color = RedText, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-            Icon(Icons.Filled.ChevronRight, null, Modifier.size(18.dp), tint = RedText)
+            Icon(AppIcons.ChevronRight, null, Modifier.size(18.dp), tint = RedText)
         }
     }
 }
@@ -377,7 +377,7 @@ fun Page(extraTop: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
 fun SubHead(title: String, vm: AppVM) {
     Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(40.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+            Icon(AppIcons.ArrowLeft, "Back")
         }
         Spacer(Modifier.width(6.dp))
         Text(title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)

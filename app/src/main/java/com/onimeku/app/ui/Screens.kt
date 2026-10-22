@@ -129,7 +129,7 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boo
                 .clickable(onClick = onRemind),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (remind) Icons.Filled.NotificationsActive else AppIcons.Bell,
+            Icon(if (remind) AppIcons.BellFill else AppIcons.Bell,
                 if (remind) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), Modifier.size(20.dp), tint = Color.White)
         }
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 14.dp, end = 64.dp, bottom = 12.dp)) {
@@ -607,7 +607,7 @@ private fun HeroPage(vm: AppVM, a: Anime, pull: () -> Float, ken: androidx.compo
                         .background(if (on) Color.White else GlassFill)
                         .border(1.dp, if (on) Color.White else GlassStroke, RoundedCornerShape(18.dp)).sparkBurst(on),
                     contentAlignment = Alignment.Center,
-                ) { MorphIcon(on, Icons.Filled.Check, Icons.Filled.Add, if (on) "Added" else "My List", 26.dp, if (on) Bg else Color.White) }
+                ) { MorphIcon(on, AppIcons.Check, AppIcons.Plus, if (on) "Added" else "My List", 26.dp, if (on) Bg else Color.White) }
             }
         }
         }
@@ -688,7 +688,7 @@ fun MyListScreen(vm: AppVM) {
                                         .background(if (on) Red else Color(0xCC14161F)).border(1.dp, if (on) Red else Color(0x66FFFFFF), CircleShape)
                                         .clickable { vm.toggleML(t.id) },
                                     contentAlignment = Alignment.Center,
-                                ) { Icon(if (on) Icons.Filled.Check else Icons.Filled.Add, if (on) "Added" else "My List", Modifier.size(16.dp), tint = Color.White) }
+                                ) { Icon(if (on) AppIcons.Check else AppIcons.Plus, if (on) "Added" else "My List", Modifier.size(16.dp), tint = Color.White) }
                             }
                             Text(t.title, Modifier.padding(top = 6.dp), fontSize = 12.sp, lineHeight = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
@@ -739,7 +739,7 @@ private fun DownloadRing(pct: Int, onClick: () -> Unit) {
         androidx.compose.material3.CircularProgressIndicator(
             progress = { prog }, modifier = Modifier.size(22.dp), color = Red, trackColor = Line, strokeWidth = 2.5.dp,
         )
-        Icon(Icons.Filled.Close, "Cancel download", Modifier.size(10.dp), tint = Color.White)
+        Icon(AppIcons.Close, "Cancel download", Modifier.size(10.dp), tint = Color.White)
     }
 }
 
@@ -803,7 +803,7 @@ private fun PlayButton(label: String, sub: String?, modifier: Modifier = Modifie
             Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
             if (sub != null) Text(sub, fontSize = 12.sp, color = Color(0xCCFFFFFF), maxLines = 1)
         }
-        Icon(Icons.Filled.ChevronRight, null, Modifier.nudgeX(), tint = Color(0xB3FFFFFF))
+        Icon(AppIcons.ChevronRight, null, Modifier.nudgeX(), tint = Color(0xB3FFFFFF))
     }
 }
 
@@ -1012,8 +1012,8 @@ fun DetailScreen(vm: AppVM, id: String) {
                             ?: if (resume == null) "${I18n.t("start_with", "Start with Episode")} ${a.available.firstOrNull() ?: 1}" else null,
                     ) { vm.go(Route.Player(id, resume?.ep ?: a.available.firstOrNull() ?: 1)) }
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ActionTile(Icons.Filled.Add, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
-                            Modifier.weight(1f), on = on, iconOn = Icons.Filled.Check) { vm.toggleML(id) }
+                        ActionTile(AppIcons.Plus, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
+                            Modifier.weight(1f), on = on, iconOn = AppIcons.Check) { vm.toggleML(id) }
                         ActionTile(AppIcons.Download, I18n.t("download_all", "Download all"), Modifier.weight(1f)) { vm.downloadAll(id) }
                         ActionTile(AppIcons.Share, I18n.t("share", "Share"), Modifier.weight(1f)) { share() }
                     }
@@ -1042,7 +1042,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(if (expanded) I18n.t("read_less", "Show less") else I18n.t("read_more", "Read more"),
                                 color = RedText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, Modifier.size(18.dp), tint = RedText)
+                            Icon(if (expanded) AppIcons.ChevronUp else AppIcons.ChevronDown, null, Modifier.size(18.dp), tint = RedText)
                         }
                     }
                 }
@@ -1057,7 +1057,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                             .clickable { newestFirst = !newestFirst }.padding(horizontal = 11.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Icon(Icons.Filled.SwapVert, null, Modifier.size(15.dp), tint = InkSoft)
+                        Icon(AppIcons.Swap, null, Modifier.size(15.dp), tint = InkSoft)
                         Text(if (newestFirst) I18n.t("ep_newest", "Newest") else I18n.t("ep_oldest", "Oldest"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = InkSoft)
                     }
                 }
@@ -1079,7 +1079,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                 ) {
                     when {
                         pct != null -> DownloadRing(pct) { vm.download(id, n) }
-                        dl -> IconChip(Icons.Filled.Check, I18n.t("saved_offline", "Saved offline"), on = true) { vm.download(id, n) }
+                        dl -> IconChip(AppIcons.Check, I18n.t("saved_offline", "Saved offline"), on = true) { vm.download(id, n) }
                         else -> IconChip(AppIcons.Download, "${I18n.t("download_ep", "Download episode")} $n") { vm.download(id, n) }
                     }
                 }
@@ -1117,10 +1117,10 @@ fun DetailScreen(vm: AppVM, id: String) {
         // ===== Bilah atas melayang: kaca di atas hero, jadi solid + judul saat digulir =====
         Box(Modifier.fillMaxWidth().height(statusTop + 58.dp).background(Bg.copy(alpha = barA * 0.97f)).padding(top = statusTop)) {
             Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() }
+                GlassButton(AppIcons.ArrowLeft, "Back") { vm.back() }
                 Text(a.title, Modifier.weight(1f).graphicsLayer { alpha = barA }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                GlassButton(if (on) Icons.Filled.Bookmark else AppIcons.Bookmark, if (on) "Remove from My List" else "Add to My List") { vm.toggleML(id) }
+                GlassButton(if (on) AppIcons.BookmarkFill else AppIcons.Bookmark, if (on) "Remove from My List" else "Add to My List") { vm.toggleML(id) }
             }
         }
     }
@@ -1275,9 +1275,9 @@ fun SearchScreen(vm: AppVM) {
                 keyboardActions = KeyboardActions(onSearch = { vm.addHist(q) }),
                 decorationBox = { inner -> if (q.isEmpty()) Text(I18n.t("search_hint2", "Search anime or genre"), color = NavOff); inner() })
             if (q.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Close, "Clear", Modifier.size(18.dp), tint = InkSoft)
+                Icon(AppIcons.Close, "Clear", Modifier.size(18.dp), tint = InkSoft)
             } else if (voiceOk) Box(Modifier.size(48.dp).clip(CircleShape).clickable { showVoice = true }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Mic, I18n.t("voice_search", "Voice search"), Modifier.size(22.dp), tint = InkSoft)
+                Icon(AppIcons.Mic, I18n.t("voice_search", "Voice search"), Modifier.size(22.dp), tint = InkSoft)
             }
         }
         group("Genre") { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }

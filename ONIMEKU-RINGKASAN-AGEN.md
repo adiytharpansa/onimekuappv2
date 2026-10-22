@@ -120,7 +120,8 @@ Fullscreen/landscape, kontrol auto-sembunyi 3,5 dtk, ketuk dua kali ±10 dtk, ge
 
 | Token | Hex | Pakai untuk |
 | --- | --- | --- |
-| `Red` | `#A6122D` | Isian/latar: tombol Play, chip aktif, switch, slider, avatar, logo |
+| `Red` | `#A6122D` | Isian/latar: tombol Play, chip aktif, switch, slider, avatar |
+| `LogoRed` | `#F20A17` | Khusus logo: `Logo()`, latar ikon launcher, ikon pintasan, ikon Play Store |
 | `RedDeep` | `#6E0F1F` | Gradasi/aksen gelap |
 | `RedText` | `#E8566F` | Teks/ikon merah di atas latar gelap |
 | `Bg` / `Bg2` | `#14161F` / `#1B1E2A` | Latar / kartu |

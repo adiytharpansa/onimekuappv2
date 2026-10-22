@@ -13,22 +13,30 @@ import androidx.compose.ui.unit.dp
  * ikon bilah bawah ([NavGlyph]) sehingga seluruh aplikasi satu bahasa visual
  * (gaya Lucide). Menggantikan Icons.Outlined.* Material di layar non-pemutar.
  * Warna diatur lewat tint pada Icon (garis hitam di sini hanya penampung).
- * Ikon terisi/kontrol pemutar sengaja tetap Material Filled.
+ * Bintang, segitiga putar, dan kontrol pemutar sengaja tetap Material Filled.
  */
 object AppIcons {
     private fun circle(cx: Float, cy: Float, r: Float): String =
         "M${cx - r} ${cy}a$r $r 0 1 0 ${2 * r} 0a$r $r 0 1 0 ${-2 * r} 0z"
 
-    private fun line(name: String, vararg d: String): ImageVector =
-        ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
-            d.forEach {
+    private fun build(name: String, mirror: Boolean, filledFirst: Boolean, d: List<String>): ImageVector =
+        ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f, autoMirror = mirror).apply {
+            d.forEachIndexed { i, p ->
+                val fillIt = filledFirst && i == 0
                 addPath(
-                    PathParser().parsePathString(it).toNodes(),
+                    PathParser().parsePathString(p).toNodes(),
+                    fill = if (fillIt) SolidColor(Color.Black) else null,
                     stroke = SolidColor(Color.Black), strokeLineWidth = 1.9f,
                     strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
                 )
             }
         }.build()
+
+    private fun line(name: String, vararg d: String): ImageVector = build(name, false, false, d.toList())
+    /** Ikon berarah (panah/chevron/kirim): otomatis dicerminkan pada bahasa kanan-ke-kiri. */
+    private fun lineM(name: String, vararg d: String): ImageVector = build(name, true, false, d.toList())
+    /** Bentuk pertama terisi + bergaris (keadaan aktif); sisanya hanya garis. */
+    private fun solid(name: String, vararg d: String): ImageVector = build(name, false, true, d.toList())
 
     val Download: ImageVector by lazy { line("Download", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3") }
     val Share: ImageVector by lazy { line("Share", "M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8", "M16 6l-4-4-4 4", "M12 2v13") }
@@ -52,4 +60,17 @@ object AppIcons {
     val Inbox: ImageVector by lazy { line("Inbox", "M22 12h-6l-2 3h-4l-2-3H2", "M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z") }
     val Keyboard: ImageVector by lazy { line("Keyboard", "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M6 8h.01", "M10 8h.01", "M14 8h.01", "M18 8h.01", "M8 12h.01", "M12 12h.01", "M16 12h.01", "M7 16h10") }
     val Dice: ImageVector by lazy { line("Dice", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M8 8h.01", "M16 8h.01", "M12 12h.01", "M8 16h.01", "M16 16h.01") }
+    val Check: ImageVector by lazy { line("Check", "M20 6L9 17l-5-5") }
+    val Plus: ImageVector by lazy { line("Plus", "M5 12h14", "M12 5v14") }
+    val Close: ImageVector by lazy { line("Close", "M18 6L6 18", "M6 6l12 12") }
+    val ChevronRight: ImageVector by lazy { lineM("ChevronRight", "M9 18l6-6-6-6") }
+    val ChevronUp: ImageVector by lazy { line("ChevronUp", "M18 15l-6-6-6 6") }
+    val ChevronDown: ImageVector by lazy { line("ChevronDown", "M6 9l6 6 6-6") }
+    val ArrowLeft: ImageVector by lazy { lineM("ArrowLeft", "M19 12H5", "M12 19l-7-7 7-7") }
+    val Send: ImageVector by lazy { lineM("Send", "M22 2L11 13", "M22 2l-7 20-4-9-9-4 20-7z") }
+    val Swap: ImageVector by lazy { line("Swap", "M21 16l-4 4-4-4", "M17 20V4", "M3 8l4-4 4 4", "M7 4v16") }
+    val Mic: ImageVector by lazy { line("Mic", "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z", "M19 10v2a7 7 0 0 1-14 0v-2", "M12 19v3") }
+    val MicOff: ImageVector by lazy { line("MicOff", "M2 2l20 20", "M18.89 13.23A7.12 7.12 0 0 0 19 12v-2", "M5 10v2a7 7 0 0 0 12 5", "M15 9.34V5a3 3 0 0 0-5.68-1.33", "M9 9v3a3 3 0 0 0 5.12 2.12", "M12 19v3") }
+    val BellFill: ImageVector by lazy { solid("BellFill", "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9z", "M10.3 21a1.94 1.94 0 0 0 3.4 0") }
+    val BookmarkFill: ImageVector by lazy { solid("BookmarkFill", "M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z") }
 }

@@ -190,7 +190,7 @@ fun VoiceSearchSheet(onApply: (String) -> Unit, onType: () -> Unit, onDismiss: (
                         s.picks.forEach { p -> Chip(p, on = p == sel) { sel = p } }
                     }
                     Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        VButton(I18n.t("voice_repeat", "Again"), Icons.Filled.Mic, primary = false, Modifier.weight(1f)) { attempt++ }
+                        VButton(I18n.t("voice_repeat", "Again"), AppIcons.Mic, primary = false, Modifier.weight(1f)) { attempt++ }
                         VButton(
                             if (hits > 0) I18n.t("voice_see", "See %d results").format(hits) else I18n.t("voice_search_go", "Search"),
                             null, primary = true, Modifier.weight(1.3f),
@@ -236,7 +236,7 @@ private fun MicPulse(level: Float, active: Boolean) {
                 .background(if (active) RingRed else Color(0xFF2A2D42)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (active) Icons.Filled.Mic else Icons.Filled.MicOff, null, Modifier.size(34.dp), tint = if (active) Color.White else NavOff)
+            Icon(if (active) AppIcons.Mic else AppIcons.MicOff, null, Modifier.size(34.dp), tint = if (active) Color.White else NavOff)
         }
     }
 }

@@ -91,7 +91,7 @@ fun ProfileScreen(vm: AppVM) {
                         Text(pr.name.take(1).uppercase(), fontWeight = FontWeight.Bold)
                     }
                     Text(pr.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    if (sel) Icon(Icons.Filled.Check, "Active", Modifier.size(20.dp), tint = RedText)
+                    if (sel) Icon(AppIcons.Check, "Active", Modifier.size(20.dp), tint = RedText)
                 }
                 if (vm.s.profiles.size > 1 && !sel) IconChip(AppIcons.Trash, "Delete profile") { vm.delProfile(i) }
             }
@@ -148,7 +148,7 @@ fun ProfileScreen(vm: AppVM) {
                         fontSize = 12.5.sp, color = NavOff,
                     )
                 }
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
+                Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
             }
         }
 
@@ -162,7 +162,7 @@ fun ProfileScreen(vm: AppVM) {
                     }
                     Text(label, Modifier.weight(1f).padding(start = 2.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     if (k == "language") Text(if (vm.s.settings.lang == "id") "Bahasa Indonesia" else "English", color = NavOff, fontSize = 14.sp)
-                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
+                    Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
                 }
             }
         }
@@ -252,7 +252,7 @@ fun SubScreen(vm: AppVM, key: String) {
                         if (i > 0) HLine()
                         Row(Modifier.fillMaxWidth().clickable { vm.setSettings { st -> st.copy(lang = code) } }.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(label, Modifier.weight(1f), fontSize = 16.sp)
-                            if (vm.s.settings.lang == code) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText)
+                            if (vm.s.settings.lang == code) Icon(AppIcons.Check, null, Modifier.size(20.dp), tint = RedText)
                         }
                     }
                     HLine()
@@ -307,7 +307,7 @@ fun SubScreen(vm: AppVM, key: String) {
                         ctxA.startActivity(android.content.Intent.createChooser(send, "Send diagnostics").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     }.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("Send diagnostics", Modifier.weight(1f), fontSize = 16.sp)
-                        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
+                        Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
                     }
                     HLine()
                     listOf("terms" to "Terms of Service", "privacy" to "Privacy Policy", "licenses" to "Licenses").forEachIndexed { i, (k2, l) ->
@@ -315,7 +315,7 @@ fun SubScreen(vm: AppVM, key: String) {
                         Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k2)) }.padding(horizontal = 18.dp, vertical = 16.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(l, Modifier.weight(1f), fontSize = 16.sp)
-                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(20.dp), tint = NavOff)
+                            Icon(AppIcons.ChevronRight, null, Modifier.size(20.dp), tint = NavOff)
                         }
                     }
                 }
