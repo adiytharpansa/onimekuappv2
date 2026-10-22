@@ -1427,7 +1427,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
             }
             val uiVisible = ctlShown
-            val uiA by animateFloatAsState(if (uiVisible) 1f else 0f, tween(200), label = "controlsAlpha")
+            val uiA = if (uiVisible) 1f else 0f
             if (uiA > 0.01f) Box(Modifier.matchParentSize().graphicsLayer { alpha = uiA }) {
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color(0xB3080910), 0.32f to Color(0x33080910), 0.6f to Color(0x33080910), 1f to Color(0xD9080910))))
 
@@ -1436,7 +1436,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { vm.back() }, contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                     }
-                    if (!full) Spacer(Modifier.weight(1f)) else Column(Modifier.weight(1f).padding(start = Sp.S4)) {
+                    Column(Modifier.weight(1f).padding(start = Sp.S4)) {
                         Text(a.title, fontSize = Ty.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Text("Episode ${r.ep}", fontSize = Ty.Caption, color = Color(0xFFE6E8F0))
                     }
@@ -1497,8 +1497,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 } else {
                     var rotB by remember { mutableStateOf(0f) }
                     var rotF by remember { mutableStateOf(0f) }
-                    val rb by animateFloatAsState(rotB, tween(380), label = "rotBack")
-                    val rf by animateFloatAsState(rotF, tween(380), label = "rotFwd")
+                    val rb = 0f
+                    val rf = 0f
                     Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
                         if (hasPrev) Box(Modifier.size(44.dp).clip(CircleShape).pressable { step(-1); uiTick++ }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.SkipPrevious, "Previous episode", Modifier.size(30.dp), tint = Color.White)
@@ -1597,12 +1597,20 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                     Text(a.title, fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp,
                         letterSpacing = (-0.3).sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.genres.take(2).joinToString(", ").ifBlank { null }, statusText(a.status)).joinToString("  ·  "),
-                        Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = InkSoft, maxLines = 1)
+                    Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.score?.takeIf { it > 0 }?.let { "★ " + String.format(java.util.Locale.US, "%.1f", it) },
+                        a.genres.take(2).joinToString(", ").ifBlank { null }, statusText(a.status)).joinToString("  ·  "),
+                        Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
 
-                    if (hasPrev || hasNext) Row(Modifier.fillMaxWidth().padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                        if (hasPrev) Btn(I18n.t("previous", "Previous"), BtnStyle.Solid, Icons.Filled.SkipPrevious, Modifier.weight(1f), height = 48.dp) { step(-1) }
-                        if (hasNext) Btn(I18n.t("next_episode", "Next episode"), BtnStyle.Play, Icons.Filled.SkipNext, Modifier.weight(1f), height = 48.dp) { step(1) }
+                    // Sinopsis tepat di bawah judul (seperti Netflix/Crunchyroll), 3 baris + Show more.
+                    if (a.synopsis.isNotBlank()) {
+                        var more by remember(r.id) { mutableStateOf(false) }
+                        var clipped by remember(r.id) { mutableStateOf(false) }
+                        Text(a.synopsis, Modifier.padding(top = Sp.S12).clickable { more = !more }, fontSize = Ty.Small, color = InkSoft, lineHeight = 19.sp,
+                            maxLines = if (more) 24 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            onTextLayout = { if (!more) clipped = it.hasVisualOverflow })
+                        if (clipped || more) Text(if (more) I18n.t("syn_less", "Show less") else I18n.t("syn_more", "Show more"),
+                            Modifier.heightIn(min = 48.dp).clickable { more = !more }.wrapContentHeight(Alignment.CenterVertically),
+                            fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = RedText)
                     }
 
                     Row(Modifier.fillMaxWidth().padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
@@ -1637,23 +1645,18 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     androidx.compose.foundation.lazy.LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = Gutter),
                         horizontalArrangement = Arrangement.spacedBy(Sp.S8), modifier = Modifier.padding(top = Sp.S8)) {
                         items(epList, key = { "ep$it" }) { n ->
-                            EpisodeChip(n, isCur = n == r.ep, seen = "${r.id}:$n" in vm.p.seen, saved = vm.hasDl(r.id, n)) { if (n != r.ep) goEp(n) }
+                            EpisodeChip(n, isCur = n == r.ep, seen = "${r.id}:$n" in vm.p.seen, saved = vm.hasDl(r.id, n),
+                                inProgress = (vm.p.prog["${r.id}:$n"] ?: 0) > 30 && "${r.id}:$n" !in vm.p.seen) { if (n != r.ep) goEp(n) }
                         }
+                    }
+                    if (hasPrev || hasNext) Row(Modifier.padding(horizontal = Gutter).padding(top = Sp.S12), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
+                        if (hasPrev) NavEpCard(I18n.t("previous", "Previous"), epList.getOrNull(curIdx - 1) ?: (r.ep - 1), false, Modifier.weight(1f)) { step(-1) }
+                        if (hasNext) NavEpCard(I18n.t("up_next", "Up next"), epList.getOrNull(curIdx + 1) ?: (r.ep + 1), true, Modifier.weight(1f)) { step(1) }
                     }
                 }
             }
             item(key = "about") {
                 Column(Modifier.padding(horizontal = Gutter)) {
-                    if (a.synopsis.isNotBlank()) {
-                        var more by remember(r.id) { mutableStateOf(false) }
-                        var clipped by remember(r.id) { mutableStateOf(false) }
-                        Text(a.synopsis, Modifier.padding(top = Sp.S16).clickable { more = !more }, fontSize = Ty.Small, color = InkSoft, lineHeight = 19.sp,
-                            maxLines = if (more) 24 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            onTextLayout = { if (!more) clipped = it.hasVisualOverflow })
-                        if (clipped || more) Text(if (more) I18n.t("syn_less", "Show less") else I18n.t("syn_more", "Show more"),
-                            Modifier.heightIn(min = 48.dp).clickable { more = !more }.wrapContentHeight(Alignment.CenterVertically),
-                            fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = RedText)
-                    }
                     if (!vm.s.settings.gestureHintSeen) Row(Modifier.padding(top = Sp.S16).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = Sp.S12, vertical = Sp.S2),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                         Icon(Icons.Filled.TouchApp, null, Modifier.size(16.dp), tint = NavOff)
@@ -1980,7 +1983,7 @@ private fun BoxScope.UpNextCard(
 
 /** Kotak nomor episode untuk deretan geser di bawah video: episode aktif merah, sudah ditonton redup + centang, tersimpan offline bertitik. */
 @Composable
-private fun EpisodeChip(n: Int, isCur: Boolean, seen: Boolean, saved: Boolean, onClick: () -> Unit) {
+private fun EpisodeChip(n: Int, isCur: Boolean, seen: Boolean, saved: Boolean, inProgress: Boolean = false, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier.size(width = 56.dp, height = 48.dp).clip(shape)
@@ -1991,6 +1994,23 @@ private fun EpisodeChip(n: Int, isCur: Boolean, seen: Boolean, saved: Boolean, o
         Text("$n", fontSize = Ty.Body, fontWeight = if (isCur) FontWeight.Bold else FontWeight.Medium,
             color = if (isCur) Color.White else if (seen) NavOff else Color.White, maxLines = 1)
         if (seen && !isCur) Icon(Icons.Filled.CheckCircle, null, Modifier.align(Alignment.TopEnd).padding(Sp.S4).size(12.dp), tint = Color(0xFF3DDC97))
+        if (inProgress && !isCur) Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = Sp.S8).fillMaxWidth().height(3.dp).clip(CircleShape).background(Red))
         if (saved) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Sp.S4).size(5.dp).clip(CircleShape).background(if (isCur) Color.White else RedText))
+    }
+}
+
+/** Kartu navigasi episode (Previous / Up next) di bawah deretan episode. */
+@Composable
+private fun NavEpCard(label: String, ep: Int, next: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(modifier.heightIn(min = 56.dp).clip(shape).background(Bg2).border(1.dp, if (next) Red else Line, shape)
+        .clickable(onClick = onClick).padding(horizontal = Sp.S12, vertical = Sp.S8),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+        if (!next) Icon(Icons.Filled.SkipPrevious, null, Modifier.size(22.dp), tint = Color.White)
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = Ty.Caption, color = if (next) RedText else InkSoft, maxLines = 1)
+            Text("Episode $ep", fontSize = Ty.Body, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+        if (next) Icon(Icons.Filled.SkipNext, null, Modifier.size(22.dp), tint = Color.White)
     }
 }
