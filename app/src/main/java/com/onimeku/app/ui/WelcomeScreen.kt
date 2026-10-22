@@ -80,15 +80,24 @@ private fun SlideText(i: Int, modifier: Modifier = Modifier) {
  * berganti. Poster ASLI dari katalog; kosong = shimmer.
  */
 @Composable
-private fun BentoTile(a: Anime?, order: Int, zoomMs: Int, score: Boolean, modifier: Modifier) {
+private fun BentoTile(a: Anime?, score: Boolean, onFail: (String) -> Unit, modifier: Modifier) {
     val shape = RoundedCornerShape(22.dp)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     Box(modifier
         .clip(shape).background(Bg2).border(1.dp, Color(0x26FFFFFF), shape)) {
+        // Shimmer selalu di belakang: terlihat selama gambar dimuat, tertutup poster begitu siap.
+        Box(Modifier.fillMaxSize().shimmer())
         Crossfade(a, animationSpec = tween(300), label = "tile") { x ->
-            val req = rememberImg(x?.let { PosterHealer.posterFor(it) })
+            val url = x?.let { PosterHealer.posterFor(it) }
+            val req = remember(url) {
+                if (url.isNullOrBlank()) null
+                else coil.request.ImageRequest.Builder(ctx).data(url)
+                    .crossfade(350).precision(coil.size.Precision.INEXACT)
+                    .listener(onError = { _, _ -> x?.let { onFail(it.id) } })
+                    .build()
+            }
             Box(Modifier.fillMaxSize()) {
-                if (req == null) Box(Modifier.fillMaxSize().shimmer())
-                else coil.compose.AsyncImage(req, x?.title, Modifier.fillMaxSize(),
+                if (req != null) coil.compose.AsyncImage(req, x?.title, Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop, alignment = Alignment.TopCenter)
                 val sc = x?.score?.takeIf { score && it > 0 }
                 if (sc != null) {
@@ -112,15 +121,17 @@ fun WelcomeScreen(vm: AppVM) {
 
     // Kolam poster ASLI teratas, satu per franchise (Season 1/2/Part N tidak ikut ganda) dan satu per gambar.
     // Dipotong ke kelipatan 6: ubin ke-k hanya memakai indeks k, k+6, k+12, ... sehingga 6 ubin yang
-    // tampil bersamaan SELALU anime berbeda.
+    // tampil bersamaan SELALU anime berbeda. Bila kurang dari 6 judul, dipakai apa adanya (diulang).
     val pool = remember(Catalog.all) {
         val seenF = HashSet<String>(); val seenP = HashSet<String>()
         val uniq = Catalog.popular.asSequence().mapNotNull { Catalog.byId[it] }
             .filter { a -> !PosterHealer.posterFor(a).isNullOrBlank() }
             .filter { a -> seenP.add(Catalog.posterFileKey(PosterHealer.posterFor(a)!!)) && seenF.add(Catalog.franchiseKey(a.title).ifEmpty { a.id }) }
-            .take(24).toList()
-        uniq.take((uniq.size / 6) * 6)
+            .take(36).toList()
+        if (uniq.size < 6) uniq else uniq.take((uniq.size / 6) * 6)
     }
+    // Poster yang gagal dimuat dilewati: ubin langsung pindah ke anime berikutnya di kelasnya sendiri.
+    val failed = remember { mutableStateListOf<String>() }
     val swaps = remember { mutableStateListOf(0, 0, 0, 0, 0, 0) }
     LaunchedEffect(pool.size) {
         if (pool.size <= 6) return@LaunchedEffect
@@ -129,9 +140,15 @@ fun WelcomeScreen(vm: AppVM) {
     }
     fun at(k: Int): Anime? {
         if (pool.isEmpty()) return null
-        if (pool.size < 6) return pool[k % pool.size]
-        return pool[(k + 6 * swaps[k]) % pool.size]
+        if (pool.size < 6) return pool[k % pool.size].takeIf { it.id !in failed }
+        val steps = pool.size / 6
+        for (j in 0 until steps) {
+            val a = pool[(k + 6 * (swaps[k] + j)) % pool.size]
+            if (a.id !in failed) return a
+        }
+        return null
     }
+    val onFail: (String) -> Unit = { id -> if (id !in failed) failed.add(id) }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
         // Cahaya merah lembut di belakang kisi.
@@ -147,22 +164,26 @@ fun WelcomeScreen(vm: AppVM) {
                     fontSize = Ty.Caption, fontWeight = FontWeight.Medium, color = InkSoft)
             }
 
-            // Kisi bento 3 kolom, tinggi mengisi sisa layar; ujung bawah memudar ke latar.
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                Row(Modifier.fillMaxSize().padding(horizontal = Sp.S24), horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+            // Dinding poster bento 3 kolom, DIMIRINGKAN ke kiri (-8°) dan sedikit diperbesar agar sudut-sudutnya
+            // tetap penuh; ujung atas & bawah memudar ke latar supaya rapi bersama header dan teks.
+            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                Row(Modifier.fillMaxSize().padding(horizontal = Sp.S24)
+                    .graphicsLayer { rotationZ = -8f; scaleX = 1.14f; scaleY = 1.14f },
+                    horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                     Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
-                        BentoTile(at(0), 0, 7000, true, Modifier.weight(1.7f).fillMaxWidth())
-                        BentoTile(at(1), 3, 9000, false, Modifier.weight(1f).fillMaxWidth())
+                        BentoTile(at(0), true, onFail, Modifier.weight(1.7f).fillMaxWidth())
+                        BentoTile(at(1), false, onFail, Modifier.weight(1f).fillMaxWidth())
                     }
                     Column(Modifier.weight(1f).fillMaxHeight().padding(top = Sp.S32), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
-                        BentoTile(at(2), 1, 8000, false, Modifier.weight(1f).fillMaxWidth())
-                        BentoTile(at(3), 4, 6500, true, Modifier.weight(1.7f).fillMaxWidth())
+                        BentoTile(at(2), false, onFail, Modifier.weight(1f).fillMaxWidth())
+                        BentoTile(at(3), true, onFail, Modifier.weight(1.7f).fillMaxWidth())
                     }
                     Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Sp.S8)) {
-                        BentoTile(at(4), 2, 7500, false, Modifier.weight(1.3f).fillMaxWidth())
-                        BentoTile(at(5), 5, 8500, false, Modifier.weight(1.3f).fillMaxWidth())
+                        BentoTile(at(4), false, onFail, Modifier.weight(1.3f).fillMaxWidth())
+                        BentoTile(at(5), false, onFail, Modifier.weight(1.3f).fillMaxWidth())
                     }
                 }
+                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(28.dp).background(Brush.verticalGradient(listOf(Bg, Color.Transparent))))
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(96.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Bg))))
             }
 
@@ -188,3 +209,4 @@ fun WelcomeScreen(vm: AppVM) {
         }
     }
 }
+
