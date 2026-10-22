@@ -802,7 +802,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         val shifted = withSubOffset(playback.subtitles, subOffsetNow)
         if (shifted.map { it.url } == playback.subtitles.map { it.url }) return@LaunchedEffect
         val next = playback.copy(subtitles = shifted)
-        pb = next
         val cur = player.currentMediaItem ?: return@LaunchedEffect
         val pos = player.currentPosition
         val play = player.playWhenReady
