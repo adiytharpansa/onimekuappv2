@@ -1,3 +1,10 @@
+# v1.0.0-debug.68 (belum dikompilasi): Ikon launcher merah + logo seragam
+**Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu.
+- Ikon launcher: huruf "O" putih tetap, latar diganti merah `#F20A17` (`values/colors.xml` → `ic_bg`). `play-store-icon-512.png` diwarnai ulang sama.
+- `Logo()` di `ui/Components.kt` kini lingkaran merah + "O" putih yang memakai path persis `ic_launcher_foreground.xml` (menggantikan belah ketupat + cincin). Dipakai di Sambutan, Login, Tentang, dan loading pemutar.
+- Ikon pintasan tidak diubah.
+- Rollback cepat: kembalikan `Components.kt`, `colors.xml`, dan PNG dari `debug.67`.
+
 # v1.0.0-debug.67 (belum dikompilasi): Ikon garis seragam
 **Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu.
 - `ui/AppIcons.kt` baru: ikon garis (kisi 24, garis bulat 1,9 — sama dengan `NavGlyph`) untuk Download, Share, Trash, Search, Info, Help, Lock, User, History, Clock, Globe, Message, Flame, Bell, Bookmark, Refresh, Eye/EyeOff, Settings, Inbox, Keyboard, Dice.
