@@ -1,3 +1,15 @@
+# Penyempurnaan subtitle (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/Subtitles.kt`, `ui/PlayerScreen.kt`, `ui/PlayerParts.kt`, `data/State.kt`, `I18n.kt`, tes baru `SubtitleLogicTest.kt`.
+- **Bug: Auto mengabaikan bahasa aplikasi.** `SubLang.pick` selalu English dulu walau aplikasi berbahasa Indonesia (tes `subtitlePickHonoursPreferenceAndFallsBack` sebenarnya sudah mengharapkan Indonesia dulu). Kini Auto: aplikasi Indonesia -> Indonesia dulu, selain itu English dulu.
+- **Trek sebagian tidak lagi dipilih otomatis:** "Signs & Songs", forced, karaoke, lirik didahulukan di bawah trek dialog penuh (`SubLang.isPartial`); hanya dipakai bila tidak ada pilihan lain.
+- **Bahasa lain ikut diingat:** memilih subtitle non-Indonesia/English (mis. Arab, Korea) kini disimpan sebagai `subLang` (`SubLang.key`) dan dipakai episode berikutnya; toast "tidak tersedia · memakai ..." berlaku untuk semua bahasa pilihan, bukan hanya id/en. Kode lama "in" dikenali sebagai Indonesia.
+- **Varian trek dibedakan di menu:** "English" vs "English · SDH" / "· Signs & Songs" / "· forced" (dulu semua tampil sama "English").
+- **Subtitle naik di atas kontrol:** saat kontrol pemutar tampil, subtitle diangkat (`setBottomPaddingFraction` 0,22) agar tidak tertutup bilah seek; kembali turun saat kontrol sembunyi (tidak di PiP).
+- **Gaya subtitle:** pratinjau langsung; pilihan warna (Putih/Kuning); opsi "Pakai gaya teks tayang sistem" (ikuti Captions Android: ukuran, warna, tepi, untuk aksesibilitas). Pengaturan baru `Settings.subColor`, `Settings.subSystem`.
+- i18n: "Gaya subtitle", ukuran, "Latar hitam", warna, dan pratinjau kini diterjemahkan (dulu hard-coded Inggris).
+- Belum dibuat: penyesuaian waktu subtitle (delay/percepat). Subtitle samping dirender langsung oleh Media3 sehingga offset butuh renderer teks kustom.
+- Rollback cepat: kembalikan berkas di atas dari versi sebelumnya dan hapus `SubtitleLogicTest.kt`.
+
 # Penyempurnaan dubbing (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di berkas baru `ui/DubLogic.kt` + tes `DubLogicTest.kt`, serta `ui/PlayerScreen.kt`, `ui/PlayerParts.kt`, `ui/ProfileScreens.kt`, `data/State.kt`, `I18n.kt`.
 - **Bug: pilihan dubbing tertimpa.** `onTracksChanged` dulu menerapkan ulang dubbing bawaan setiap trek berubah; bila dua trek berbahasa sama (mis. dua "English") pilihan pengguna selalu dikembalikan ke yang pertama. Kini dubbing otomatis diterapkan SEKALI per episode (`dubDone`), dan pilihan manual tidak pernah ditimpa.

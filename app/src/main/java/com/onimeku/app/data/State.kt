@@ -52,6 +52,9 @@ data class Settings(
     // Gaya subtitle pemutar: ukuran "small" | "normal" | "large" | "xl", latar hitam di belakang teks.
     val subSize: String = "normal",
     val subBg: Boolean = false,
+    // Warna teks subtitle: "white" | "yellow". subSystem = ikuti gaya teks-tayang (captioning) sistem Android.
+    val subColor: String = "white",
+    val subSystem: Boolean = false,
     // Petunjuk gestur di halaman pemutar: tampil sampai ditutup/20 dtk menonton, lalu tidak muncul lagi.
     val gestureHintSeen: Boolean = false,
     // Picture-in-picture otomatis saat menekan Home/gestur home ketika video diputar (seperti YouTube).

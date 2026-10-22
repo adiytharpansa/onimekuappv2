@@ -34,6 +34,7 @@ object SubLang {
     const val INDONESIAN_LABEL = "Indonesian"
     /** "id", "en", atau null (bahasa lain) dari kode bahasa + label trek. */
     fun code(lang: String, label: String = ""): String? {
+        if (lang.trim().equals("in", true)) return "id"   // kode lama ISO 639-1 untuk Indonesia
         val s = "$lang $label".lowercase()
         return when {
             s.contains("indo") || Regex("\\b(id|ind)\\b").containsMatchIn(s) -> "id"
@@ -44,11 +45,25 @@ object SubLang {
 
     fun code(t: ApiSubtitle): String? = code(t.lang, t.label)
 
+    /** Trek sebagian (hanya "Signs & Songs", forced, lirik): bukan terjemahan dialog penuh, jangan jadi pilihan otomatis. */
+    private val PARTIAL = Regex("\\b(forced|signs?|songs?|karaoke|lyrics?)\\b", RegexOption.IGNORE_CASE)
+    fun isPartial(t: ApiSubtitle): Boolean = PARTIAL.containsMatchIn(t.label)
+
+    /** Kunci bahasa untuk disimpan sebagai preferensi: "id"/"en" atau kode 2 huruf bahasa lain ("ar", "ko", ...); null bila tak dikenal. */
+    fun key(t: ApiSubtitle): String? =
+        code(t) ?: DubLogic.normalize(t.lang).ifEmpty { DubLogic.normalize(t.label) }.ifEmpty { null }
+
     /** Nama ramah untuk ditampilkan. */
-    fun display(t: ApiSubtitle, i: Int): String = when (code(t)) {
-        "id" -> INDONESIAN_LABEL
-        "en" -> "English"
-        else -> t.label.ifBlank { t.lang.uppercase() }.ifBlank { "Sub ${i + 1}" }
+    private val VARIANT = Regex("\\b(sdh|cc|forced|signs?\\s*(&|and)?\\s*songs?|signs?|songs?|karaoke|commentary)\\b", RegexOption.IGNORE_CASE)
+    fun display(t: ApiSubtitle, i: Int): String {
+        val base = when (code(t)) {
+            "id" -> INDONESIAN_LABEL
+            "en" -> "English"
+            else -> return t.label.ifBlank { t.lang.uppercase() }.ifBlank { "Sub ${i + 1}" }
+        }
+        // Dua trek se-bahasa (mis. "English" dan "English (SDH)") dibedakan lewat penanda variannya.
+        val v = VARIANT.find(t.label)?.value?.trim()
+        return if (v != null) "$base · $v" else base
     }
 
     /**
@@ -71,23 +86,30 @@ object SubLang {
     }
 
     fun prefName(pref: String): String = when (pref) {
-        "id" -> INDONESIAN_LABEL; "en" -> "English"; "off" -> I18n.t("ctl_off", "Off"); else -> "Auto"
+        "id" -> INDONESIAN_LABEL; "en" -> "English"; "off" -> I18n.t("ctl_off", "Off"); "auto" -> "Auto"
+        else -> dubLangName(pref) ?: pref
     }
 
     /**
-     * Pilih indeks trek. pref: "auto" | "id" | "en" | "off". Auto mengikuti bahasa aplikasi
-     * (English dulu, lalu Indonesia); bila bahasa pilihan tidak ada, jatuh ke
-     * bahasa kedua (Indonesia <-> English), lalu trek pertama. -1 = mati.
+     * Pilih indeks trek. pref: "auto" | "off" | "id" | "en" | kode bahasa lain ("ar", "ko", ...). Auto mengikuti bahasa
+     * aplikasi (aplikasi Indonesia -> Indonesia dulu, selain itu English dulu); bahasa pilihan yang tidak ada jatuh ke
+     * English/Indonesia, lalu trek pertama. Di tiap bahasa, trek dialog penuh didahulukan dari trek sebagian
+     * ("Signs & Songs", forced). -1 = mati.
      */
     fun pick(tracks: List<ApiSubtitle>, pref: String, appLang: String): Int {
         if (pref == "off" || tracks.isEmpty()) return -1
-        val order = when (pref) {
-            "id" -> listOf("id", "en")
-            "en" -> listOf("en", "id")
-            else -> listOf("en", "id")
+        val primary = when (pref) { "auto" -> if (appLang == "id") "id" else "en"; else -> pref }
+        val order = buildList {
+            add(primary)
+            if (primary != "en") add("en")
+            if (primary != "id") add("id")
         }
-        for (c in order) { val i = tracks.indexOfFirst { code(it) == c }; if (i >= 0) return i }
-        return 0
+        for (c in order) {
+            val same = tracks.indices.filter { key(tracks[it]) == c }
+            val i = same.firstOrNull { !isPartial(tracks[it]) } ?: same.firstOrNull()
+            if (i != null) return i
+        }
+        return tracks.indexOfFirst { !isPartial(it) }.takeIf { it >= 0 } ?: 0
     }
 }
 

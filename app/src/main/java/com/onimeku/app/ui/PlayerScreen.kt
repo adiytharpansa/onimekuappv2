@@ -121,18 +121,30 @@ private fun onWifi(ctx: Context): Boolean {
 }
 
 @Composable
-private fun VideoSurface(player: Player, modifier: Modifier, subScale: Float = 1f, subBg: Boolean = false, resizeMode: Int = 0) {
+private fun VideoSurface(
+    player: Player, modifier: Modifier, subScale: Float = 1f, subBg: Boolean = false, resizeMode: Int = 0,
+    subColor: Int = android.graphics.Color.WHITE, subSystem: Boolean = false, subLift: Boolean = false,
+) {
     AndroidView(
         factory = { c -> PlayerView(c).also { it.player = player; it.useController = false } },
         update = { pv ->
             pv.resizeMode = resizeMode // 0 = FIT, 4 = ZOOM (penuh, memotong tepi); literal agar tak butuh opt-in API tak stabil
             pv.subtitleView?.let { sv ->
-                sv.setApplyEmbeddedStyles(false)
-                sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subScale)
-                sv.setStyle(androidx.media3.ui.CaptionStyleCompat(
-                    android.graphics.Color.WHITE, if (subBg) 0xB3000000.toInt() else android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
-                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null,
-                ))
+                if (subSystem) {
+                    // Ikuti pengaturan "Teks tayang"/Captions sistem (ukuran, warna, tepi) untuk aksesibilitas.
+                    sv.setApplyEmbeddedStyles(true)
+                    sv.setUserDefaultStyle()
+                    sv.setUserDefaultTextSize()
+                } else {
+                    sv.setApplyEmbeddedStyles(false)
+                    sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subScale)
+                    sv.setStyle(androidx.media3.ui.CaptionStyleCompat(
+                        subColor, if (subBg) 0xB3000000.toInt() else android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+                        androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null,
+                    ))
+                }
+                // Saat kontrol tampil, subtitle naik di atas bilah seek (seperti YouTube) agar tidak tertutup.
+                sv.setBottomPaddingFraction(if (subLift) 0.22f else androidx.media3.ui.SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION)
             }
         },
         modifier = modifier,
@@ -141,7 +153,10 @@ private fun VideoSurface(player: Player, modifier: Modifier, subScale: Float = 1
     )
 }
 
-private fun subScaleOf(size: String): Float = when (size) { "small" -> 0.8f; "large" -> 1.3f; "xl" -> 1.7f; else -> 1f }
+internal fun subScaleOf(size: String): Float = when (size) { "small" -> 0.8f; "large" -> 1.3f; "xl" -> 1.7f; else -> 1f }
+
+/** Warna teks subtitle dari nama pilihan ("white" | "yellow"). */
+internal fun subColorOf(name: String): Int = if (name == "yellow") 0xFFFFE04B.toInt() else android.graphics.Color.WHITE
 
 @Composable
 fun PlayerScreen(vm: AppVM, r: Route.Player) {
@@ -925,7 +940,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     val pref = vm.s.settings.subLang
                     val pick = SubLang.pick(subTracks, pref, vm.s.settings.lang)
                     // Bahasa pilihan tidak tersedia di episode ini -> beri tahu, lalu pakai bahasa cadangan.
-                    if ((pref == "id" || pref == "en") && pick >= 0 && SubLang.code(subTracks[pick]) != pref)
+                    if (pref != "auto" && pref != "off" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
                         vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
                     applySub(pick)
                 } else if (subReady && subIdx >= 0 && !subLocalApplied && tracks.groups.any { isLocalSubtitleGroup(it) }) {
@@ -1202,8 +1217,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
     val subBgOn = vm.s.settings.subBg
+    val subColorInt = subColorOf(vm.s.settings.subColor)
+    val subSys = vm.s.settings.subSystem
     if (vm.inPip) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn) }
+        Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, 0, subColorInt, subSys) }
         return
     }
 
@@ -1329,7 +1346,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                 },
         ) {
-            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, if (fillMode) 4 else 0)
+            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, if (fillMode) 4 else 0, subColorInt, subSys, subLift = showUi)
             // Sampul anime menutupi layar hitam sampai bingkai video pertama tampil.
             if (!rendered && !failed) {
                 RealImage(a, Modifier.fillMaxSize())
@@ -1622,7 +1639,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         subTracks = subTracks, subCurrent = subIdx, subPref = vm.s.settings.subLang, subLabel = subName(subIdx),
         onSubTrack = { i ->
             applySub(i); sheet = null
-            SubLang.code(subTracks[i])?.let { c -> vm.setSettings { it.copy(subLang = c) } }
+            SubLang.key(subTracks[i])?.let { c -> vm.setSettings { it.copy(subLang = c) } }
             vm.toast("${I18n.t("subtitles", "Subtitles")}: ${subName(i)}")
         },
         onSubOff = { applySub(-1); sheet = null; vm.setSettings { it.copy(subLang = "off") }; vm.toast("${I18n.t("subtitles", "Subtitles")}: ${I18n.t("ctl_off", "Off")}") },
@@ -1633,6 +1650,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         subSize = vm.s.settings.subSize, subBg = vm.s.settings.subBg,
         onSubSize = { v -> vm.setSettings { it.copy(subSize = v) } },
         onSubBg = { v -> vm.setSettings { it.copy(subBg = v) } },
+        subColor = vm.s.settings.subColor, subSystem = vm.s.settings.subSystem,
+        onSubColor = { v -> vm.setSettings { it.copy(subColor = v) } },
+        onSubSystem = { v -> vm.setSettings { it.copy(subSystem = v) } },
         speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
         audioLabels = audioLabels, audioKeys = audioKeys, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}") },
         sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(when (m) { 0 -> "Sleep timer: Off"; -1 -> "Sleep timer: ${I18n.t("sleep_end", "End of episode")}"; else -> "Sleep timer: $m min" }) },

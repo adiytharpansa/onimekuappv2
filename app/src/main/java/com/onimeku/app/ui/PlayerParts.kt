@@ -175,6 +175,7 @@ internal fun PlayerSettingsSheet(
     subTracks: List<com.onimeku.app.data.ApiSubtitle>, subCurrent: Int, subPref: String, subLabel: String,
     onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
     subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
+    subColor: String = "white", subSystem: Boolean = false, onSubColor: (String) -> Unit = {}, onSubSystem: (Boolean) -> Unit = {},
     speed: Float, onSpeed: (Float) -> Unit,
     audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit, audioKeys: List<String> = emptyList(),
     sleepMin: Int, onSleep: (Int) -> Unit, onLock: () -> Unit, onPip: () -> Unit,
@@ -186,7 +187,10 @@ internal fun PlayerSettingsSheet(
     LaunchedEffect(page) { if (page != null) held = page }
     val open = page != null
     fun qLabel(q: String) = if (q == "Auto" && quality == "Auto" && autoRes > 0) "Auto (${autoRes}p)" else q
-    val sizeNames = listOf("small" to "Small", "normal" to "Normal", "large" to "Large", "xl" to "Extra large")
+    val sizeNames = listOf(
+        "small" to I18n.t("sub_sz_small", "Small"), "normal" to I18n.t("normal", "Normal"),
+        "large" to I18n.t("sub_sz_large", "Large"), "xl" to I18n.t("sub_sz_xl", "Extra large"),
+    )
     Box(Modifier.fillMaxSize()) {
         androidx.compose.animation.AnimatedVisibility(
             open, enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(160)),
@@ -231,17 +235,48 @@ internal fun PlayerSettingsSheet(
                                 }
                             }
                             Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
-                            SheetRowItem(Icons.Filled.FormatSize, "Subtitle style", sizeNames.firstOrNull { it.first == subSize }?.second ?: "Normal") { onPage("substyle") }
+                            SheetRowItem(Icons.Filled.FormatSize, I18n.t("sub_style", "Subtitle style"),
+                                if (subSystem) I18n.t("sub_sys_short", "System") else sizeNames.firstOrNull { it.first == subSize }?.second ?: I18n.t("normal", "Normal")) { onPage("substyle") }
                         }
                         "substyle" -> {
-                            SheetHeader("Subtitle style") { onPage("subs") }
-                            sizeNames.forEach { (k, label) -> SheetOption(label, subSize == k) { onSubSize(k) } }
-                            Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
-                            Row(Modifier.fillMaxWidth().clickable { onSubBg(!subBg) }.padding(horizontal = Sp.S20, vertical = Sp.S8), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Black background", Modifier.weight(1f), fontSize = Ty.Subtitle, color = Color.White)
-                                Switch(subBg, { onSubBg(it) }, colors = SwitchDefaults.colors(
+                            SheetHeader(I18n.t("sub_style", "Subtitle style")) { onPage("subs") }
+                            // Pratinjau langsung: ukuran, warna, dan latar mengikuti pilihan (gaya sistem dipratinjau putih standar).
+                            Box(
+                                Modifier.padding(horizontal = Sp.S20, vertical = Sp.S8).fillMaxWidth().heightIn(min = 72.dp)
+                                    .clip(RoundedCornerShape(12.dp)).background(Color(0xFF0A0B10)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                val pvScale = if (subSystem) 1f else subScaleOf(subSize)
+                                Text(
+                                    I18n.t("sub_preview", "Sample subtitle text"),
+                                    Modifier.padding(Sp.S8).background(if (subBg && !subSystem) Color(0xB3000000) else Color.Transparent).padding(horizontal = Sp.S4),
+                                    fontSize = (16f * pvScale).sp, fontWeight = FontWeight.Medium,
+                                    color = Color(if (subSystem) android.graphics.Color.WHITE else subColorOf(subColor)), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                )
+                            }
+                            Row(Modifier.fillMaxWidth().clickable { onSubSystem(!subSystem) }.padding(horizontal = Sp.S20, vertical = Sp.S8), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(I18n.t("sub_sys_t", "Use system caption style"), fontSize = Ty.Subtitle, color = Color.White)
+                                    Text(I18n.t("sub_sys_d", "Follow Android Captions settings (size, color, edge)."), fontSize = Ty.Caption, color = NavOff)
+                                }
+                                Switch(subSystem, { onSubSystem(it) }, colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
                                     uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50)))
+                            }
+                            if (!subSystem) {
+                                Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
+                                sizeNames.forEach { (k, label) -> SheetOption(label, subSize == k) { onSubSize(k) } }
+                                Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
+                                listOf("white" to I18n.t("sub_c_white", "White"), "yellow" to I18n.t("sub_c_yellow", "Yellow")).forEach { (k, label) ->
+                                    SheetOption(label, subColor == k) { onSubColor(k) }
+                                }
+                                Box(Modifier.padding(vertical = Sp.S8).fillMaxWidth().height(1.dp).background(Line))
+                                Row(Modifier.fillMaxWidth().clickable { onSubBg(!subBg) }.padding(horizontal = Sp.S20, vertical = Sp.S8), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(I18n.t("sub_bg", "Black background"), Modifier.weight(1f), fontSize = Ty.Subtitle, color = Color.White)
+                                    Switch(subBg, { onSubBg(it) }, colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White, checkedTrackColor = Red, checkedBorderColor = Red,
+                                        uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF3A3E50), uncheckedBorderColor = Color(0xFF3A3E50)))
+                                }
                             }
                         }
                         "speed" -> {
