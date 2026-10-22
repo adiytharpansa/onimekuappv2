@@ -688,6 +688,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var hudTick by remember { mutableIntStateOf(0) }
     val durNow by rememberUpdatedState(dur)
     var audioLabels by remember(r) { mutableStateOf<List<String>>(emptyList()) }
+    var audioKeys by remember(r) { mutableStateOf<List<String>>(emptyList()) }
     var audioIdx by remember(r) { mutableIntStateOf(0) }
     var heights by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
     var sleepMin by remember(r) { mutableIntStateOf(0) }
@@ -832,11 +833,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (h != null) b.setMaxVideoSize(Int.MAX_VALUE, h) else b.setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
         player.trackSelectionParameters = b.build()
     }
-    fun applyAudio(i: Int) {
+    fun applyAudio(i: Int, save: Boolean = true) {
         val g = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }.getOrNull(i) ?: return
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0)).build()
         audioIdx = i
+        // Pilihan pengguna jadi dubbing bawaan (tersimpan permanen), dipakai lagi di episode berikutnya.
+        if (save) audioKey(g.mediaTrackGroup.getFormat(0)).takeIf { it.isNotBlank() }?.let { k -> vm.setSettings { it.copy(dubLang = k) } }
     }
     fun seekBy(ms: Long) {
         val t = (player.currentPosition + ms).coerceIn(0L, if (player.duration > 0) player.duration else Long.MAX_VALUE)
@@ -889,11 +892,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 // Perbaikan agen: alias C0 sama ilegalnya dengan val C.
                 val ag = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }
-                audioLabels = ag.mapIndexed { i, g ->
-                    val f = g.mediaTrackGroup.getFormat(0)
-                    (f.label ?: f.language?.uppercase() ?: "Track ${i + 1}")
-                }
+                val af = ag.map { it.mediaTrackGroup.getFormat(0) }
+                audioLabels = af.mapIndexed { i, f -> dubName(f, i) }
+                audioKeys = af.map { audioKey(it) }
                 audioIdx = ag.indexOfFirst { it.isSelected }.coerceAtLeast(0)
+                // Dubbing pilihan sebelumnya dipakai lagi di episode ini bila trek itu tersedia.
+                val wantDub = vm.s.settings.dubLang
+                if (wantDub != "auto") {
+                    val wi = af.indexOfFirst { audioKey(it) == wantDub }
+                    if (wi >= 0 && wi != audioIdx) applyAudio(wi, save = false)
+                }
                 heights = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
                     .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).height } }
                     .filter { it > 0 }.distinct().sortedDescending()
@@ -1392,7 +1400,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         Text("Episode ${r.ep}", fontSize = Ty.Caption, color = Color(0xFFE6E8F0))
                     }
                     if (full) Box(Modifier.size(48.dp).clip(CircleShape).clickable { epPanel = !epPanel; uiTick++ }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.VideoLibrary, I18n.t("episodes", "Episodes"), tint = Color.White)
+                        Icon(Icons.Filled.VideoLibrary, I18n.t("episodes", "Episodes"), Modifier.size(20.dp), tint = Color.White)
                     }
                     if (subTracks.isNotEmpty()) Box(Modifier.size(48.dp).clip(CircleShape).clickable {
                         // Tombol CC: hidupkan/matikan subtitle sekali ketuk (seperti YouTube).
@@ -1405,10 +1413,19 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         }
                         uiTick++
                     }, contentAlignment = Alignment.Center) {
-                        Icon(if (subIdx >= 0) Icons.Filled.ClosedCaption else Icons.Filled.ClosedCaptionOff, "Subtitles", tint = Color.White)
+                        Icon(if (subIdx >= 0) Icons.Filled.ClosedCaption else Icons.Filled.ClosedCaptionOff, "Subtitles", Modifier.size(20.dp), tint = Color.White)
+                    }
+                    // Ikon aksi bar atas (episode, CC, dubbing, roda gigi) seragam 20dp agar rapi; area ketuk tetap 48dp.
+                    // Tombol dubbing langsung di bar kontrol (posisi paling umum, seperti "Audio & Subtitles" Netflix / Audio track YouTube).
+                    // Hanya tampil bila ada lebih dari satu trek audio; ketuk membuka lembar "Dubbing".
+                    if (audioLabels.size > 1) Box(Modifier.size(48.dp).clip(CircleShape).clickable(
+                        role = androidx.compose.ui.semantics.Role.Button,
+                        onClickLabel = I18n.t("dub_pick", "Choose dubbing"),
+                    ) { sheet = "audio"; uiTick++ }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Audiotrack, "${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(audioIdx) { audioLabels[0] }}", Modifier.size(20.dp), tint = Color.White)
                     }
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { sheet = "main"; uiTick++ }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Settings, "Settings", tint = Color.White)
+                        Icon(Icons.Filled.Settings, "Settings", Modifier.size(20.dp), tint = Color.White)
                     }
                 }
 
@@ -1525,12 +1542,19 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + Sp.S24),
         ) {
             item(key = "info") {
-                Column(Modifier.padding(horizontal = Gutter).padding(top = Sp.S16)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+                // Baris badge dibuat setinggi 48dp (area ketuk chip dubbing) SELALU, supaya judul tidak melompat saat chip muncul
+                // setelah trek audio termuat; padding atas/judul dikurangi agar jarak visualnya tetap seperti semula.
+                Column(Modifier.padding(horizontal = Gutter).padding(top = Sp.S2)) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                         Tag("EPISODE ${r.ep}", Red, Color.White, small = true)
                         if (offline) Tag("OFFLINE", Color(0x33FFFFFF), Color.White, small = true)
+                        // Pemilih dubbing: rata kanan sebaris dengan badge episode; ketuk membuka lembar pilihan.
+                        if (audioLabels.isNotEmpty()) {
+                            Spacer(Modifier.weight(1f))
+                            DubChip(audioLabels.getOrElse(audioIdx) { audioLabels[0] }, dubFlag(audioKeys.getOrNull(audioIdx)), canPick = audioLabels.size > 1) { sheet = "audio" }
+                        }
                     }
-                    Text(a.title, Modifier.padding(top = Sp.S8), fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp,
+                    Text(a.title, fontSize = Ty.Head, fontWeight = FontWeight.Bold, lineHeight = 26.sp,
                         letterSpacing = (-0.3).sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(listOfNotNull(a.year.takeIf { it > 0 }?.toString(), a.genres.take(2).joinToString(", ").ifBlank { null }, statusText(a.status)).joinToString("  ·  "),
                         Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = InkSoft, maxLines = 1)
@@ -1593,7 +1617,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onSubSize = { v -> vm.setSettings { it.copy(subSize = v) } },
         onSubBg = { v -> vm.setSettings { it.copy(subBg = v) } },
         speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
-        audioLabels = audioLabels, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("Audio: ${audioLabels.getOrElse(n) { "?" }}") },
+        audioLabels = audioLabels, audioKeys = audioKeys, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}") },
         sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(when (m) { 0 -> "Sleep timer: Off"; -1 -> "Sleep timer: ${I18n.t("sleep_end", "End of episode")}"; else -> "Sleep timer: $m min" }) },
         onLock = { locked = true; showUi = true; sheet = null },
         onPip = {

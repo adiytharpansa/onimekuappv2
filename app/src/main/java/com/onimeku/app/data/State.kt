@@ -45,6 +45,8 @@ data class Settings(
     val lang: String = "en",
     // Bahasa subtitle pemutar: "auto" (ikut bahasa aplikasi, Indonesia/English), "id", "en", atau "off".
     val subLang: String = "auto",
+    // Dubbing (trek audio) bawaan: "auto" (ikut stream) atau kode bahasa ("ja", "id", "en"). Dipakai otomatis bila episode punya trek itu.
+    val dubLang: String = "auto",
     // Gaya subtitle pemutar: ukuran "small" | "normal" | "large" | "xl", latar hitam di belakang teks.
     val subSize: String = "normal",
     val subBg: Boolean = false,

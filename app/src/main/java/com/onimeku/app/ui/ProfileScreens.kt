@@ -173,6 +173,18 @@ fun ProfileScreen(vm: AppVM) {
 private fun Grp(text: String) =
     Text(text.uppercase(), Modifier.padding(start = Sp.S2, top = Sp.S24, bottom = Sp.S8), fontSize = Ty.Caption, fontWeight = FontWeight.SemiBold, color = NavOff, letterSpacing = 1.sp)
 
+/** Baris pengaturan pilihan tunggal: judul + deskripsi + deretan chip yang bisa digeser bila sempit. */
+@Composable
+private fun ChoiceRow(title: String, desc: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S12)) {
+        Text(title, fontSize = Ty.Subtitle, fontWeight = FontWeight.Medium)
+        Text(desc, fontSize = Ty.Small, color = NavOff, modifier = Modifier.padding(top = Sp.S2))
+        Row(Modifier.padding(top = Sp.S12).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
+            options.forEach { (k, l) -> Chip(l, on = selected == k, height = 40.dp) { onSelect(k) } }
+        }
+    }
+}
+
 @Composable
 private fun SwitchRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = Sp.S16, vertical = Sp.S12), verticalAlignment = Alignment.CenterVertically,
@@ -209,6 +221,12 @@ fun SubScreen(vm: AppVM, key: String) {
                     SwitchRow(I18n.t("bg_play_t", "Background playback"), I18n.t("bg_play_d", "Keep audio playing with lock-screen controls when you leave the app."), set.bgPlay) { v -> vm.setSettings { it.copy(bgPlay = v) } }
                     HLine()
                     SwitchRow(I18n.t("pip_t", "Picture-in-picture"), I18n.t("pip_d", "Keep watching in a small window when you press Home while a video is playing."), set.autoPip) { v -> vm.setSettings { it.copy(autoPip = v) } }
+                    HLine()
+                    ChoiceRow(
+                        I18n.t("dub_def_t", "Default dubbing"), I18n.t("dub_def_d", "Used automatically when an episode offers that audio track."),
+                        listOf("auto" to "Auto", "ja" to I18n.t("dub_ja", "Japanese"), "id" to I18n.t("dub_id", "Indonesian"), "en" to I18n.t("dub_en", "English")),
+                        set.dubLang,
+                    ) { k -> vm.setSettings { it.copy(dubLang = k) } }
                 }
                 Grp(I18n.t("grp_data", "Data and alerts"))
                 CardBox {

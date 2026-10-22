@@ -86,6 +86,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -174,7 +176,7 @@ internal fun PlayerSettingsSheet(
     onSubTrack: (Int) -> Unit, onSubOff: () -> Unit, onSubAuto: () -> Unit,
     subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
     speed: Float, onSpeed: (Float) -> Unit,
-    audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit,
+    audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit, audioKeys: List<String> = emptyList(),
     sleepMin: Int, onSleep: (Int) -> Unit, onLock: () -> Unit, onPip: () -> Unit,
     audioOnly: Boolean, onAudioOnly: () -> Unit,
     onPage: (String?) -> Unit,
@@ -249,8 +251,10 @@ internal fun PlayerSettingsSheet(
                             }
                         }
                         "audio" -> {
-                            SheetHeader("Audio") { onPage("main") }
-                            audioLabels.forEachIndexed { i, l -> SheetOption(l, i == audioIdx) { onAudio(i) } }
+                            SheetHeader(I18n.t("dubbing", "Dubbing")) { onPage("main") }
+                            // Urutan tampil: English pertama, Indonesia kedua, sisanya (mis. Japanese) mengikuti urutan trek asli.
+                            audioLabels.indices.sortedBy { i -> when (audioKeys.getOrNull(i)) { "en" -> 0; "id" -> 1; else -> 2 } }
+                                .forEach { i -> DubOption(audioLabels[i], dubFlag(audioKeys.getOrNull(i)), i == audioIdx) { onAudio(i) } }
                         }
                         "sleep" -> {
                             SheetHeader(I18n.t("ctl_sleep", "Sleep timer")) { onPage("main") }
@@ -260,7 +264,7 @@ internal fun PlayerSettingsSheet(
                             SheetRowItem(Icons.Filled.Tune, I18n.t("quality", "Quality"), qLabel(quality)) { onPage("quality") }
                             SheetRowItem(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), if (subTracks.isNotEmpty()) subLabel else I18n.t("subs_na", "Not available")) { if (subTracks.isNotEmpty()) onPage("subs") }
                             SheetRowItem(Icons.Filled.Speed, I18n.t("speed", "Playback speed"), if (speed == 1f) I18n.t("normal", "Normal") else "${spdLabel(speed)}×") { onPage("speed") }
-                            if (audioLabels.size > 1) SheetRowItem(Icons.Filled.Audiotrack, "Audio", audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
+                            if (audioLabels.size > 1) SheetRowItem(Icons.Filled.Audiotrack, I18n.t("dubbing", "Dubbing"), audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
                             SheetRowItem(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep timer"), when (sleepMin) { 0 -> I18n.t("ctl_off", "Off"); -1 -> I18n.t("sleep_end", "End of episode"); else -> "$sleepMin min" }) { onPage("sleep") }
                             SheetRowItem(Icons.Filled.PictureInPictureAlt, "Picture-in-picture", "") { onPip() }
                             SheetRowItem(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock screen"), "") { onLock() }
@@ -301,6 +305,93 @@ internal fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) 
         Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { if (selected) Icon(Icons.Filled.Check, null, Modifier.size(20.dp), tint = RedText) }
         Text(label, Modifier.padding(start = Sp.S16), fontSize = Ty.Subtitle, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (selected) RedText else Color.White)
+    }
+}
+
+// ------------------------------------------------------------------ Dubbing (trek audio)
+private val LANG3 = mapOf(
+    "jpn" to "ja", "ind" to "id", "eng" to "en", "kor" to "ko", "zho" to "zh", "chi" to "zh", "spa" to "es",
+    "por" to "pt", "fra" to "fr", "fre" to "fr", "deu" to "de", "ger" to "de", "ara" to "ar", "tha" to "th",
+    "vie" to "vi", "msa" to "ms", "may" to "ms", "rus" to "ru", "ita" to "it",
+)
+
+/** Nama dubbing yang ramah dibaca: label trek bila bermakna, kalau tidak nama bahasa dari kodenya ("ja" -> Japanese / Jepang). */
+internal fun dubName(f: androidx.media3.common.Format, i: Int): String {
+    val label = f.label?.trim().orEmpty()
+    if (label.length > 3) return label
+    val raw = (f.language ?: label).trim().lowercase()
+    if (raw.isNotEmpty() && raw != "und") {
+        val code = LANG3[raw] ?: raw
+        val n = java.util.Locale.forLanguageTag(code).getDisplayLanguage(uiLocale())
+        if (n.isNotBlank() && !n.equals(code, true)) return n.replaceFirstChar { it.uppercase() }
+    }
+    return "Track ${i + 1}"
+}
+
+/** Kunci stabil sebuah trek audio, dipakai mengingat pilihan dubbing antar episode. */
+internal fun audioKey(f: androidx.media3.common.Format): String {
+    val raw = (f.language ?: f.label ?: "").trim().lowercase().substringBefore('-')
+    return LANG3[raw] ?: raw
+}
+
+/** Bendera kecil untuk kode bahasa trek audio; null bila tak dikenal (chip/baris memakai ikon not musik). */
+internal fun dubFlag(key: String?): String? = when (key) {
+    "ja" -> "\uD83C\uDDEF\uD83C\uDDF5"; "id" -> "\uD83C\uDDEE\uD83C\uDDE9"; "en" -> "\uD83C\uDDFA\uD83C\uDDF8"
+    "ko" -> "\uD83C\uDDF0\uD83C\uDDF7"; "zh" -> "\uD83C\uDDE8\uD83C\uDDF3"; "es" -> "\uD83C\uDDEA\uD83C\uDDF8"
+    "pt" -> "\uD83C\uDDE7\uD83C\uDDF7"; "fr" -> "\uD83C\uDDEB\uD83C\uDDF7"; "de" -> "\uD83C\uDDE9\uD83C\uDDEA"
+    "ar" -> "\uD83C\uDDF8\uD83C\uDDE6"; "th" -> "\uD83C\uDDF9\uD83C\uDDED"; "vi" -> "\uD83C\uDDFB\uD83C\uDDF3"
+    "ms" -> "\uD83C\uDDF2\uD83C\uDDFE"; "ru" -> "\uD83C\uDDF7\uD83C\uDDFA"; "it" -> "\uD83C\uDDEE\uD83C\uDDF9"
+    else -> null
+}
+
+/**
+ * Chip dubbing ringkas: bendera + nama dubbing aktif (+ panah bila ada pilihan lain). Tampilan hanya 24dp dengan tepi
+ * bergradien halus; area ketuknya tetap 48dp (pedoman Material), ada umpan balik saat ditekan dan deskripsi untuk pembaca layar.
+ */
+@Composable
+internal fun DubChip(label: String, flag: String?, canPick: Boolean, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val desc = "${I18n.t("dubbing", "Dubbing")}: $label"
+    Box(
+        Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics(mergeDescendants = true) { contentDescription = desc }
+            .then(if (canPick) Modifier.clickable(interactionSource = src, indication = null, role = Role.Button,
+                onClickLabel = I18n.t("dub_pick", "Choose dubbing"), onClick = onClick) else Modifier),
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        val shape = RoundedCornerShape(12.dp)
+        Row(
+            Modifier.height(24.dp).clip(shape)
+                .background(if (pressed) Color(0xFF2A2E3F) else Color(0xCC1B1E2A))
+                .border(1.dp, Brush.horizontalGradient(listOf(Color(0x99E8566F), Color(0x402A2D3B))), shape)
+                .padding(start = if (flag != null) 6.dp else Sp.S8, end = if (canPick) 2.dp else Sp.S8),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (flag != null) Text(flag, fontSize = 12.sp) else Icon(Icons.Filled.Audiotrack, null, Modifier.size(12.dp), tint = InkSoft)
+            Text(label, Modifier.padding(start = 5.dp).widthIn(max = 120.dp), fontSize = Ty.Micro, fontWeight = FontWeight.SemiBold,
+                color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            if (canPick) Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(14.dp), tint = NavOff)
+        }
+    }
+}
+
+/** Baris pilihan dubbing yang ringkas: bendera dalam lingkaran kecil, nama, dan centang di kanan; baris aktif diberi latar merah tipis. */
+@Composable
+internal fun DubOption(label: String, flag: String?, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Sp.S12, vertical = 2.dp).clip(shape)
+            .background(if (selected) Color(0x26E8566F) else Color.Transparent)
+            .clickable(role = Role.RadioButton, onClick = onClick).padding(horizontal = Sp.S8, vertical = Sp.S8),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(Color(0x1FFFFFFF)), contentAlignment = Alignment.Center) {
+            if (flag != null) Text(flag, fontSize = 15.sp) else Icon(Icons.Filled.Audiotrack, null, Modifier.size(15.dp), tint = InkSoft)
+        }
+        Text(label, Modifier.weight(1f).padding(start = Sp.S12), fontSize = Ty.Body, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) RedText else Color.White, maxLines = 1)
+        if (selected) Icon(Icons.Filled.Check, null, Modifier.size(18.dp), tint = RedText)
     }
 }
 
