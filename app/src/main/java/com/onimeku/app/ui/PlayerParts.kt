@@ -178,6 +178,7 @@ internal fun PlayerSettingsSheet(
     subSize: String, subBg: Boolean, onSubSize: (String) -> Unit, onSubBg: (Boolean) -> Unit,
     subColor: String = "white", subSystem: Boolean = false, onSubColor: (String) -> Unit = {}, onSubSystem: (Boolean) -> Unit = {},
     speed: Float, onSpeed: (Float) -> Unit,
+    autoplay: Boolean = true, onAutoplay: (Boolean) -> Unit = {},
     audioLabels: List<String>, audioIdx: Int, onAudio: (Int) -> Unit, audioKeys: List<String> = emptyList(),
     sleepMin: Int, onSleep: (Int) -> Unit, onLock: () -> Unit, onPip: () -> Unit,
     audioOnly: Boolean, onAudioOnly: () -> Unit,
@@ -301,6 +302,7 @@ internal fun PlayerSettingsSheet(
                             SheetRowItem(Icons.Filled.ClosedCaption, I18n.t("subtitles", "Subtitles"), if (subTracks.isNotEmpty()) subLabel else I18n.t("subs_na", "Not available")) { if (subTracks.isNotEmpty()) onPage("subs") }
                             SheetRowItem(Icons.Filled.Speed, I18n.t("speed", "Playback speed"), if (speed == 1f) I18n.t("normal", "Normal") else "${spdLabel(speed)}×") { onPage("speed") }
                             if (audioLabels.size > 1) SheetRowItem(Icons.Filled.Audiotrack, I18n.t("dubbing", "Dubbing"), audioLabels.getOrElse(audioIdx) { "?" }) { onPage("audio") }
+                            SheetRowItem(Icons.Filled.SkipNext, I18n.t("autoplay_next", "Autoplay next"), if (autoplay) "On" else "Off") { onAutoplay(!autoplay) }
                             SheetRowItem(Icons.Filled.Bedtime, I18n.t("ctl_sleep", "Sleep timer"), when (sleepMin) { 0 -> I18n.t("ctl_off", "Off"); -1 -> I18n.t("sleep_end", "End of episode"); else -> "$sleepMin min" }) { onPage("sleep") }
                             SheetRowItem(Icons.Filled.PictureInPictureAlt, "Picture-in-picture", "") { onPip() }
                             SheetRowItem(Icons.Filled.Lock, I18n.t("ctl_lock", "Lock screen"), "") { onLock() }
@@ -351,7 +353,8 @@ internal fun dubName(f: androidx.media3.common.Format, i: Int): String {
     if (label.length > 3) return label
     val code = DubLogic.normalize(f.language).ifEmpty { DubLogic.normalize(label) }
     if (code.isNotEmpty()) dubLangName(code)?.let { return it }
-    return "Track ${i + 1}"
+    // Trek pertama tanpa bahasa umumnya audio asli stream; lebih jelas daripada "Track 1".
+    return if (i == 0) I18n.t("dub_original", "Original") else "Track ${i + 1}"
 }
 
 /** Nama bahasa dari kode ("ja" -> Japanese / Jepang) mengikuti bahasa aplikasi; null bila tak dikenal. */

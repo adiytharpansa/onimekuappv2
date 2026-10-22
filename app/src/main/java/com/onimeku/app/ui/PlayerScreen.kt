@@ -1695,6 +1695,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         subColor = vm.s.settings.subColor, subSystem = vm.s.settings.subSystem,
         onSubColor = { v -> vm.setSettings { it.copy(subColor = v) } },
         onSubSystem = { v -> vm.setSettings { it.copy(subSystem = v) } },
+        autoplay = vm.s.settings.autoplay, onAutoplay = { v -> vm.setSettings { it.copy(autoplay = v) }; vm.toast("${I18n.t("autoplay_next", "Autoplay next")}: ${if (v) "On" else "Off"}") },
         speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
         audioLabels = audioLabels, audioKeys = audioKeys, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}") },
         sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(when (m) { 0 -> "Sleep timer: Off"; -1 -> "Sleep timer: ${I18n.t("sleep_end", "End of episode")}"; else -> "Sleep timer: $m min" }) },
@@ -1945,19 +1946,19 @@ private fun BoxScope.SkipChips(
     val introEnd = playback.introEnd
     val outroStart = playback.outroStart
     val hasIntro = introEnd != null && introEnd > 0
-    val chip = Modifier.align(Alignment.BottomEnd).padding(end = Sp.S16, bottom = 66.dp).clip(CircleShape)
+    val chip = Modifier.align(Alignment.BottomEnd).padding(end = Sp.S16, bottom = 68.dp).clip(CircleShape)
         .background(Color(0x99080910)).border(1.dp, Color(0xCCFFFFFF), CircleShape)
     if (introEnd != null && introEnd > 0 && pos >= (playback.introStart ?: 0) && pos < introEnd) {
         Text(I18n.t("skip_intro", "Skip intro"), chip.clickable { onSeekSec(introEnd) }
-            .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
+            .padding(horizontal = Sp.S16, vertical = 6.dp), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
     }
     if (outroStart != null && outroStart > 0 && pos >= outroStart && (playback.outroEnd ?: dur) > pos) {
         Text(I18n.t("skip_outro", "Skip outro"), chip.clickable { onSeekSec(playback.outroEnd ?: dur) }
-            .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
+            .padding(horizontal = Sp.S16, vertical = 6.dp), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
     }
     if (SkipLogic.fallbackVisible(sec, hasIntro, true, dur)) {
         Text(I18n.t("skip_fallback", "Skip %1\$ds").format(SkipLogic.FALLBACK_SEC), chip.clickable { onSeekSec(sec + SkipLogic.FALLBACK_SEC) }
-            .padding(horizontal = Sp.S16, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
+            .padding(horizontal = Sp.S16, vertical = 6.dp), fontSize = Ty.Small, fontWeight = FontWeight.Medium)
     }
 }
 
