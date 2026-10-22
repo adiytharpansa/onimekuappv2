@@ -6,6 +6,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
@@ -42,8 +47,15 @@ private val avatarColors = listOf(Color(0xFFA6122D), Color(0xFF3B82F6), Color(0x
 
 @Composable
 fun ProfileScreen(vm: AppVM) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     var name by rememberSaveable { mutableStateOf("") }
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    var renameIdx by rememberSaveable { mutableStateOf(-1) }
+    var deleteIdx by rememberSaveable { mutableStateOf(-1) }
+    var confirmOut by rememberSaveable { mutableStateOf(false) }
+    var confirmDel by rememberSaveable { mutableStateOf(false) }
+    val addNow = {
+        if (vm.addProfile(name)) { name = ""; focus.clearFocus() }
+    }
     Page(extraTop = 24.dp) {
         val acc = vm.s.account
         val hShape = RoundedCornerShape(24.dp)
@@ -57,26 +69,33 @@ fun ProfileScreen(vm: AppVM) {
                 else Icon(AppIcons.User, null, Modifier.size(34.dp), tint = InkSoft)
             }
             Column(Modifier.weight(1f)) {
-                Text(if (acc != null) "Signed in" else "Guest", fontSize = Ty.Head2, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
-                Text(acc?.email ?: "Not signed in", Modifier.padding(top = Sp.S2), fontSize = Ty.Body, color = InkSoft, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(if (acc != null) I18n.t("prof_signed_in", "Signed in") else I18n.t("prof_guest", "Guest"), fontSize = Ty.Head2, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                Text(acc?.email ?: I18n.t("prof_not_signed", "Not signed in"), Modifier.padding(top = Sp.S2), fontSize = Ty.Body, color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(I18n.t("prof_active", "Active profile: %s").format(vm.p.name), Modifier.padding(top = Sp.S4), fontSize = Ty.Small, color = NavOff, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        val st = remember(vm.p.days, vm.p.seen, Catalog.all) { com.onimeku.app.data.Stats.compute(vm.p) }
+        val st = remember(vm.p.days, vm.p.seen, vm.p.myList, Catalog.all) { com.onimeku.app.data.Stats.compute(vm.p) }
         Text(I18n.t("stats_title", "Your stats"), fontSize = Ty.Title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = Sp.S12))
         CardBox(Modifier.padding(bottom = Sp.S24).fadeSlideIn(60)) {
             Column(Modifier.padding(Sp.S16), verticalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                val time = if (st.monthSec < 3600) "${st.monthSec / 60} ${I18n.t("unit_min", "min")}" else "${st.monthSec / 3600}.${(st.monthSec % 3600) / 360} ${I18n.t("unit_h", "h")}"
+                val mu = I18n.t("unit_min", "min"); val hu = I18n.t("unit_h", "h")
+                fun days(n: Int) = "$n ${if (n == 1) I18n.t("unit_day", "day") else I18n.t("unit_days", "days")}"
                 Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                    StatCell(time, I18n.t("stat_month", "Watched this month"), Modifier.weight(1f))
+                    StatCell(com.onimeku.app.data.Stats.fmtDuration(st.monthSec, mu, hu), I18n.t("stat_month", "Watched this month"), Modifier.weight(1f))
                     StatCell("${st.episodes}", I18n.t("stat_eps", "Episodes finished"), Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
                     StatCell(st.topGenre ?: "–", I18n.t("stat_genre", "Top genre"), Modifier.weight(1f))
-                    StatCell("${st.streak} ${if (st.streak == 1) I18n.t("unit_day", "day") else I18n.t("unit_days", "days")}", I18n.t("stat_streak", "Daily streak"), Modifier.weight(1f))
+                    StatCell(days(st.streak), I18n.t("stat_streak", "Daily streak"), Modifier.weight(1f))
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
+                    StatCell(com.onimeku.app.data.Stats.fmtDuration(st.totalSec, mu, hu), I18n.t("stat_total", "Total watch time"), Modifier.weight(1f))
+                    StatCell(days(maxOf(st.bestStreak, st.streak)), I18n.t("stat_best", "Best streak"), Modifier.weight(1f))
+                }
+                WeekChart(st.week)
             }
         }
-        Text("Profiles", fontSize = Ty.Title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = Sp.S12))
+        Text(I18n.t("prof_title", "Profiles"), fontSize = Ty.Title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = Sp.S12))
         vm.s.profiles.forEachIndexed { i, pr ->
             val sel = i == vm.s.pi
             val bd by androidx.compose.animation.animateColorAsState(if (sel) Red else Line, androidx.compose.animation.core.tween(250), label = "profBd")
@@ -90,48 +109,87 @@ fun ProfileScreen(vm: AppVM) {
                     Box(Modifier.size(36.dp).clip(CircleShape).background(avatarColors[i % 4]), contentAlignment = Alignment.Center) {
                         Text(pr.name.take(1).uppercase(), fontWeight = FontWeight.Bold)
                     }
-                    Text(pr.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    if (sel) Icon(AppIcons.Check, "Active", Modifier.size(20.dp), tint = RedText)
+                    Column(Modifier.weight(1f)) {
+                        Text(pr.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(I18n.t("prof_in_list", "%d in My List").format(pr.myList.size), fontSize = Ty.Caption, color = NavOff)
+                    }
+                    if (sel) Icon(AppIcons.Check, I18n.t("prof_active_short", "Active"), Modifier.size(20.dp), tint = RedText)
                 }
-                if (vm.s.profiles.size > 1 && !sel) IconChip(AppIcons.Trash, "Delete profile") { vm.delProfile(i) }
+                IconChip(AppIcons.Edit, I18n.t("prof_rename", "Rename")) { renameIdx = i }
+                if (vm.s.profiles.size > 1 && !sel) IconChip(AppIcons.Trash, I18n.t("prof_delete", "Delete profile")) { deleteIdx = i }
             }
         }
-        if (vm.s.profiles.size < 4) {
+        if (vm.s.profiles.size < com.onimeku.app.data.ProfileRules.MAX_PROFILES) {
             Row(Modifier.padding(bottom = Sp.S24), horizontalArrangement = Arrangement.spacedBy(Sp.S12), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f).height(44.dp).clip(CircleShape).background(Bg2).border(1.dp, Line, CircleShape).padding(horizontal = Sp.S16),
                     contentAlignment = Alignment.CenterStart) {
-                    BasicTextField(name, { if (it.length <= 12) name = it }, singleLine = true,
+                    BasicTextField(name, { if (it.length <= com.onimeku.app.data.ProfileRules.MAX_LEN) name = it }, singleLine = true,
                         textStyle = TextStyle(color = Color.White, fontSize = Ty.Subtitle), cursorBrush = SolidColor(Color.White),
-                        decorationBox = { inner -> if (name.isEmpty()) Text("New profile", color = NavOff); inner() })
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { addNow() }),
+                        decorationBox = { inner -> if (name.isEmpty()) Text(I18n.t("prof_new", "New profile"), color = NavOff); inner() })
                 }
-                Chip("Add") {
-                    if (name.isBlank()) vm.toast("Enter a name") else { vm.addProfile(name.trim()); name = "" }
-                }
+                Chip(I18n.t("prof_add", "Add")) { addNow() }
             }
         }
 
+        // ---- dialog: ganti nama / hapus profil ----
+        if (renameIdx in vm.s.profiles.indices) {
+            val idx = renameIdx
+            var txt by remember(idx) { mutableStateOf(vm.s.profiles[idx].name) }
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { renameIdx = -1 },
+                title = { Text(I18n.t("prof_rename_title", "Rename profile")) },
+                text = {
+                    Box(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(Color(0x14FFFFFF)).padding(horizontal = Sp.S16), contentAlignment = Alignment.CenterStart) {
+                        BasicTextField(txt, { if (it.length <= com.onimeku.app.data.ProfileRules.MAX_LEN) txt = it }, singleLine = true,
+                            textStyle = TextStyle(color = Color.White, fontSize = Ty.Subtitle), cursorBrush = SolidColor(Color.White),
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { if (vm.renameProfile(idx, txt)) renameIdx = -1 }))
+                    }
+                },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { if (vm.renameProfile(idx, txt)) renameIdx = -1 }) { Text(I18n.t("prof_save", "Save"), color = RedText) } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { renameIdx = -1 }) { Text(I18n.t("prof_cancel", "Cancel")) } },
+            )
+        }
+        if (deleteIdx in vm.s.profiles.indices) {
+            val idx = deleteIdx
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { deleteIdx = -1 },
+                title = { Text(I18n.t("prof_delete_title", "Delete profile \"%s\"?").format(vm.s.profiles[idx].name)) },
+                text = { Text(I18n.t("prof_delete_body", "This profile's My List, progress and stats will be removed from this device.")) },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { deleteIdx = -1; vm.delProfile(idx) }) { Text(I18n.t("prof_delete_confirm", "Delete"), color = RedText) } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { deleteIdx = -1 }) { Text(I18n.t("prof_cancel", "Cancel")) } },
+            )
+        }
 
         if (acc == null) CardBox(Modifier.padding(top = Sp.S20).fadeSlideIn(120)) {
             Column(Modifier.padding(Sp.S20)) {
-                Text("Sign in to Onimeku", fontSize = Ty.Title2, fontWeight = FontWeight.SemiBold)
-                Text("Save your watchlist and pick up where you left off on any device.", Modifier.padding(top = Sp.S8), color = InkSoft, fontSize = Ty.Body)
+                Text(I18n.t("prof_signin_t", "Sign in to Onimeku"), fontSize = Ty.Title2, fontWeight = FontWeight.SemiBold)
+                Text(I18n.t("prof_signin_b", "Save your watchlist and pick up where you left off on any device."), Modifier.padding(top = Sp.S8), color = InkSoft, fontSize = Ty.Body)
                 Row(Modifier.padding(top = Sp.S16), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                    Btn("Sign in", BtnStyle.Solid, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(false)) }
-                    Btn("Sign up", BtnStyle.Play, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(true)) }
+                    Btn(I18n.t("prof_signin", "Sign in"), BtnStyle.Solid, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(false)) }
+                    Btn(I18n.t("prof_signup", "Sign up"), BtnStyle.Play, modifier = Modifier.weight(1f)) { vm.go(Route.Auth(true)) }
                 }
             }
         } else Box(Modifier.padding(top = Sp.S20)) {
-            var confirmDel by remember { mutableStateOf(false) }
             Column(verticalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                Btn("Sign out", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { vm.signOut() }
-                Btn("Delete account", BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { confirmDel = true }
+                Btn(I18n.t("prof_signout", "Sign out"), BtnStyle.Outline, modifier = Modifier.fillMaxWidth()) { confirmOut = true }
+                Btn(I18n.t("prof_delacc", "Delete account"), BtnStyle.Outline, modifier = Modifier.fillMaxWidth(), loading = vm.authBusy) { confirmDel = true }
             }
+            if (confirmOut) androidx.compose.material3.AlertDialog(
+                onDismissRequest = { confirmOut = false },
+                title = { Text(I18n.t("prof_signout_title", "Sign out?")) },
+                text = { Text(I18n.t("prof_signout_body", "Data on this device stays. Syncing stops until you sign in again.")) },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmOut = false; vm.signOut() }) { Text(I18n.t("prof_signout", "Sign out"), color = RedText) } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmOut = false }) { Text(I18n.t("prof_cancel", "Cancel")) } },
+            )
             if (confirmDel) androidx.compose.material3.AlertDialog(
                 onDismissRequest = { confirmDel = false },
-                title = { Text("Delete account?") },
-                text = { Text("This permanently deletes your account and the data synced to it. Data stored only on this device stays here.") },
-                confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmDel = false; vm.deleteAccount() }) { Text("Delete", color = RedText) } },
-                dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmDel = false }) { Text("Cancel") } },
+                title = { Text(I18n.t("prof_delacc_title", "Delete account?")) },
+                text = { Text(I18n.t("prof_delacc_body", "This permanently deletes your account and the data synced to it. Data stored only on this device stays here.")) },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmDel = false; vm.deleteAccount() }) { Text(I18n.t("prof_delete_confirm", "Delete"), color = RedText) } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmDel = false }) { Text(I18n.t("prof_cancel", "Cancel")) } },
             )
         }
 
@@ -333,5 +391,26 @@ private fun StatCell(value: String, label: String, modifier: Modifier = Modifier
     ) {
         Text(value, fontSize = Ty.Title2, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         Text(label, Modifier.padding(top = Sp.S2), fontSize = Ty.Caption, color = NavOff, maxLines = 2)
+    }
+}
+
+/** Grafik batang 7 hari terakhir (lama -> hari ini). Hari ini berwarna merah; tinggi batang relatif terhadap hari terpanjang. */
+@Composable
+private fun WeekChart(week: List<Int>) {
+    val max = (week.maxOrNull() ?: 0).coerceAtLeast(1)
+    val today = java.time.LocalDate.now()
+    val loc = java.util.Locale(I18n.lang)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0x0FFFFFFF)).padding(horizontal = Sp.S16, vertical = Sp.S12)) {
+        Text(I18n.t("stat_week", "Last 7 days"), fontSize = Ty.Caption, color = NavOff)
+        Row(Modifier.fillMaxWidth().padding(top = Sp.S12), horizontalArrangement = Arrangement.spacedBy(Sp.S8), verticalAlignment = Alignment.Bottom) {
+            week.forEachIndexed { i, sec ->
+                val d = today.minusDays((6 - i).toLong())
+                val h = if (sec <= 0) 4.dp else (8 + 44f * sec / max).dp
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Sp.S4)) {
+                    Box(Modifier.width(18.dp).height(h).clip(RoundedCornerShape(5.dp)).background(if (i == 6 && sec > 0) Red else if (sec > 0) Color(0x66FFFFFF) else Color(0x1FFFFFFF)))
+                    Text(d.dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW, loc), fontSize = Ty.Micro, color = if (i == 6) InkSoft else NavOff, maxLines = 1)
+                }
+            }
+        }
     }
 }

@@ -1,3 +1,14 @@
+# Penyempurnaan layar Profil (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/ProfileScreens.kt`, `ui/AppIcons.kt`, `AppVM.kt`, `data/Stats.kt`, `data/State.kt`, `data/Sync.kt`, `I18n.kt`, berkas baru `data/ProfileRules.kt`, tes `ProfileRulesTest.kt`, `StatsTest.kt`.
+- **Bug sinkronisasi: profil yang dihapus muncul lagi.** Merge berbasis union per nama, jadi profil yang dihapus di perangkat ini dikembalikan dari server saat login/pull. Kini `AppState.goneProfiles` mencatat nama profil yang dihapus/diganti nama, dan `Sync.merge(..., gone)` tidak menghidupkannya kembali.
+- **Bug: nama profil ganda.** Nama dipakai sebagai kunci sinkronisasi, tetapi bisa dibuat kembar ("Kid" dan "kid"). Kini `ProfileRules` menolak nama kosong, kembar (tanpa beda huruf besar/kecil), dan lebih dari 4 profil; spasi dirapikan.
+- **Profil:** ganti nama (ikon pensil), konfirmasi sebelum hapus profil, jumlah item My List per profil, tombol Done di keyboard untuk menambah profil, header menampilkan profil aktif. Mengetuk profil yang sudah aktif tidak lagi memicu toast/pindah ulang.
+- **Statistik:** tambah Total waktu menonton, Runtun terbaik, dan grafik batang 7 hari terakhir. Format durasi dipusatkan di `Stats.fmtDuration`.
+- **Akun:** konfirmasi sebelum Sign out; tombol Delete account menampilkan status sibuk.
+- **i18n:** semua teks layar Profil (Profiles, New profile, Add, Sign in/up, dialog, toast) kini punya terjemahan Indonesia; dulu hard-coded Inggris.
+- Catatan: ganti nama di satu perangkat tetap bisa membuat profil lama terlihat di perangkat lain sampai perangkat itu juga menghapusnya (merge sengaja tetap union).
+- Rollback cepat: kembalikan berkas di atas dari versi sebelumnya dan hapus `ProfileRules.kt`, `ProfileRulesTest.kt`.
+
 # Penyempurnaan subtitle (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu. Perubahan di `ui/Subtitles.kt`, `ui/PlayerScreen.kt`, `ui/PlayerParts.kt`, `data/State.kt`, `I18n.kt`, tes baru `SubtitleLogicTest.kt`.
 - **Bug: Auto mengabaikan bahasa aplikasi.** `SubLang.pick` selalu English dulu walau aplikasi berbahasa Indonesia (tes `subtitlePickHonoursPreferenceAndFallsBack` sebenarnya sudah mengharapkan Indonesia dulu). Kini Auto: aplikasi Indonesia -> Indonesia dulu, selain itu English dulu.

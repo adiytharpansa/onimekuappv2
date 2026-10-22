@@ -59,7 +59,8 @@ object Sync {
     }
 
     /** Gabungkan profil lokal dengan profil jarak jauh (cocok per nama, maks 4 profil). */
-    fun merge(local: List<Profile>, remote: List<Profile>): List<Profile> {
+    fun merge(local: List<Profile>, remote: List<Profile>, gone: Collection<String> = emptyList()): List<Profile> {
+        val goneKeys = gone.map { it.lowercase() }.toSet()
         val byName = remote.associateBy { it.name }
         val merged = local.map { l ->
             val r = byName[l.name] ?: return@map l
@@ -76,7 +77,7 @@ object Sync {
                 last = l.last ?: r.last, base = l.base ?: r.base,
             )
         }
-        val extra = remote.filter { r -> local.none { it.name == r.name } }
+        val extra = remote.filter { r -> local.none { it.name == r.name } && r.name.lowercase() !in goneKeys }
         return (merged + extra).take(4)
     }
 }

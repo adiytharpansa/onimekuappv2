@@ -41,6 +41,7 @@ object AppIcons {
     val Download: ImageVector by lazy { line("Download", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3") }
     val Share: ImageVector by lazy { line("Share", "M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8", "M16 6l-4-4-4 4", "M12 2v13") }
     val Trash: ImageVector by lazy { line("Trash", "M3 6h18", "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6", "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2", "M10 11v6", "M14 11v6") }
+    val Edit: ImageVector by lazy { line("Edit", "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z", "M15 5l4 4") }
     val Search: ImageVector by lazy { line("Search", circle(11f, 11f, 8f), "M21 21l-4.3-4.3") }
     val Info: ImageVector by lazy { line("Info", circle(12f, 12f, 10f), "M12 16v-4", "M12 8h.01") }
     val Help: ImageVector by lazy { line("Help", circle(12f, 12f, 10f), "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3", "M12 17h.01") }

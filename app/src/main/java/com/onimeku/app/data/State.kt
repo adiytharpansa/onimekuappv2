@@ -74,6 +74,9 @@ data class AppState(
     val profiles: List<Profile> = listOf(Profile("Me")),
     val pi: Int = 0,
     val account: Account? = null,
+    // Nama profil yang sengaja dihapus/diganti nama di perangkat ini. Tanpa ini, penggabungan sinkronisasi
+    // (union per nama) menghidupkan kembali profil lama dari server. Dibersihkan saat nama dipakai lagi.
+    val goneProfiles: List<String> = emptyList(),
 )
 
 class Store(ctx: Context) {

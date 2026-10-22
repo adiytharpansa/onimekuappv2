@@ -400,7 +400,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val remote = withAccount { Sync.pull(it) } ?: return@launch
-                upd { st -> st.copy(profiles = Sync.merge(st.profiles, remote)) }
+                upd { st -> st.copy(profiles = Sync.merge(st.profiles, remote, st.goneProfiles)) }
             } catch (_: Exception) {}
         }
     }
@@ -729,13 +729,56 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     // ---------- profiles ----------
-    fun switchProfile(i: Int) { upd { it.copy(pi = i) }; refreshWidget(force = true); toast("Switched to ${s.profiles[i].name}"); setTab(Route.ProfileTab) }
-    fun addProfile(name: String) = upd { it.copy(profiles = it.profiles + Profile(name)) }
-    fun delProfile(i: Int) {
+    fun switchProfile(i: Int) {
+        if (i !in s.profiles.indices) return
+        if (i == s.pi) return
+        upd { it.copy(pi = i) }; refreshWidget(force = true)
+        toast(I18n.t("prof_switched", "Switched to %s").format(s.profiles[i].name)); setTab(Route.ProfileTab)
+    }
+
+    /** Tambah profil. Mengembalikan true bila berhasil; bila gagal menampilkan toast alasan. */
+    fun addProfile(raw: String): Boolean {
+        val problem = ProfileRules.problem(raw, s.profiles)
+        if (problem != null) { toast(problemText(problem)); return false }
+        val n = ProfileRules.clean(raw)
+        upd { it.copy(profiles = it.profiles + Profile(n), goneProfiles = it.goneProfiles.filterNot { g -> g.equals(n, true) }) }
+        return true
+    }
+
+    fun renameProfile(i: Int, raw: String): Boolean {
+        if (i !in s.profiles.indices) return false
+        val problem = ProfileRules.problem(raw, s.profiles, exceptIndex = i)
+        if (problem != null) { toast(problemText(problem)); return false }
+        val n = ProfileRules.clean(raw)
+        val old = s.profiles[i].name
+        if (n == old) return true
+        // Nama lama dicatat agar tidak muncul lagi sebagai profil terpisah dari server.
         upd { st ->
-            st.copy(profiles = st.profiles.filterIndexed { k, _ -> k != i }, pi = if (i < st.pi) st.pi - 1 else st.pi)
+            st.copy(
+                profiles = st.profiles.mapIndexed { k, pr -> if (k == i) pr.copy(name = n) else pr },
+                goneProfiles = (st.goneProfiles.filterNot { g -> g.equals(n, true) } + old).takeLast(20),
+            )
+        }
+        toast(I18n.t("prof_renamed", "Profile renamed"))
+        return true
+    }
+
+    fun delProfile(i: Int) {
+        if (s.profiles.size <= 1 || i !in s.profiles.indices) return
+        val gone = s.profiles[i].name
+        upd { st ->
+            val list = st.profiles.filterIndexed { k, _ -> k != i }
+            val pi = (if (i < st.pi) st.pi - 1 else st.pi).coerceIn(0, list.lastIndex)
+            st.copy(profiles = list, pi = pi, goneProfiles = (st.goneProfiles.filterNot { g -> g.equals(gone, true) } + gone).takeLast(20))
         }
         Reminders.rescheduleAll(app, s)
+        toast(I18n.t("prof_deleted", "Profile deleted"))
+    }
+
+    private fun problemText(p: ProfileRules.Problem) = when (p) {
+        ProfileRules.Problem.EMPTY -> I18n.t("prof_err_empty", "Enter a name")
+        ProfileRules.Problem.DUPLICATE -> I18n.t("prof_err_dup", "That name is already used")
+        ProfileRules.Problem.FULL -> I18n.t("prof_err_full", "Up to 4 profiles")
     }
 
     // ---------- akun ----------
@@ -757,7 +800,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val acc = AuthClient.signIn(email.trim(), password)
         upd { it.copy(account = acc) }
         pullAndMerge()
-        toast("Welcome back")
+        toast(I18n.t("auth_welcome", "Welcome back"))
         setTab(Route.ProfileTab)
     }
 
@@ -790,7 +833,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         val acc = AuthClient.fromTokens(accessToken, refreshToken)
         upd { it.copy(account = acc) }
         pullAndMerge()
-        toast("Welcome back")
+        toast(I18n.t("auth_welcome", "Welcome back"))
         setTab(Route.ProfileTab)
     }
 
@@ -802,7 +845,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun signOut() {
         val acc = s.account ?: return
         upd { it.copy(account = null) }
-        toast("Signed out")
+        toast(I18n.t("auth_signed_out", "Signed out"))
         viewModelScope.launch { try { AuthClient.signOut(acc.accessToken) } catch (_: Exception) {} }
     }
 
@@ -814,7 +857,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         AuthClient.deleteAccount(fresh.accessToken)
         syncJob?.cancel()
         upd { it.copy(account = null) }
-        toast("Account deleted")
+        toast(I18n.t("auth_deleted", "Account deleted"))
     }
 
     // ---------- welcome ----------
