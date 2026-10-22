@@ -80,10 +80,9 @@ fun rememberCommentsUi(animeId: String): CommentsUi {
 }
 
 @Composable
-private fun Avatar(name: String, highlight: Boolean, size: Dp = 36.dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(if (highlight) Red else Solid), contentAlignment = Alignment.Center) {
-        Text(name.ifBlank { "U" }.take(1).uppercase(), fontSize = (size.value * 0.4f).sp, fontWeight = FontWeight.Bold)
-    }
+private fun Avatar(name: String, highlight: Boolean, size: Dp = 36.dp, photoUrl: String = "") {
+    // Foto akun yang sedang login (sama dengan di tab Profile); huruf awal jadi cadangan selagi foto dimuat/gagal.
+    AccountAvatar(photoUrl, name.ifBlank { "U" }.take(1).uppercase(), size, if (highlight) Red else Solid, Color.Transparent, 0.dp, (size.value * 0.4f).sp)
 }
 
 fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
@@ -128,7 +127,7 @@ fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
             val shown = if (ui.expanded.value) list else list.take(PREVIEW_COUNT)
             items(shown, key = { "comment:${it.id}" }) { c ->
                 val mine = c.user_id == vm.s.account?.userId
-                CommentItem(c, mine) { ui.pendingDelete.value = c }
+                CommentItem(c, mine, if (mine) vm.s.account?.avatarUrl.orEmpty() else "") { ui.pendingDelete.value = c }
             }
             if (list.size > PREVIEW_COUNT) item(key = "c_more") {
                 val open = ui.expanded.value
@@ -170,7 +169,7 @@ private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
         var focused by remember { mutableStateOf(false) }
         val focus = LocalFocusManager.current
         val canSend = text.isNotBlank()
-        Avatar(vm.p.name, true)
+        Avatar(acc.name.ifBlank { acc.email }.ifBlank { vm.p.name }, true, photoUrl = acc.avatarUrl)
         Row(
             Modifier.weight(1f).heightIn(min = 42.dp).clip(RoundedCornerShape(21.dp)).background(Bg2)
                 .border(1.dp, if (focused) RedText else Line, RoundedCornerShape(21.dp)),
@@ -199,12 +198,12 @@ private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
 }
 
 @Composable
-private fun CommentItem(c: CommentRow, mine: Boolean, onDelete: () -> Unit) {
+private fun CommentItem(c: CommentRow, mine: Boolean, photoUrl: String, onDelete: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = Sp.S16),
         horizontalArrangement = Arrangement.spacedBy(Sp.S12),
     ) {
-        Avatar(c.author, mine)
+        Avatar(c.author, mine, photoUrl = photoUrl)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                 Text(
@@ -258,3 +257,4 @@ internal fun commentTime(iso: String): String = runCatching {
             .format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm", uiLocale()))
     }
 }.getOrElse { if (iso.length >= 16) iso.substring(0, 10) + " " + iso.substring(11, 16) else "" }
+

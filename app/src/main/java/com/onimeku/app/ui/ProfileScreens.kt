@@ -48,7 +48,7 @@ import com.onimeku.app.data.Catalog
 
 /** Avatar bulat: foto akun bila ada (Google/Gmail), selain itu huruf awal di atas warna. Huruf tetap jadi cadangan selagi foto dimuat/gagal. */
 @Composable
-private fun AccountAvatar(url: String, initial: String, size: androidx.compose.ui.unit.Dp, bg: Color, border: Color, borderW: androidx.compose.ui.unit.Dp, fontSize: androidx.compose.ui.unit.TextUnit) {
+internal fun AccountAvatar(url: String, initial: String, size: androidx.compose.ui.unit.Dp, bg: Color, border: Color, borderW: androidx.compose.ui.unit.Dp, fontSize: androidx.compose.ui.unit.TextUnit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val req = remember(url) {
         if (url.isBlank()) null
@@ -514,3 +514,4 @@ private fun WeekChart(week: List<Int>) {
         }
     }
 }
+
