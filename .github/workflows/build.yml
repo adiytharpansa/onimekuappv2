@@ -46,6 +46,8 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          # Artefak hanya jembatan ke rilis; jangan ditumpuk (kuota penyimpanan Actions 0,5 GB).
+          retention-days: 3
 
       - name: Create GitHub Release with debug APK
         if: ${{ inputs.release_tag != '' }}
