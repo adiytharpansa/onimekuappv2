@@ -149,7 +149,13 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             OnimekuTheme {
-                CompositionLocalProvider(androidx.compose.foundation.LocalIndication provides com.onimeku.app.ui.NoIndication, LocalEnsureNotif provides { cb -> ensureNotif(cb) }, LocalQuickMenu provides { a -> vm.quick = a.id }) {
+                // Skala huruf sistem dibatasi 1,3x agar tab bar, chip, dan kartu tidak patah di perangkat
+                // dengan "Font size" maksimum. (Ukuran tampilan/density tetap dihormati penuh.)
+                val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+                CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale.coerceAtMost(1.3f)),
+                    androidx.compose.foundation.LocalIndication provides com.onimeku.app.ui.NoIndication, LocalEnsureNotif provides { cb -> ensureNotif(cb) }, LocalQuickMenu provides { a -> vm.quick = a.id },
+                ) {
                     val appVm: AppVM = viewModel()
                     com.onimeku.app.ui.ProvideImageShimmer { App(appVm) }
                 }
@@ -338,7 +344,7 @@ fun App(vm: AppVM) {
                 enter = fadeIn(tween(200)) + slideInVertically(tween(250)) { it / 2 },
                 exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 2 },
             ) {
-                Text(vm.toastMsg ?: lastToast, Modifier.clip(CircleShape).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp),
+                Text(vm.toastMsg ?: lastToast, Modifier.widthIn(max = 480.dp).clip(CircleShape).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp),
                     color = Bg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
         }
@@ -384,7 +390,8 @@ private fun TabBar(vm: AppVM, modifier: Modifier) {
             .drawBehind { drawLine(Line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
             .navigationBarsPadding().height(TabBarHeight),
     ) {
-    Row(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+    // Tablet: ikon tab dikelompokkan di tengah (maks. TabBarMaxW), bukan direntang sepanjang layar.
+    Row(Modifier.align(Alignment.TopCenter).widthIn(max = TabBarMaxW).fillMaxSize().padding(horizontal = 8.dp)) {
         tabs.forEach { t ->
             val sel = vm.tab == t.r
             // Tanpa ripple/sorotan putih transparan: indication = null. Umpan balik sentuhan hanya

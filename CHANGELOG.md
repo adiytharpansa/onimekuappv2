@@ -1,3 +1,15 @@
+# Responsif lintas perangkat: ponsel, lipat, tablet, split-screen (belum dikompilasi)
+**Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di berkas baru `ui/Responsive.kt`, serta `ui/Components.kt`, `ui/Screens.kt`, `ui/PlayerScreen.kt`, `ui/PlayerParts.kt`, `MainActivity.kt`.
+- `ui/Responsive.kt` (baru): `WidthClass` (Compact <600dp, Medium 600-839dp, Expanded >=840dp, berdasarkan lebar JENDELA), `ContentMaxW` 720dp, `GridMaxW` 1200dp, `TabBarMaxW` 560dp, `pageSidePad()`, `gridCellMin()`, `Modifier.safeSides()` (menjauhi lubang kamera/bilah navigasi di sisi saat landscape).
+- `Page`: konten dipusatkan, maks. 720dp, margin samping 16/24/32dp menurut kelas lebar; area gulir tetap selebar layar. Memengaruhi Profil, Settings, Unduhan, Notifikasi, Login.
+- `AnimeGrid` (See all, Search, My List): sel poster adaptif 100/128/148dp, grid dipusatkan maks. 1200dp (dulu tetap 100dp sehingga tablet jadi 9+ kolom mungil).
+- Beranda: jumlah kolom grid = lebar/150dp (3-10), dulu lebar/140dp (3-8).
+- `TabBar`: ikon dikelompokkan di tengah maks. 560dp pada tablet.
+- Pemutar: tinggi video non-fullscreen dibatasi 60% area (jendela lebar/split-screen tidak lagi menelan panel episode); lembar pengaturan non-fullscreen maks. 560dp.
+- `MainActivity`: skala huruf sistem dibatasi 1,3x (tab bar/chip/kartu tidak patah pada "Font size" maksimum). Ubah/hapus `coerceAtMost(1.3f)` bila ingin mengikuti skala sistem penuh.
+- Penyempurnaan: skeleton grid (`PosterGridSkeleton`) kini menghitung kolom dari lebar (dulu tetap 3) dan skeleton See all selaras dengan `AnimeGrid`; toast dibatasi 480dp; `widthClassFor(Int)` diekstrak sebagai fungsi murni + tes `ResponsiveTest`.
+- Rollback cepat: kembalikan berkas di atas dari `debug.74` dan hapus `ui/Responsive.kt` serta `ResponsiveTest.kt`.
+
 # Pemilih dubbing di halaman pemutar (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/PlayerScreen.kt`, `ui/PlayerParts.kt`, `ui/ProfileScreens.kt`, `data/State.kt`, `I18n.kt`.
 - Chip dubbing ringkas (tampilan 24dp, bendera + nama, tepi gradien halus) rata kanan sebaris dengan badge "EPISODE n" (ikon + nama dubbing aktif + panah). Ketuk membuka lembar "Dubbing" (daftar trek audio, baris ringkas dengan bendera dalam lingkaran, baris aktif berlatar merah tipis + centang; `DubOption`, `dubFlag`). Bila stream hanya punya satu trek, chip tampil statis tanpa panah.

@@ -153,14 +153,17 @@ fun CommentSkeleton(count: Int = 3, modifier: Modifier = Modifier) {
     }
 }
 
-/** Kerangka grid poster 3 kolom (Lihat semua / hasil cari saat katalog belum tiba). */
+/** Kerangka grid poster (Lihat semua / hasil cari saat katalog belum tiba); jumlah kolom mengikuti lebar seperti [AnimeGrid]. */
 @Composable
 fun PosterGridSkeleton(rows: Int = 4, modifier: Modifier = Modifier, hPad: androidx.compose.ui.unit.Dp = 16.dp) {
+    val cellMin = gridCellMin()
     ProvideShimmer {
-        Column(modifier.fillMaxWidth().padding(horizontal = hPad), verticalArrangement = Arrangement.spacedBy(Sp.S16)) {
+      androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth()) {
+        val cols = ((maxWidth - hPad * 2 + Sp.S12) / (cellMin + Sp.S12)).toInt().coerceAtLeast(3)
+        Column(Modifier.fillMaxWidth().padding(horizontal = hPad), verticalArrangement = Arrangement.spacedBy(Sp.S16)) {
             repeat(rows) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                    repeat(3) {
+                    repeat(cols) {
                         Column(Modifier.weight(1f)) {
                             SkeletonBox(Modifier.fillMaxWidth().aspectRatio(232f / 311f), 12.dp)
                             Spacer(Modifier.height(Sp.S8))
@@ -172,6 +175,7 @@ fun PosterGridSkeleton(rows: Int = 4, modifier: Modifier = Modifier, hPad: andro
                 }
             }
         }
+      }
     }
 }
 

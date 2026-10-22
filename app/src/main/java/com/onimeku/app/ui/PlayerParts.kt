@@ -201,7 +201,7 @@ internal fun PlayerSettingsSheet(
         ) {
             val shape = if (full) RoundedCornerShape(18.dp) else RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
             Column(
-                (if (full) Modifier.width(340.dp).padding(end = Sp.S16, bottom = Sp.S12) else Modifier.fillMaxWidth())
+                (if (full) Modifier.width(340.dp).padding(end = Sp.S16, bottom = Sp.S12) else Modifier.widthIn(max = 560.dp).fillMaxWidth())
                     .heightIn(max = if (full) 300.dp else 520.dp)
                     .clip(shape).background(Bg2).border(1.dp, Line, shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }

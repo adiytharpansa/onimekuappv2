@@ -259,7 +259,7 @@ private fun HomeContent(vm: AppVM) {
         while (true) { delay(30 * 60_000L); vm.refreshIfStale(30 * 60_000L) }
     }
     // Home hanya menampilkan 24 judul pertama (8 baris); sisanya lewat "Browse all" (daftar penuh + filter genre).
-    val gridCols = (LocalConfiguration.current.screenWidthDp / 140).coerceIn(3, 8)
+    val gridCols = (LocalConfiguration.current.screenWidthDp / 150).coerceIn(3, 10)
     // Genre terpilih menyaring grid di tempat (null = Semua).
     val homeGenre = vm.homeGenre
     val allRows = remember(Catalog.all, gridCols, homeGenre) {
@@ -1174,7 +1174,13 @@ fun SeeAllScreen(vm: AppVM, key: String) {
     val items = remember(key, ids, Catalog.all) { ids.mapNotNull { Catalog.byId[it] } }
     // Katalog belum tiba: kerangka grid, bukan daftar kosong "0 anime".
     if (Catalog.all.isEmpty() && Catalog.loading) {
-        Page { SubHead(title, vm); PosterGridSkeleton(4, Modifier.padding(top = Sp.S8), hPad = 0.dp) }
+        // Selaras dengan AnimeGrid (lebar maks. GridMaxW, margin responsif) supaya tidak "melompat" saat katalog tiba.
+        Box(Modifier.fillMaxSize().safeSides(), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.widthIn(max = GridMaxW).fillMaxWidth().padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Sp.S16)) {
+                Box(Modifier.padding(horizontal = pageSidePad())) { SubHead(title, vm) }
+                PosterGridSkeleton(4, Modifier.padding(top = Sp.S8), hPad = pageSidePad())
+            }
+        }
         return
     }
     AnimeGrid(items, vm) {

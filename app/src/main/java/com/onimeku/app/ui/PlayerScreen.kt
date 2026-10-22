@@ -1209,7 +1209,9 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             Modifier.fillMaxWidth().layout { m, c ->
                 // Tinggi: 16:9 saat portrait -> seluruh sisa layar saat fullscreen, diinterpolasi oleh fullA.
                 val w = c.maxWidth
-                val hVideo = (w * 9f / 16f)
+                // Tablet/jendela lebar non-fullscreen: tinggi video dibatasi 60% area agar panel episode & info
+                // di bawahnya tetap terlihat (video tetap 16:9 di tengah, sisi kosong hitam).
+                val hVideo = (w * 9f / 16f).coerceAtMost(if (c.hasBoundedHeight) c.maxHeight * 0.6f else Float.MAX_VALUE)
                 val hFull = if (c.hasBoundedHeight) c.maxHeight.toFloat() else hVideo
                 val h = (hVideo + (hFull - hVideo) * fullA).toInt().coerceAtLeast(0)
                 val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))

@@ -329,15 +329,19 @@ fun bottomContentPadding(): Dp =
 @Composable
 fun AnimeGrid(items: List<Anime>, vm: AppVM, header: @Composable () -> Unit) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(100.dp),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = Sp.S16, end = Sp.S16, top = top + Sp.S16, bottom = bottomContentPadding()),
-        horizontalArrangement = Arrangement.spacedBy(Sp.S12),
-        verticalArrangement = Arrangement.spacedBy(Sp.S16),
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
-        itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(motionGridItem()) { Tile(a, vm, i % 9) } }
+    val side = pageSidePad()
+    // Tablet: grid dipusatkan (maks. GridMaxW) dan sel poster lebih lebar, bukan makin banyak kolom mungil.
+    Box(Modifier.fillMaxSize().safeSides(), contentAlignment = Alignment.TopCenter) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(gridCellMin()),
+            modifier = Modifier.widthIn(max = GridMaxW).fillMaxSize(),
+            contentPadding = PaddingValues(start = side, end = side, top = top + Sp.S16, bottom = bottomContentPadding()),
+            horizontalArrangement = Arrangement.spacedBy(Sp.S12),
+            verticalArrangement = Arrangement.spacedBy(Sp.S16),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) { Column { header() } }
+            itemsIndexed(items, key = { _, it -> it.id }) { i, a -> Box(motionGridItem()) { Tile(a, vm, i % 9) } }
+        }
     }
 }
 
@@ -369,11 +373,16 @@ fun SectionHead(title: String, subtitle: String? = null, onAll: (() -> Unit)? = 
 @Composable
 fun Page(extraTop: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val side = pageSidePad()
+    // Kolom luar menggulir selebar layar (sentuhan di sisi kosong tablet tetap menggulir);
+    // kolom dalam dipusatkan dan dibatasi ContentMaxW supaya baris teks/form tidak melar di tablet.
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = Sp.S16, end = Sp.S16, top = top + extraTop, bottom = bottomContentPadding()),
-        content = content,
-    )
+        Modifier.fillMaxSize().safeSides().verticalScroll(rememberScrollState())
+            .padding(top = top + extraTop, bottom = bottomContentPadding()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Column(Modifier.widthIn(max = ContentMaxW).fillMaxWidth().padding(horizontal = side), content = content)
+    }
 }
 
 @Composable
