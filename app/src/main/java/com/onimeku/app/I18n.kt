@@ -242,6 +242,7 @@ object I18n {
         "dub_ja" to "Jepang",
         "dub_id" to "Indonesia",
         "dub_en" to "Inggris",
+        "dub_original" to "Asli",
         "dub_unavail" to "Dubbing %1\$s tidak tersedia · memakai %2\$s",
         "dub_selected" to "Dipilih",
         "sub_style" to "Gaya subtitle",
@@ -429,6 +430,7 @@ object I18n {
         "skip_fallback" to "Lewati %1\$d dtk",
         "sec_short" to "dtk",
         "auto_skip_t" to "Lewati intro otomatis",
+        "autoplay_next" to "Putar berikutnya otomatis",
         "auto_skip_d" to "Langsung melompati lagu pembuka bila episode punya penanda intro.",
     )
 }
