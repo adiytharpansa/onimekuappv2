@@ -20,6 +20,8 @@ val RedText = Color(0xFFE8566F)
 val LogoRed = Color(0xFFF20A17)
 val Line = Color(0xFF2A2D3B)
 val NavOff = Color(0xFF9EA4B8)
+// Teks genre/meta di bawah poster: lebih terang dari NavOff (kontras ~9:1 di atas Bg).
+val MetaText = Color(0xFFB8BDCF)
 // Emas untuk skor/rating (satu-satunya aksen hangat; jangan dipakai untuk tombol).
 val Gold = Color(0xFFFFC857)
 val Solid = Color(0xFF2B2E3B)

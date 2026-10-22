@@ -80,7 +80,17 @@ private fun PosterRow(title: String, ids: List<String>, vm: AppVM, seeAll: Strin
     if (items.isEmpty()) return
     Column(if (delayMs >= 0) Modifier.fadeSlideIn(delayMs) else Modifier) {
         Spacer(Modifier.height(SectionGap))
-        SectionHead(title, subtitle = subtitle, onAll = seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
+        // Satu judul saja: tanpa "See all" dan tanpa sisi kanan kosong; tampil sebagai kartu lanskap selebar layar.
+        val single = items.size == 1 && !ranked
+        SectionHead(title, subtitle = subtitle, onAll = if (single) null else seeAll?.let { key -> { vm.go(Route.SeeAll(key)) } })
+        if (single) {
+            val a = items[0]
+            Poster(
+                a, null, modifier = Modifier.padding(horizontal = Sp.S16), ep = true, badges = true,
+                meta = cleanTitle(a.title) to cardMeta(a).ifBlank { " " }, sharedKey = "row:$title:${a.id}",
+            ) { vm.go(Route.Detail(a.id)) }
+            return@Column
+        }
         Rail {
             itemsIndexed(items, key = { _, a -> a.id }) { i, a ->
                 PosterCard(a, railW, rank = if (ranked) i + 1 else null, sharedKey = "row:$title:${a.id}", index = i) { vm.go(Route.Detail(a.id)) }
@@ -220,6 +230,29 @@ private fun HomeContent(vm: AppVM) {
     }
     val fresh = Catalog.new
     val soon = Catalog.comingSoon.take(12)
+    // Rail yang isinya (>= 80%) sudah tampil di rail di atasnya disembunyikan, supaya Beranda tidak mengulang
+    // judul yang sama berkali-kali saat katalog masih kecil. Urutan = urutan tampil di layar.
+    val railLists = remember(Catalog.all) {
+        val shown = mutableListOf<Set<String>>(Catalog.top.toSet())
+        fun pick(ids: List<String>): List<String> {
+            val s = ids.toSet()
+            if (s.isEmpty()) return emptyList()
+            val dup = shown.any { prev -> s.count { it in prev }.toFloat() / s.size >= 0.8f }
+            if (dup) return emptyList()
+            shown += s
+            return ids
+        }
+        // "new" (episode terbaru) punya informasi sendiri (nomor episode), jadi selalu tampil tetapi ikut dicatat.
+        shown += Catalog.new.map { it.first }.toSet()
+        // Airing Now hanya berisi judul berstatus tayang (RELEASING). Selalu tampil bila ada isinya,
+        // walau juga ada di Top Hits; satu judul tampil sebagai kartu lanskap (lihat PosterRow).
+        val airingRail = Catalog.airing.take(12)
+        shown += airingRail.toSet()
+        listOf(
+            airingRail, pick(Catalog.popular.take(12)),
+            pick(Catalog.latest.take(12)), pick(Catalog.donghua.take(12)),
+        )
+    }
     // Beranda yang dibiarkan terbuka tetap segar: muat ulang katalog tiap 30 menit (judul yang baru rilis
     // keluar dari Coming Soon dan naik ke New Episode Releases). Saat aplikasi dibuka kembali, ON_RESUME sudah menyegarkan (>5 mnt).
     LaunchedEffect(Unit) {
@@ -355,10 +388,10 @@ private fun HomeContent(vm: AppVM) {
             }
         }
         // delayMs = -1: tanpa animasi masuk (baris di bawah layar tidak mengulang animasi saat digulir kembali).
-        item(key = "airing", contentType = "rail") { PosterRow(I18n.t("sec_airing", "Airing Now"), Catalog.airing.take(12), vm, seeAll = "airing", delayMs = 140) }
-        item(key = "popular", contentType = "rail") { PosterRow(I18n.t("sec_popular", "Popular"), Catalog.popular.take(12), vm, seeAll = "popular", delayMs = -1) }
-        item(key = "latest", contentType = "rail") { PosterRow(I18n.t("sec_latest", "Latest Releases"), Catalog.latest.take(12), vm, seeAll = "latest", delayMs = -1) }
-        item(key = "donghua", contentType = "rail") { PosterRow(I18n.t("sec_donghua", "Donghua"), Catalog.donghua.take(12), vm, seeAll = "donghua", delayMs = -1) }
+        item(key = "airing", contentType = "rail") { PosterRow(I18n.t("sec_airing", "Airing Now"), railLists[0], vm, seeAll = "airing", delayMs = 140) }
+        item(key = "popular", contentType = "rail") { PosterRow(I18n.t("sec_popular", "Popular"), railLists[1], vm, seeAll = "popular", delayMs = -1) }
+        item(key = "latest", contentType = "rail") { PosterRow(I18n.t("sec_latest", "Latest Releases"), railLists[2], vm, seeAll = "latest", delayMs = -1) }
+        item(key = "donghua", contentType = "rail") { PosterRow(I18n.t("sec_donghua", "Donghua"), railLists[3], vm, seeAll = "donghua", delayMs = -1) }
         // All Anime: seluruh katalog langsung tampil sebagai grid 3 kolom (dipecah per baris agar tetap lazy).
         item(key = "all-head", contentType = "all-head") {
             Column {

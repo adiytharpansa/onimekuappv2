@@ -190,11 +190,11 @@ fun ScoreBadge(score: String, modifier: Modifier = Modifier, small: Boolean = fa
     val sh = RoundedCornerShape(8.dp)
     Row(
         modifier.clip(sh).background(Color(0xB30A0B10)).border(0.5.dp, Color(0x33FFFFFF), sh)
-            .padding(horizontal = Sp.S8, vertical = Sp.S4),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S4),
+            .padding(horizontal = Sp.S8, vertical = Sp.S2),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S2),
     ) {
-        Icon(Icons.Filled.Star, null, Modifier.size(if (small) 11.dp else 13.dp), tint = Gold)
-        Text(score.replace("★", "").trim(), fontSize = if (small) Ty.Micro else Ty.Caption, fontWeight = FontWeight.Bold, color = Color.White)
+        Icon(Icons.Filled.Star, null, Modifier.size(if (small) 10.dp else 12.dp), tint = Gold)
+        Text(score.replace("★", "").trim(), fontSize = Ty.Micro, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
 
@@ -244,10 +244,10 @@ fun Poster(
         LoadedImage(img, a.title, Modifier.fillMaxSize(), pending = !a.poster.isNullOrBlank())
         if (badges) {
             val rt = a.rating
-            if (rt != null) ScoreBadge(rt, Modifier.align(Alignment.TopStart).padding(if (compact) Sp.S8 else Sp.S12), small = compact)
-            else if (a.status == "Airing") LiveBadge(Modifier.align(Alignment.TopStart).padding(if (compact) Sp.S8 else Sp.S12), small = compact)
+            if (rt != null) ScoreBadge(rt, Modifier.align(Alignment.TopStart).padding(Sp.S8), small = compact)
+            else if (a.status == "Airing") LiveBadge(Modifier.align(Alignment.TopStart).padding(Sp.S8), small = compact)
             if (a.hd || newBadge) Column(
-                Modifier.align(Alignment.TopEnd).padding(if (compact) Sp.S8 else Sp.S12),
+                Modifier.align(Alignment.TopEnd).padding(Sp.S8),
                 horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Sp.S4),
             ) {
                 if (newBadge) Tag(I18n.t("badge_new", "NEW"), Gold, Bg, small = true)
@@ -255,21 +255,23 @@ fun Poster(
             }
         }
         if (rank != null) {
-            val big = 60.sp
-            Box(Modifier.align(Alignment.BottomStart).padding(start = Sp.S12, bottom = Sp.S2).popIn(120 + rank * 70)) {
+            val big = 44.sp
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(72.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB30A0B10)))))
+            Box(Modifier.align(Alignment.BottomStart).padding(start = Sp.S8, bottom = Sp.S2).popIn(120 + rank * 70)) {
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Bg,
-                    style = TextStyle(drawStyle = Stroke(width = 14f)), lineHeight = big)
+                    style = TextStyle(drawStyle = Stroke(width = 10f)), lineHeight = big)
                 Text("$rank", fontSize = big, fontWeight = FontWeight.Bold, color = Color.White, lineHeight = big)
             }
         }
         if (meta != null) {
             Column(
                 Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD90A0B10))))
-                    .padding(start = Sp.S12, end = Sp.S12, top = Sp.S24, bottom = Sp.S12),
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB30A0B10), Color(0xF20A0B10))))
+                    .padding(start = Sp.S12, end = Sp.S12, top = Sp.S32, bottom = if (progress != null) Sp.S12 else Sp.S8),
             ) {
-                Text(meta.first, fontWeight = FontWeight.SemiBold, fontSize = Ty.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(meta.second, fontSize = Ty.Small, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta.first, fontWeight = FontWeight.SemiBold, fontSize = if (ep) Ty.Body else Ty.Small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta.second, fontSize = Ty.Caption, fontWeight = FontWeight.Medium, color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (playIcon) {
@@ -294,7 +296,7 @@ fun PosterCard(a: Anime, w: Dp, rank: Int? = null, sharedKey: String? = null, in
         Text(cleanTitle(a.title), Modifier.padding(top = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.Medium, lineHeight = 17.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
         // Baris meta selalu memesan tinggi: struktur kartu rail = kartu grid (judul 2 baris + meta 1 baris).
-        Text(cardMeta(a).ifBlank { " " }, Modifier.padding(top = Sp.S2), fontSize = Ty.Caption, color = NavOff,
+        Text(cardMeta(a).ifBlank { " " }, Modifier.padding(top = Sp.S2), fontSize = Ty.Caption, color = MetaText,
             minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -307,7 +309,7 @@ fun Tile(a: Anime, vm: AppVM, index: Int = 0) {
         Text(cleanTitle(a.title), Modifier.padding(top = Sp.S8), fontSize = Ty.Caption, fontWeight = FontWeight.Medium, lineHeight = 15.sp,
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
         // Baris meta selalu memesan tinggi (genre, atau cadangan tahun · eps) supaya kartu di satu baris grid sama tinggi.
-        Text(cardMeta(a).ifBlank { " " }, fontSize = Ty.Micro, color = NavOff, modifier = Modifier.padding(top = Sp.S2),
+        Text(cardMeta(a).ifBlank { " " }, fontSize = Ty.Micro, color = MetaText, modifier = Modifier.padding(top = Sp.S2),
             minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -317,7 +319,7 @@ val TabBarHeight: Dp = 68.dp
 
 @Composable
 fun bottomContentPadding(): Dp =
-    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + TabBarHeight + 16.dp
+    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + TabBarHeight + 24.dp
 
 /**
  * Grid anime berbasis LazyVerticalGrid: hanya sel yang terlihat yang digambar,
