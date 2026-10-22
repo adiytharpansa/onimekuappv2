@@ -21,7 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -118,7 +118,7 @@ fun LazyListScope.commentsSection(vm: AppVM, animeId: String, ui: CommentsUi) {
                 Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(32.dp), tint = NavOff)
+                Icon(AppIcons.Message, null, Modifier.size(32.dp), tint = NavOff)
                 Text(I18n.t("comment_empty_t", "No comments yet"), Modifier.padding(top = 10.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(I18n.t("comment_empty_s", "Be the first to share what you think."), Modifier.padding(top = 3.dp),
                     fontSize = 13.sp, color = NavOff, textAlign = TextAlign.Center)
@@ -161,7 +161,7 @@ private fun CommentComposer(vm: AppVM, animeId: String, ui: CommentsUi) {
                     .clickable { vm.go(Route.Auth(false)) }.padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Outlined.Lock, null, Modifier.size(16.dp), tint = NavOff)
+                Icon(AppIcons.Lock, null, Modifier.size(16.dp), tint = NavOff)
                 Text(I18n.t("sign_in_to_comment", "Sign in to comment"), fontSize = 14.sp, color = NavOff)
             }
             return@Row
@@ -223,7 +223,7 @@ private fun CommentItem(c: CommentRow, mine: Boolean, onDelete: () -> Unit) {
                 if (mine) Box(
                     Modifier.size(28.dp).clip(CircleShape).clickable(onClick = onDelete),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Outlined.DeleteOutline, I18n.t("comment_delete", "Delete"), Modifier.size(17.dp), tint = NavOff) }
+                ) { Icon(AppIcons.Trash, I18n.t("comment_delete", "Delete"), Modifier.size(17.dp), tint = NavOff) }
             }
             Text(c.body, Modifier.padding(top = 4.dp), fontSize = 14.sp, color = InkSoft, lineHeight = 21.sp)
         }

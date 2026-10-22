@@ -250,7 +250,7 @@ private fun EpisodeCard(s: Slot, next: Boolean, reminded: Boolean, nowSec: Long,
             }
         }
         IconChip(
-            if (reminded) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone,
+            if (reminded) Icons.Filled.NotificationsActive else AppIcons.Bell,
             if (reminded) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), reminded, onBell,
         )
     }
@@ -281,7 +281,7 @@ private fun ListFilter(on: Boolean, onClick: () -> Unit) {
             .pressable(onClick).padding(horizontal = 13.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(if (on) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder, null, Modifier.size(16.dp), tint = if (on) Color.White else NavOff)
+        Icon(if (on) Icons.Filled.Bookmark else AppIcons.Bookmark, null, Modifier.size(16.dp), tint = if (on) Color.White else NavOff)
         Text("My List", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.White else TimeInk)
     }
 }

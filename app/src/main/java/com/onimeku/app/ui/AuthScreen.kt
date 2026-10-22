@@ -61,7 +61,7 @@ private fun AuthField(
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone() }, onNext = { }),
             )
             if (password) Box(Modifier.size(40.dp).clip(CircleShape).clickable { show = !show }, contentAlignment = Alignment.Center) {
-                Icon(if (show) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (show) "Hide password" else "Show password",
+                Icon(if (show) AppIcons.EyeOff else AppIcons.Eye, if (show) "Hide password" else "Show password",
                     Modifier.size(20.dp), tint = NavOff)
             }
         }

@@ -1579,8 +1579,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         val onList = r.id in vm.p.myList
                         ActionTile(Icons.Filled.Add, if (onList) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
                             Modifier.weight(1f), on = onList, iconOn = Icons.Filled.Check) { vm.toggleML(r.id) }
-                        if (!offline) ActionTile(Icons.Filled.Download, I18n.t("download", "Download"), Modifier.weight(1f)) { vm.download(r.id, r.ep) }
-                        ActionTile(Icons.Filled.Share, I18n.t("share", "Share"), Modifier.weight(1f)) {
+                        if (!offline) ActionTile(AppIcons.Download, I18n.t("download", "Download"), Modifier.weight(1f)) { vm.download(r.id, r.ep) }
+                        ActionTile(AppIcons.Share, I18n.t("share", "Share"), Modifier.weight(1f)) {
                             val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/${r.id}")

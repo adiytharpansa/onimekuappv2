@@ -174,10 +174,10 @@ fun VoiceSearchSheet(onApply: (String) -> Unit, onType: () -> Unit, onDismiss: (
                     Text(s.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                     Text(s.body, Modifier.padding(top = 6.dp), fontSize = 13.sp, lineHeight = 19.sp, color = NavOff, textAlign = TextAlign.Center)
                     Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        VButton(I18n.t("voice_type", "Type"), Icons.Outlined.Keyboard, primary = false, Modifier.weight(1f), onType)
+                        VButton(I18n.t("voice_type", "Type"), AppIcons.Keyboard, primary = false, Modifier.weight(1f), onType)
                         if (s.needsPermission) VButton(I18n.t("voice_settings", "Open settings"), null, primary = true, Modifier.weight(1f)) {
                             ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
-                        } else VButton(I18n.t("retry", "Retry"), Icons.Outlined.Refresh, primary = true, Modifier.weight(1f)) { attempt++ }
+                        } else VButton(I18n.t("retry", "Retry"), AppIcons.Refresh, primary = true, Modifier.weight(1f)) { attempt++ }
                     }
                 }
                 is VState.Done -> {

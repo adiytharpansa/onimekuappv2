@@ -69,17 +69,17 @@ fun QuickMenuSheet(vm: AppVM, id: String) {
             HLine()
             row(if (inList) Icons.Filled.Check else Icons.Filled.Add,
                 if (inList) I18n.t("qm_in_list", "Remove from My List") else I18n.t("qm_add_list", "Add to My List"), on = inList) { vm.toggleML(id) }
-            if (canRemind) row(if (reminded) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone,
+            if (canRemind) row(if (reminded) Icons.Filled.NotificationsActive else AppIcons.Bell,
                 if (reminded) I18n.t("qm_unremind", "Remove reminder") else I18n.t("qm_remind", "Remind me"), on = reminded) { vm.toggleRemind(id, ensure) }
-            if (canDownload) row(Icons.Outlined.Download, "${I18n.t("qm_download", "Download episode")} $firstEp") { vm.download(id, firstEp) }
-            row(Icons.Outlined.Share, I18n.t("share", "Share")) {
+            if (canDownload) row(AppIcons.Download, "${I18n.t("qm_download", "Download episode")} $firstEp") { vm.download(id, firstEp) }
+            row(AppIcons.Share, I18n.t("share", "Share")) {
                 val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${a.title} on Onimeku: onimeku://anime/$id")
                 }
                 ctx.startActivity(android.content.Intent.createChooser(send, I18n.t("share", "Share")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            row(Icons.Outlined.Info, I18n.t("qm_details", "Open details")) { vm.go(Route.Detail(id)) }
+            row(AppIcons.Info, I18n.t("qm_details", "Open details")) { vm.go(Route.Detail(id)) }
         }
     }
 }

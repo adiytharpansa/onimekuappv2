@@ -54,7 +54,7 @@ fun ProfileScreen(vm: AppVM) {
         ) {
             Box(Modifier.size(68.dp).clip(CircleShape).background(if (acc != null) Red else Color(0x26FFFFFF)).border(2.dp, if (acc != null) RedText else Line, CircleShape), contentAlignment = Alignment.Center) {
                 if (acc != null) Text(acc.email.take(1).uppercase(), fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                else Icon(Icons.Outlined.Person, null, Modifier.size(34.dp), tint = InkSoft)
+                else Icon(AppIcons.User, null, Modifier.size(34.dp), tint = InkSoft)
             }
             Column(Modifier.weight(1f)) {
                 Text(if (acc != null) "Signed in" else "Guest", fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
@@ -93,7 +93,7 @@ fun ProfileScreen(vm: AppVM) {
                     Text(pr.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     if (sel) Icon(Icons.Filled.Check, "Active", Modifier.size(20.dp), tint = RedText)
                 }
-                if (vm.s.profiles.size > 1 && !sel) IconChip(Icons.Outlined.Delete, "Delete profile") { vm.delProfile(i) }
+                if (vm.s.profiles.size > 1 && !sel) IconChip(AppIcons.Trash, "Delete profile") { vm.delProfile(i) }
             }
         }
         if (vm.s.profiles.size < 4) {
@@ -139,7 +139,7 @@ fun ProfileScreen(vm: AppVM) {
             Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Downloads) }.padding(horizontal = 18.dp, vertical = 17.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.size(34.dp).clip(CircleShape).background(Red.copy(alpha = 0.28f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.Download, null, Modifier.size(18.dp), tint = RedText)
+                    Icon(AppIcons.Download, null, Modifier.size(18.dp), tint = RedText)
                 }
                 Column(Modifier.weight(1f).padding(start = 2.dp)) {
                     Text(I18n.t("tab_download", "Download"), fontSize = 16.sp, fontWeight = FontWeight.Medium)
@@ -158,7 +158,7 @@ fun ProfileScreen(vm: AppVM) {
                 Row(Modifier.fillMaxWidth().clickable { vm.go(Route.Sub(k)) }.padding(horizontal = 18.dp, vertical = 17.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x14FFFFFF)), contentAlignment = Alignment.Center) {
-                        Icon(when (k) { "settings" -> Icons.Outlined.Settings; "language" -> Icons.Outlined.Language; "help" -> Icons.Outlined.HelpOutline; else -> Icons.Outlined.Info }, null, Modifier.size(18.dp), tint = InkSoft)
+                        Icon(when (k) { "settings" -> AppIcons.Settings; "language" -> AppIcons.Globe; "help" -> AppIcons.Help; else -> AppIcons.Info }, null, Modifier.size(18.dp), tint = InkSoft)
                     }
                     Text(label, Modifier.weight(1f).padding(start = 2.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     if (k == "language") Text(if (vm.s.settings.lang == "id") "Bahasa Indonesia" else "English", color = NavOff, fontSize = 14.sp)

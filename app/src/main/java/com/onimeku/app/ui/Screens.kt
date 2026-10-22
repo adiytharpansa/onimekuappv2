@@ -114,7 +114,7 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boo
             Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(8.dp)).background(Red).padding(horizontal = 9.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Icon(Icons.Outlined.Schedule, null, Modifier.size(12.dp), tint = Color.White)
+            Icon(AppIcons.Clock, null, Modifier.size(12.dp), tint = Color.White)
             Text(I18n.t("coming_badge", "COMING SOON"), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = Color.White, maxLines = 1, softWrap = false)
         }
         if (a.year > 0) Text(
@@ -129,7 +129,7 @@ private fun ComingSoonCard(a: Anime, w: androidx.compose.ui.unit.Dp, remind: Boo
                 .clickable(onClick = onRemind),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (remind) Icons.Filled.NotificationsActive else Icons.Outlined.NotificationsNone,
+            Icon(if (remind) Icons.Filled.NotificationsActive else AppIcons.Bell,
                 if (remind) I18n.t("reminder_on", "Reminder on") else I18n.t("remind_me", "Remind me"), Modifier.size(20.dp), tint = Color.White)
         }
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 14.dp, end = 64.dp, bottom = 12.dp)) {
@@ -280,7 +280,7 @@ private fun HomeContent(vm: AppVM) {
         item(key = "hero", contentType = "hero") { Hero(vm, heroH) { stretch } }
         item(key = "surprise", contentType = "surprise") {
             Row(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip(I18n.t("surprise", "Surprise me"), icon = Icons.Outlined.Casino) { vm.surprise() }
+                Chip(I18n.t("surprise", "Surprise me"), icon = AppIcons.Dice) { vm.surprise() }
             }
         }
 
@@ -648,13 +648,13 @@ fun MyListScreen(vm: AppVM) {
             // Ajakan di tengah (tanpa kartu berbingkai) + rekomendasi supaya layar tidak kosong.
             Column(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.BookmarkBorder, null, Modifier.size(28.dp), tint = RedText)
+                    Icon(AppIcons.Bookmark, null, Modifier.size(28.dp), tint = RedText)
                 }
                 Text(I18n.t("mylist_empty_t", "Your list is empty"), Modifier.padding(top = 12.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(I18n.t("mylist_empty_b", "Tap + on any anime to save it here."), Modifier.padding(top = 6.dp, start = 16.dp, end = 16.dp), fontSize = 13.sp, color = InkSoft, textAlign = TextAlign.Center)
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play, height = 42.dp) { vm.setTab(Route.Home) }
-                    Chip(I18n.t("surprise", "Surprise me"), icon = Icons.Outlined.Casino) { vm.surprise() }
+                    Chip(I18n.t("surprise", "Surprise me"), icon = AppIcons.Dice) { vm.surprise() }
                 }
             }
             val recs = Catalog.top.take(10).mapNotNull { Catalog.byId[it] }
@@ -707,7 +707,7 @@ fun DownloadsScreen(vm: AppVM) = Page {
     if (d.isEmpty()) EmptyBox(I18n.t("dl_none_t", "No downloads yet"), I18n.t("dl_none_b", "Open an anime and tap the download icon on an episode to watch it offline.")) { Btn(I18n.t("browse_anime", "Browse anime"), BtnStyle.Play) { vm.setTab(Route.Home) } }
     else {
         Text("${d.size} ${I18n.t("n_episodes_unit", "episode")}${if (d.size > 1 && I18n.lang != "id") "s" else ""}", color = InkSoft, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-        Box(Modifier.padding(bottom = 12.dp)) { Chip(I18n.t("delete_all", "Delete all"), icon = Icons.Outlined.Delete) { vm.removeAllDl() } }
+        Box(Modifier.padding(bottom = 12.dp)) { Chip(I18n.t("delete_all", "Delete all"), icon = AppIcons.Trash) { vm.removeAllDl() } }
         d.forEachIndexed { idx, x ->
             val a = Catalog.byId[x.id] ?: return@forEachIndexed
             val pct = vm.downloading["${x.id}:${x.ep}"]
@@ -715,7 +715,7 @@ fun DownloadsScreen(vm: AppVM) = Page {
                 ItemRow(a, "Ep ${x.ep}", a.title,
                     if (pct != null) "${I18n.t("downloading", "Downloading…")} $pct%" else "Episode ${x.ep} · ${I18n.t("saved_offline", "Saved offline")}",
                     onOpen = { vm.go(Route.Player(x.id, x.ep)) }) {
-                    IconChip(Icons.Outlined.Delete, I18n.t("remove_dl", "Remove download")) { vm.removeDl(x.id, x.ep) }
+                    IconChip(AppIcons.Trash, I18n.t("remove_dl", "Remove download")) { vm.removeDl(x.id, x.ep) }
                 }
                 if (pct != null) {
                     val animPct by animateFloatAsState(pct / 100f, tween(300), label = "dlBar")
@@ -1014,8 +1014,8 @@ fun DetailScreen(vm: AppVM, id: String) {
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ActionTile(Icons.Filled.Add, if (on) I18n.t("added", "Added") else I18n.t("my_list", "My List"),
                             Modifier.weight(1f), on = on, iconOn = Icons.Filled.Check) { vm.toggleML(id) }
-                        ActionTile(Icons.Outlined.Download, I18n.t("download_all", "Download all"), Modifier.weight(1f)) { vm.downloadAll(id) }
-                        ActionTile(Icons.Outlined.Share, I18n.t("share", "Share"), Modifier.weight(1f)) { share() }
+                        ActionTile(AppIcons.Download, I18n.t("download_all", "Download all"), Modifier.weight(1f)) { vm.downloadAll(id) }
+                        ActionTile(AppIcons.Share, I18n.t("share", "Share"), Modifier.weight(1f)) { share() }
                     }
                 }
             }
@@ -1080,7 +1080,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                     when {
                         pct != null -> DownloadRing(pct) { vm.download(id, n) }
                         dl -> IconChip(Icons.Filled.Check, I18n.t("saved_offline", "Saved offline"), on = true) { vm.download(id, n) }
-                        else -> IconChip(Icons.Outlined.Download, "${I18n.t("download_ep", "Download episode")} $n") { vm.download(id, n) }
+                        else -> IconChip(AppIcons.Download, "${I18n.t("download_ep", "Download episode")} $n") { vm.download(id, n) }
                     }
                 }
                 }
@@ -1120,7 +1120,7 @@ fun DetailScreen(vm: AppVM, id: String) {
                 GlassButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { vm.back() }
                 Text(a.title, Modifier.weight(1f).graphicsLayer { alpha = barA }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                GlassButton(if (on) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder, if (on) "Remove from My List" else "Add to My List") { vm.toggleML(id) }
+                GlassButton(if (on) Icons.Filled.Bookmark else AppIcons.Bookmark, if (on) "Remove from My List" else "Add to My List") { vm.toggleML(id) }
             }
         }
     }
@@ -1268,7 +1268,7 @@ fun SearchScreen(vm: AppVM) {
         else Text(I18n.t("search", "Search"), Modifier.padding(bottom = 12.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
         Row(Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(18.dp)).background(Bg2).border(1.dp, if (q.isNotEmpty()) Red.copy(alpha = 0.7f) else Line, RoundedCornerShape(18.dp)).padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Outlined.Search, null, Modifier.size(22.dp), tint = if (q.isNotEmpty()) RedText else NavOff)
+            Icon(AppIcons.Search, null, Modifier.size(22.dp), tint = if (q.isNotEmpty()) RedText else NavOff)
             BasicTextField(q, { q = it }, Modifier.weight(1f).focusRequester(fr), singleLine = true,
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -1303,12 +1303,12 @@ fun SearchScreen(vm: AppVM) {
             if (vm.s.hist.isEmpty()) {
                 // Ajakan singkat (bukan kartu berbingkai bertanda "kosong"): ikon pencarian + dua baris teks.
                 Column(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.Search, null, Modifier.size(30.dp), tint = RedText)
+                    Icon(AppIcons.Search, null, Modifier.size(30.dp), tint = RedText)
                     Text(I18n.t("find_next_t", "Find your next anime"), Modifier.padding(top = 8.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     Text(I18n.t("find_next_b", "Search a title or genre, or pick filters above."), Modifier.padding(top = 4.dp), fontSize = 13.sp, color = InkSoft, textAlign = TextAlign.Center)
                 }
             } else {
-                heading(I18n.t("recent_searches", "Recent searches"), Icons.Outlined.History, top = 14.dp)
+                heading(I18n.t("recent_searches", "Recent searches"), AppIcons.History, top = 14.dp)
                 FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     vm.s.hist.forEach { h -> Chip(h) { q = h } }
                     Chip(I18n.t("clear_hist", "Clear history")) { vm.clearHist() }
@@ -1316,7 +1316,7 @@ fun SearchScreen(vm: AppVM) {
             }
             val trend = Catalog.top.take(8).mapNotNull { Catalog.byId[it] }
             if (trend.isNotEmpty()) {
-                heading(I18n.t("trending_now", "Trending now"), Icons.Outlined.LocalFireDepartment)
+                heading(I18n.t("trending_now", "Trending now"), AppIcons.Flame)
                 trend.forEachIndexed { i, t ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
                     Row(

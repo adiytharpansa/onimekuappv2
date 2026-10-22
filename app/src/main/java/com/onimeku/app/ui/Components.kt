@@ -388,7 +388,7 @@ fun EmptyBox(title: String, text: String, action: (@Composable () -> Unit)? = nu
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.padding(bottom = 14.dp).size(56.dp).clip(CircleShape).background(Color(0x26A6122D)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Inbox, null, Modifier.size(28.dp), tint = RedText)
+            Icon(AppIcons.Inbox, null, Modifier.size(28.dp), tint = RedText)
         }
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Text(text, color = InkSoft, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp))

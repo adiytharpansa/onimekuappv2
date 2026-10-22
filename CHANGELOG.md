@@ -1,3 +1,13 @@
+# v1.0.0-debug.67 (belum dikompilasi): Ikon garis seragam
+**Belum dikompilasi/dijalankan.** Jalankan `gradle :app:assembleDebug` dulu.
+- `ui/AppIcons.kt` baru: ikon garis (kisi 24, garis bulat 1,9 — sama dengan `NavGlyph`) untuk Download, Share, Trash, Search, Info, Help, Lock, User, History, Clock, Globe, Message, Flame, Bell, Bookmark, Refresh, Eye/EyeOff, Settings, Inbox, Keyboard, Dice.
+- Semua `Icons.Outlined.*` di layar non-pemutar diganti `AppIcons.*` (Beranda, Detail, Profil, Auth, Kalender, Komentar, Suara, menu tekan-lama, lembar pemutar). Ikon terisi dan kontrol pemutar tetap Material Filled.
+- Ikon pintasan (Lanjutkan/Cari): latar #14161F + cincin merah tema + glif putih bergaris, senada ikon "O". Ikon notifikasi: lonceng garis.
+- Rollback cepat: hapus `AppIcons.kt` tidak cukup; kembalikan dari `debug.66`.
+
+# v1.0.0-debug.66 (belum dikompilasi): Audit ikon
+- Ikon Download/Share di lembar pemutar kini Outlined, sama dengan layar Detail dan menu tekan-lama (`PlayerScreen.kt`); ikon hapus komentar memakai `Outlined.Delete` seperti tempat lain (`CommentsUI.kt`). Ikon kontrol pemutar (Filled) sengaja dibiarkan.
+
 # v1.0.0-debug.65 (belum dikompilasi): Stream macet
 **Belum dikompilasi/dijalankan.** Perubahan di `ui/PlayerScreen.kt`.
 - Pengawas macet baru: setelah video pernah tampil, buffering terus-menerus 12 dtk -> minta ulang segmen di posisi yang sama; 15 dtk lagi -> turunkan kualitas satu tingkat (hanya sesi ini) + `prepare()` ulang; maks 3 siklus per kemacetan. Dicatat ke CrashLog ("player ... macet").
