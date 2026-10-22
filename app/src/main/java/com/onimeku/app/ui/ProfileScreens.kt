@@ -187,8 +187,6 @@ private fun SwitchRow(title: String, desc: String, checked: Boolean, onChange: (
     }
 }
 
-}
-
 @Composable
 fun SubScreen(vm: AppVM, key: String) {
     val ensure = LocalEnsureNotif.current
