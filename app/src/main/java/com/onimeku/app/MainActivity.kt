@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
                 val q = android.net.Uri.parse("onimeku://x?" + (d.encodedFragment ?: d.encodedQuery ?: ""))
                 val at = q.getQueryParameter("access_token")
                 if (!at.isNullOrBlank()) vm.finishSocial(at, q.getQueryParameter("refresh_token").orEmpty())
-                else vm.authError = q.getQueryParameter("error_description") ?: "Sign in was cancelled."
+                else vm.authError = q.getQueryParameter("error_description") ?: I18n.t("signin_cancelled", "Sign in was cancelled.")
             }
         }
     }
@@ -335,7 +335,7 @@ fun App(vm: AppVM) {
                 enter = fadeIn(tween(200)) + slideInVertically(tween(250)) { it },
                 exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it },
             ) {
-                Text("You're offline · downloads still work", Modifier.fillMaxWidth().background(RedDeep).padding(vertical = 6.dp),
+                Text(I18n.t("offline_bar", "You're offline · downloads still work"), Modifier.fillMaxWidth().background(RedDeep).padding(vertical = 6.dp),
                     color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
             val bottom = (if (vm.route is Route.Player || vm.route is Route.Auth || vm.welcomeOpen) 24.dp else TabBarHeight + 12.dp) + (if (offlineBar) 30.dp else 0.dp)

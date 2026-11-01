@@ -19,7 +19,7 @@ object Notifier {
         ) return
         val nm = ctx.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CH) == null) {
-            nm.createNotificationChannel(NotificationChannel(CH, "Episode alerts", NotificationManager.IMPORTANCE_DEFAULT))
+            nm.createNotificationChannel(NotificationChannel(CH, I18n.t("notif_channel", "Episode alerts"), NotificationManager.IMPORTANCE_DEFAULT))
         }
         val pi = PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(ctx, CH)

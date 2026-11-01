@@ -87,12 +87,18 @@ object Sync {
         return order to pruned
     }
 
-    /** Gabungkan profil lokal dengan profil jarak jauh (cocok per nama, maks 4 profil). */
+    /**
+     * Gabungkan profil lokal dengan profil jarak jauh (cocok per nama, maks 4 profil).
+     * Pencocokan nama TANPA beda huruf besar/kecil: server bisa menyimpan "kid" sementara
+     * perangkat ini "Kid" (nama dibuat sebelum aturan kembar diterapkan, atau dibuat di
+     * perangkat lain); dengan pencocokan persis, keduanya jadi dua profil terpisah dan
+     * penggabungan menggandakan daftar. Nama yang dipakai tetap nama lokal.
+     */
     fun merge(local: List<Profile>, remote: List<Profile>, gone: Collection<String> = emptyList()): List<Profile> {
         val goneKeys = gone.map { it.lowercase() }.toSet()
-        val byName = remote.associateBy { it.name }
+        val byName = remote.associateBy { it.name.lowercase() }
         val merged = local.map { l ->
-            val r = byName[l.name] ?: return@map l
+            val r = byName[l.name.lowercase()] ?: return@map l
             val (seen, seenTs) = mergeStamped(l.seen, l.seenTs, r.seen, r.seenTs)
             val (myList, myListTs) = mergeStamped(l.myList, l.myListTs, r.myList, r.myListTs)
             val seenSet = seen.toHashSet()
@@ -108,7 +114,7 @@ object Sync {
                 last = l.last ?: r.last, base = l.base ?: r.base,
             )
         }
-        val extra = remote.filter { r -> local.none { it.name == r.name } && r.name.lowercase() !in goneKeys }
+        val extra = remote.filter { r -> local.none { it.name.equals(r.name, ignoreCase = true) } && r.name.lowercase() !in goneKeys }
         return (merged + extra).take(4)
     }
 }

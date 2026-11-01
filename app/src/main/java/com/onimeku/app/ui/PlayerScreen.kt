@@ -1507,7 +1507,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             if (locked && showUi) {
                 Box(Modifier.align(Alignment.CenterStart).then(cutPad).padding(start = Sp.S16).size(48.dp).clip(CircleShape).background(Color(0x99000000))
                     .clickable { locked = false; uiTick++ }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.LockOpen, "Unlock controls")
+                    Icon(Icons.Filled.LockOpen, I18n.t("ctl_unlock", "Unlock controls"))
                 }
             }
             if (dtSide != 0) {
@@ -1631,25 +1631,25 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     val rf = 0f
                     Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S16)) {
                         if (hasPrev) Box(Modifier.size(44.dp).clip(CircleShape).pressable { step(-1); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.SkipPrevious, "Previous episode", Modifier.size(30.dp), tint = Color.White)
+                            Icon(Icons.Filled.SkipPrevious, I18n.t("ctl_prev", "Previous episode"), Modifier.size(30.dp), tint = Color.White)
                         } else Spacer(Modifier.size(44.dp))
                         Box(Modifier.size(52.dp).clip(CircleShape).pressable { rotB -= 360f; seekBy(-10_000); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Replay10, "Back 10 seconds", Modifier.size(34.dp).graphicsLayer { rotationZ = rb }, tint = Color.White)
+                            Icon(Icons.Filled.Replay10, I18n.t("ctl_back10", "Back 10 seconds"), Modifier.size(34.dp).graphicsLayer { rotationZ = rb }, tint = Color.White)
                         }
                         Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
                             if (buffering) {
                                 BufferingRing(ringSize = 52.dp, stroke = 3.5.dp)
                             } else {
                                 Box(Modifier.fillMaxSize().clip(CircleShape).pressable { player.playWhenReady = !player.playWhenReady; uiTick++ }, contentAlignment = Alignment.Center) {
-                                    MorphIcon(wantPlay, Icons.Filled.Pause, Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", 56.dp, Color.White)
+                                    MorphIcon(wantPlay, Icons.Filled.Pause, Icons.Filled.PlayArrow, if (wantPlay) I18n.t("pause", "Pause") else I18n.t("play", "Play"), 56.dp, Color.White)
                                 }
                             }
                         }
                         Box(Modifier.size(52.dp).clip(CircleShape).pressable { rotF += 360f; seekBy(10_000); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Forward10, "Forward 10 seconds", Modifier.size(34.dp).graphicsLayer { rotationZ = rf }, tint = Color.White)
+                            Icon(Icons.Filled.Forward10, I18n.t("ctl_fwd10", "Forward 10 seconds"), Modifier.size(34.dp).graphicsLayer { rotationZ = rf }, tint = Color.White)
                         }
                         if (hasNext) Box(Modifier.size(44.dp).clip(CircleShape).pressable { step(1); uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.SkipNext, "Next episode", Modifier.size(30.dp), tint = Color.White)
+                            Icon(Icons.Filled.SkipNext, I18n.t("ctl_next", "Next episode"), Modifier.size(30.dp), tint = Color.White)
                         } else Spacer(Modifier.size(44.dp))
                     }
                 }
@@ -1663,7 +1663,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             Icon(Icons.Filled.AspectRatio, I18n.t("fit_fill", "Fit / fill"), tint = Color.White)
                         }
                         Box(Modifier.size(48.dp).clip(CircleShape).clickable { full = !full; fullByRot = false; uiTick++ }, contentAlignment = Alignment.Center) {
-                            Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) "Exit fullscreen" else "Fullscreen", tint = Color.White)
+                            Icon(if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (full) I18n.t("ctl_exit_full", "Exit fullscreen") else I18n.t("ctl_fullscreen", "Fullscreen"), tint = Color.White)
                         }
                     }
                     SeekBarLive(

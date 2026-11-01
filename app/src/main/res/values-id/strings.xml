@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Onimeku</string>
+    <string name="dl_channel_name">Unduhan</string>
+    <string name="dl_channel_desc">Progres unduhan episode</string>
+    <string name="widget_label">LANJUT MENONTON</string>
+    <string name="widget_description">Lanjutkan episode terakhirmu langsung dari layar utama</string>
+    <string name="shortcut_continue">Lanjut</string>
+    <string name="shortcut_continue_long">Lanjut menonton</string>
+    <string name="shortcut_search">Cari</string>
+    <string name="shortcut_search_long">Cari anime</string>
+    <string name="playback_channel_name">Pemutaran</string>
+</resources>

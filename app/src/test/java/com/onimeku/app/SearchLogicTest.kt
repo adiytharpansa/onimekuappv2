@@ -38,4 +38,19 @@ class SearchLogicTest {
         assertEquals("5", ids("", sort = Sort.NEWEST).first())
         assertEquals("1", ids("", sort = Sort.TITLE).first())
     }
+
+    @Test fun queryAndFiltersCombine() {
+        assertEquals(listOf("2"), ids("blood", s = "Airing"))                       // kata + status
+        assertEquals(listOf("2"), ids("bleach", g = listOf("Action"), s = "Airing")) // kata + genre + status
+        assertEquals(emptyList<String>(), ids("blood", y = "2016"))                  // kata cocok, tahun tidak
+    }
+
+    @Test fun titleSortUsesNormalizedTitle() {
+        // "Re:Zero" urut sebagai "re zero" (di antara "pokemon" dan "titan"), bukan menurut tanda baca.
+        assertEquals(listOf("1", "2", "4", "3", "5"), ids("", sort = Sort.TITLE))
+    }
+
+    @Test fun ratingSortKeepsStableOrderForEqualScores() {
+        assertEquals(listOf("1", "2", "3", "4", "5"), ids("", sort = Sort.RATING))
+    }
 }

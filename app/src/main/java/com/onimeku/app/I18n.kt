@@ -465,5 +465,63 @@ object I18n {
         // --- pesan sinkronisasi akun ---
         "sync_relogin" to "Sesi berakhir. Masuk lagi agar sinkronisasi berjalan.",
         "sync_failed" to "Sinkronisasi tidak berjalan. Datamu tetap aman di perangkat ini.",
+        // --- sisa teks yang masih tertulis Inggris langsung (hasil audit 2 Nov 2026) ---
+        // Pencarian
+        "f_genre" to "Genre",
+        "f_status" to "Status",
+        // Notifikasi
+        "notif_off_t" to "Notifikasi episode baru nonaktif.",
+        "notif_off_b" to "Nyalakan di Pengaturan",
+        "notif_ep_out" to "episode %d sudah tayang",
+        "notif_channel" to "Notifikasi episode",
+        // Masuk / daftar
+        "conf_password" to "Konfirmasi kata sandi",
+        "have_account" to "Sudah punya akun? ",
+        "new_here" to "Baru di Onimeku? ",
+        "err_email" to "Masukkan alamat email yang benar.",
+        "err_pass_short" to "Gunakan minimal 8 karakter.",
+        "err_pass_match" to "Kata sandi tidak sama.",
+        "show_password" to "Tampilkan kata sandi",
+        "hide_password" to "Sembunyikan kata sandi",
+        "auth_confirm_email" to "Periksa emailmu untuk mengonfirmasi akun",
+        "auth_created" to "Akun dibuat",
+        "no_browser" to "Tidak ada browser untuk melanjutkan.",
+        "reset_sent" to "Tautan atur ulang terkirim bila email itu terdaftar",
+        "signin_cancelled" to "Masuk dibatalkan.",
+        // Unduhan
+        "dl_cancelled" to "Unduhan dibatalkan",
+        "dl_already" to "Sudah tersimpan luring",
+        "dl_no_space" to "Penyimpanan tidak cukup. Kosongkan ruang lalu coba lagi.",
+        "dl_cant" to "Judul ini tidak bisa diunduh",
+        "dl_start_fail" to "Unduhan gagal dimulai: Episode %d",
+        "dl_started" to "Unduhan dimulai: Episode %d",
+        "dl_starting_all" to "Memulai %d unduhan",
+        "dl_saving_ep" to "Menyimpan Episode %d untuk luring",
+        "dl_all_saved" to "Semua episode sudah tersimpan",
+        "dl_removed" to "Unduhan dihapus",
+        "dl_all_removed" to "Semua unduhan dihapus",
+        "net_problem" to "Masalah jaringan. Periksa koneksimu lalu coba lagi.",
+        // Layar sambutan
+        "w1_pre" to "Selamat Datang\n",
+        "w1_em" to "di Onimeku.",
+        "w1_sub" to "Nonton anime online, streaming online.",
+        "w2_pre" to "Ribuan\n",
+        "w2_em" to "Episode.",
+        "w2_sub" to "Pilih dari pustaka besar dalam HD, dengan episode baru setiap hari.",
+        "w3_pre" to "Tonton\n",
+        "w3_em" to "Di Mana Saja.",
+        "w3_sub" to "Unduh episode favoritmu dan terus menonton tanpa internet.",
+        // Pemutar: deskripsi kontrol (dibaca TalkBack)
+        "ctl_prev" to "Episode sebelumnya",
+        "ctl_next" to "Episode berikutnya",
+        "ctl_back10" to "Mundur 10 detik",
+        "ctl_fwd10" to "Maju 10 detik",
+        "ctl_fullscreen" to "Layar penuh",
+        "ctl_exit_full" to "Keluar layar penuh",
+        "ctl_unlock" to "Buka kunci kontrol",
+        "pause" to "Jeda",
+        "seek_bar" to "Bilah waktu",
+        // Lainnya
+        "offline_bar" to "Kamu luring · unduhan tetap bisa diputar",
     )
 }

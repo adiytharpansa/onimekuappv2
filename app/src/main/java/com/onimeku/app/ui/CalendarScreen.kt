@@ -273,7 +273,7 @@ private fun TimelineRow(
             drawCircle(if (next) RedText else DotIdle, 4.5.dp.toPx(), Offset(x, y))
         })
         Box(Modifier.weight(1f).padding(bottom = Sp.S12)) {
-            EpisodeCard(s, next, reminded, nowSec, onOpen = { vm.go(Route.Detail(a.id)) }) {
+            ScheduleEpisodeRow(s, next, reminded, nowSec, onOpen = { vm.go(Route.Detail(a.id)) }) {
                 vm.toggleRemindEpisode(a.id, s.item.ep, s.item.airingAt, ensure)
             }
         }
@@ -282,7 +282,13 @@ private fun TimelineRow(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EpisodeCard(s: Slot, next: Boolean, reminded: Boolean, nowSec: Long, onOpen: () -> Unit, onBell: () -> Unit) {
+/**
+ * Baris episode di Kalender. Sengaja TIDAK bernama `EpisodeCard`: nama itu sudah dipakai
+ * komposabel publik daftar episode di `Screens.kt` (paket sama, parameter berbeda). Fungsi
+ * private di sini menaungi nama publik itu, jadi setiap pemanggilan di berkas ini diam-diam
+ * memakai versi private — rawan salah tangkap saat disunting.
+ */
+private fun ScheduleEpisodeRow(s: Slot, next: Boolean, reminded: Boolean, nowSec: Long, onOpen: () -> Unit, onBell: () -> Unit) {
     val a = s.anime
     val shape = RoundedCornerShape(20.dp)
     val today = s.at.toLocalDate() == LocalDate.now()

@@ -125,7 +125,7 @@ internal fun YtSeekBar(
         modifier.fillMaxWidth().height(28.dp)
             .onSizeChanged { widthPx = it.width.toFloat() }
             .semantics {
-                contentDescription = "Seek bar"
+                contentDescription = I18n.t("seek_bar", "Seek bar")
                 stateDescription = "${fmt(pos.toInt())} / ${fmt(d.toInt())}"
                 progressBarRangeInfo = ProgressBarRangeInfo(pos.coerceIn(0f, d), 0f..d)
                 setProgress { v -> fin(v.coerceIn(0f, d)); true }

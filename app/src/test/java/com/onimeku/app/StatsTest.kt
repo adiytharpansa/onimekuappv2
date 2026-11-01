@@ -49,4 +49,18 @@ class StatsTest {
         assertEquals("59 min", Stats.fmtDuration(3599, "min", "h"))
         assertEquals("1.5 h", Stats.fmtDuration(5400, "min", "h"))
     }
+
+    @Test fun bestStreakNeedsTheMinimumSeconds() {
+        assertEquals(0, Stats.bestStreak(emptyMap()))
+        assertEquals(1, Stats.bestStreak(mapOf(day(0) to 100)))
+        assertEquals(0, Stats.bestStreak(mapOf(day(0) to 30)))      // di bawah ambang 60 dtk
+    }
+
+    @Test fun monthTotalCountsOnlyTheCurrentMonth() {
+        val thisMonth = LocalDate.now().withDayOfMonth(1).toString()
+        val p = Profile("t", days = mapOf(thisMonth to 120, "2020-01-01" to 999), seen = listOf("a:1", "a:2"))
+        val s = Stats.compute(p)
+        assertEquals(120, s.monthSec)
+        assertEquals(2, s.episodes)                                  // jumlah entri seen
+    }
 }

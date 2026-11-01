@@ -58,15 +58,16 @@ import com.onimeku.app.AppVM
 import com.onimeku.app.I18n
 import kotlinx.coroutines.delay
 
-private val slides = listOf(
-    Triple("Welcome To\n", "Onimeku.", "Watch Anime Online, Streaming Online"),
-    Triple("Thousands\nof ", "Episodes.", "Pick from a big library in HD, with new episodes every day."),
-    Triple("Watch\n", "Anywhere.", "Download your favorite episodes and keep watching offline."),
+/** Dibaca tiap komposisi (bukan `val` top-level): `I18n.lang` baru diterapkan setelah state dimuat. */
+private fun slides() = listOf(
+    Triple(I18n.t("w1_pre", "Welcome To\n"), I18n.t("w1_em", "Onimeku."), I18n.t("w1_sub", "Watch Anime Online, Streaming Online")),
+    Triple(I18n.t("w2_pre", "Thousands\nof "), I18n.t("w2_em", "Episodes."), I18n.t("w2_sub", "Pick from a big library in HD, with new episodes every day.")),
+    Triple(I18n.t("w3_pre", "Watch\n"), I18n.t("w3_em", "Anywhere."), I18n.t("w3_sub", "Download your favorite episodes and keep watching offline.")),
 )
 
 @Composable
 private fun SlideText(i: Int, modifier: Modifier = Modifier) {
-    val (pl, e, sb) = slides[i]
+    val (pl, e, sb) = slides()[i]
     Column(modifier) {
         Text(buildAnnotatedString {
             append(pl); withStyle(SpanStyle(color = Red)) { append(e) }
@@ -117,7 +118,7 @@ private fun BentoTile(a: Anime?, score: Boolean, onFail: (String) -> Unit, modif
 fun WelcomeScreen(vm: AppVM) {
     var idx by remember { mutableIntStateOf(0) }
     var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(tick) { while (true) { delay(4500); idx = (idx + 1) % slides.size } }
+    LaunchedEffect(tick) { while (true) { delay(4500); idx = (idx + 1) % slides().size } }
 
     // Kolam poster ASLI teratas, satu per franchise (Season 1/2/Part N tidak ikut ganda) dan satu per gambar.
     // Dipotong ke kelipatan 6: ubin ke-k hanya memakai indeks k, k+6, k+12, ... sehingga 6 ubin yang
@@ -190,11 +191,11 @@ fun WelcomeScreen(vm: AppVM) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Sp.S24).padding(bottom = Sp.S24)) {
                 // Tinggi area teks = slide tertinggi (salinan tak terlihat) supaya tombol tidak bergeser.
                 Box {
-                    slides.indices.forEach { SlideText(it, Modifier.alpha(0f).clearAndSetSemantics { }) }
+                    slides().indices.forEach { SlideText(it, Modifier.alpha(0f).clearAndSetSemantics { }) }
                     Crossfade(idx, animationSpec = tween(200), label = "welcomeText") { i -> SlideText(i) }
                 }
                 Row(Modifier.padding(top = Sp.S20), verticalAlignment = Alignment.CenterVertically) {
-                    slides.indices.forEach { i ->
+                    slides().indices.forEach { i ->
                         val dotW = if (i == idx) 28.dp else 8.dp
                         val dotC = if (i == idx) Red else Color(0xFF3A3E4E)
                         Box(Modifier.padding(end = Sp.S8).height(8.dp).width(dotW).clip(CircleShape)
@@ -202,8 +203,8 @@ fun WelcomeScreen(vm: AppVM) {
                     }
                 }
                 Row(Modifier.padding(top = Sp.S24), horizontalArrangement = Arrangement.spacedBy(Sp.S12)) {
-                    Btn("Get started", BtnStyle.Play, icon = Icons.AutoMirrored.Filled.ArrowForward, modifier = Modifier.weight(1f), height = 56.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(true)) }
-                    Btn("Sign in", BtnStyle.Solid, height = 56.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(false)) }
+                    Btn(I18n.t("welcome_get_started", "Get started"), BtnStyle.Play, icon = Icons.AutoMirrored.Filled.ArrowForward, modifier = Modifier.weight(1f), height = 56.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(true)) }
+                    Btn(I18n.t("sign_in", "Sign in"), BtnStyle.Solid, height = 56.dp) { vm.closeWelcome(); vm.go(com.onimeku.app.Route.Auth(false)) }
                 }
             }
         }

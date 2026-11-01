@@ -29,4 +29,28 @@ class SyncMergeTest {
         val remote = Profile("Me", seen = listOf("x:1"), seenTs = mapOf("x:1" to 40L))
         assertEquals(emptyList<String>(), Sync.merge(listOf(local), listOf(remote)).single().seen)
     }
+
+    // Nama profil adalah kunci penggabungan. Server bisa menyimpan ejaan beda huruf besar/kecil
+    // (dibuat di perangkat lain / sebelum aturan nama kembar), tanpa pencocokan longgar hasilnya
+    // dua profil kembar dan daftar My List mengganda.
+    @Test fun profileNamesMatchIgnoringCase() {
+        val local = listOf(Profile("Kid", myList = listOf("a")))
+        val remote = listOf(Profile("kid", myList = listOf("b")))
+        val m = Sync.merge(local, remote)
+        assertEquals(1, m.size)
+        assertEquals("Kid", m[0].name)                          // nama lokal yang dipakai
+        assertEquals(setOf("a", "b"), m[0].myList.toSet())
+    }
+
+    @Test fun serverProfileIsNotAddedTwiceWhenOnlyCaseDiffers() {
+        val local = listOf(Profile("Me"), Profile("kid"))
+        val remote = listOf(Profile("Me"), Profile("KID"))
+        assertEquals(listOf("Me", "kid"), Sync.merge(local, remote).map { it.name })
+    }
+
+    @Test fun deletedProfileStaysGoneWhenServerWritesItDifferently() {
+        val local = listOf(Profile("Me"))
+        val remote = listOf(Profile("Me"), Profile("KID"))
+        assertEquals(listOf("Me"), Sync.merge(local, remote, gone = listOf("Kid")).map { it.name })
+    }
 }

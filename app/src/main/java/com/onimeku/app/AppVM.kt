@@ -536,12 +536,12 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             Downloads.remove(app, contentKey)
             downloading.remove(k)
             upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
-            toast("Download cancelled")
+            toast(I18n.t("dl_cancelled", "Download cancelled"))
             return
         }
-        if (hasDl(id, ep)) { toast("Already saved offline"); return }
+        if (hasDl(id, ep)) { toast(I18n.t("dl_already", "Already saved offline")); return }
         val free = try { android.os.StatFs(app.filesDir.path).availableBytes } catch (e: Exception) { Long.MAX_VALUE }
-        if (free < 300L * 1024 * 1024) { toast("Not enough storage. Free up some space and try again."); return }
+        if (free < 300L * 1024 * 1024) { toast(I18n.t("dl_no_space", "Not enough storage. Free up some space and try again.")); return }
         viewModelScope.launch { startDownload(id, ep) }
     }
 
@@ -565,7 +565,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             }
             if (door == null || ladder.isNullOrBlank() || dl?.downloadable == false) {
                 autoQueued.remove(k)
-                if (!silent) toast("This title can't be downloaded")
+                if (!silent) toast(I18n.t("dl_cant", "This title can't be downloaded"))
                 return
             }
             if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
@@ -604,16 +604,16 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                 autoQueued.remove(k)
                 downloading.remove(k)
                 upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
-                if (!silent) toast("Download failed to start: Episode $ep")
+                if (!silent) toast(I18n.t("dl_start_fail", "Download failed to start: Episode %d").format(ep))
             }
             viewModelScope.launch { com.onimeku.app.data.GudangStore.downloadSubs(app, id, ep, door) }
-            toast(if (silent) "Saving Episode $ep for offline" else "Download started: Episode $ep")
+            toast(I18n.t(if (silent) "dl_saving_ep" else "dl_started", if (silent) "Saving Episode %d for offline" else "Download started: Episode %d").format(ep))
             return
         }
         val url = pb?.streamUrl
         if (pb == null || url.isNullOrBlank() || !url.contains(".m3u8")) {
             autoQueued.remove(k)
-            if (!silent) toast("This title can't be downloaded")
+            if (!silent) toast(I18n.t("dl_cant", "This title can't be downloaded"))
             return
         }
         if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
@@ -622,17 +622,17 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             autoQueued.remove(k)
             downloading.remove(k)
             upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
-            if (!silent) toast("Download failed to start: Episode $ep")
+            if (!silent) toast(I18n.t("dl_start_fail", "Download failed to start: Episode %d").format(ep))
         }
-        toast(if (silent) "Saving Episode $ep for offline" else "Download started: Episode $ep")
+        toast(I18n.t(if (silent) "dl_saving_ep" else "dl_started", if (silent) "Saving Episode %d for offline" else "Download started: Episode %d").format(ep))
     }
 
     fun downloadAll(id: String) {
         val a = Catalog.byId[id] ?: return
         val nums = if (a.available.isNotEmpty()) a.available else (1..a.eps).toList()
         val todo = nums.filter { !hasDl(id, it) }
-        if (todo.isEmpty()) { toast("All episodes already saved"); return }
-        toast("Starting ${todo.size} downloads")
+        if (todo.isEmpty()) { toast(I18n.t("dl_all_saved", "All episodes already saved")); return }
+        toast(I18n.t("dl_starting_all", "Starting %d downloads").format(todo.size))
         // Berurutan: satu pengambilan data putar pada satu
         // waktu. Sebelumnya semua episode menembak fetchPlayback paralel —
         // untuk judul ratusan episode itu membanjiri jaringan dan hulu.
@@ -643,14 +643,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         Downloads.remove(app, Downloads.key(id, ep))
         downloading.remove("$id:$ep")
         upd { st -> st.copy(downloads = st.downloads.filterNot { it.id == id && it.ep == ep }) }
-        toast("Download removed")
+        toast(I18n.t("dl_removed", "Download removed"))
     }
 
     fun removeAllDl() {
         for (d in s.downloads) Downloads.remove(app, Downloads.key(d.id, d.ep))
         downloading.clear()
         upd { it.copy(downloads = emptyList()) }
-        toast("All downloads removed")
+        toast(I18n.t("dl_all_removed", "All downloads removed"))
     }
 
     // ---- Komentar per judul ----
@@ -804,9 +804,19 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         if (oldWifi != s.settings.wifi) Downloads.setWifiOnly(app, s.settings.wifi)
     }
 
-    /** Kembalikan pengaturan ke bawaan; bahasa antarmuka, petunjuk gestur, dan dubbing per judul dipertahankan. */
+    /**
+     * Kembalikan pengaturan ke bawaan; yang dipertahankan: bahasa antarmuka, petunjuk gestur,
+     * izin notifikasi yang sudah pernah ditanya, dubbing per judul, DAN geseran waktu subtitle
+     * per judul ([Settings.subOffsetByTitle]) — dua yang terakhir adalah data yang dikumpulkan
+     * pengguna per judul, bukan pengaturan, jadi tidak boleh hilang karena "atur ulang".
+     */
     fun resetSettings() {
-        setSettings { Settings(lang = it.lang, gestureHintSeen = it.gestureHintSeen, dubByTitle = it.dubByTitle, notifAsked = it.notifAsked) }
+        setSettings {
+            Settings(
+                lang = it.lang, gestureHintSeen = it.gestureHintSeen, notifAsked = it.notifAsked,
+                dubByTitle = it.dubByTitle, subOffsetByTitle = it.subOffsetByTitle,
+            )
+        }
         toast(I18n.t("settings_reset_done", "Settings reset"))
     }
 
@@ -873,7 +883,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try { block() }
             catch (e: AuthException) { authError = e.message }
-            catch (e: Exception) { authError = "Network problem. Check your connection and try again." }
+            catch (e: Exception) { authError = I18n.t("net_problem", "Network problem. Check your connection and try again.") }
             finally { authBusy = false }
         }
     }
@@ -889,11 +899,11 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun signUp(email: String, password: String) = runAuth {
         val acc = AuthClient.signUp(email.trim(), password)
         if (acc == null) {
-            toast("Check your email to confirm your account")
+            toast(I18n.t("auth_confirm_email", "Check your email to confirm your account"))
             replaceTop(Route.Auth(false))
         } else {
             upd { it.copy(account = acc) }
-            toast("Account created")
+            toast(I18n.t("auth_created", "Account created"))
             setTab(Route.ProfileTab)
         }
     }
@@ -901,14 +911,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     /** Masuk/daftar dengan Google atau Discord: buka halaman OAuth di browser; hasilnya kembali lewat finishSocial. */
     fun socialSignIn(provider: String) {
         if (authBusy) return
-        if (!AuthClient.configured) { toast("Accounts are not available in this build yet"); return }
+        if (!AuthClient.configured) { toast(I18n.t("acct_unavailable", "Accounts are not available in this build yet")); return }
         authError = null
         try {
             app.startActivity(
                 android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(AuthClient.socialUrl(provider)))
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        } catch (e: Exception) { authError = "No browser found to continue." }
+        } catch (e: Exception) { authError = I18n.t("no_browser", "No browser found to continue.") }
     }
 
     fun finishSocial(accessToken: String, refreshToken: String) = runAuth {
@@ -921,7 +931,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun resetPassword(email: String) = runAuth {
         AuthClient.recover(email.trim())
-        toast("Reset link sent if the email exists")
+        toast(I18n.t("reset_sent", "Reset link sent if the email exists"))
     }
 
     private var profileSynced = false

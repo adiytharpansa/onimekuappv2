@@ -1,3 +1,28 @@
+# Audit kode hasil polesan (belum dikompilasi)
+**Belum dikompilasi/dijalankan** — lingkungan ini tidak punya Android SDK maupun JDK (jaringan hanya mengizinkan github/npm/pypi), jadi perubahan di bawah diverifikasi dengan penelusuran statis + skrip pemeriksa, bukan `gradle :app:assembleDebug`. Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu sebelum merilis.
+
+Cara audit: (1) semua kunci `I18n.t("...")` dibandingkan dengan peta terjemahan; (2) semua akses `Tipe.anggota` dibandingkan dengan deklarasi aslinya; (3) deklarasi top-level kembar dicari lintas berkas; (4) teks antarmuka berbahasa Inggris yang tidak lewat `I18n` dikumpulkan per berkas; (5) logika murni dibaca dan ditambah tesnya.
+
+**Bug yang diperbaiki**
+- **Atur ulang pengaturan menghapus geseran waktu subtitle per judul.** `AppVM.resetSettings()` membuat `Settings(...)` baru tanpa menyalin `subOffsetByTitle`, padahal itu data yang dikumpulkan pengguna per judul (seperti `dubByTitle` yang memang dipertahankan). Setelan ulang kini menyalinnya juga.
+- **Profil kembar bisa muncul lagi dari server karena beda huruf besar/kecil.** `Sync.merge()` mencocokkan nama profil secara persis; server yang menyimpan "kid" sementara perangkat "Kid" menghasilkan dua profil dan My List mengganda. Kini pencocokan (dan penambahan profil jarak jauh) abaikan huruf besar/kecil; nama yang dipakai tetap nama lokal.
+- **Teks slide sambutan tidak bisa diterjemahkan.** `slides` di `WelcomeScreen.kt` adalah `val` top-level: begitu diisi `I18n.t(...)`, nilainya terkunci pada bahasa bawaan saat kelas dimuat — sebelum bahasa pengguna dibaca dari state. Diubah menjadi fungsi `slides()` yang dievaluasi tiap komposisi. (Ini juga alasan teks itu dibiarkan Inggris sebelumnya.)
+
+**Pemeliharaan**
+- `CalendarScreen.kt`: komposabel private `EpisodeCard` diganti nama menjadi `ScheduleEpisodeRow`. Nama `EpisodeCard` sudah dipakai komposabel publik di `Screens.kt` (paket sama, parameter berbeda) — sah di Kotlin, tetapi fungsi private menaungi yang publik, jadi setiap pemanggilan di berkas itu diam-diam memakai versi private.
+
+**i18n: teks yang masih tertulis Inggris langsung** (sekitar 40 tempat; kunci baru ditambahkan di `I18n.kt`, teks Inggris tetap tertulis di tempat pemakaian sebagai cadangan)
+- Pencarian: label grup filter "Genre" dan "Status" (label "Year" sudah diterjemahkan).
+- Masuk/daftar: "Confirm password", "Accounts aren't available yet.", "Already have an account? ", "New to Onimeku? ", "Terms", "Privacy", tiga pesan validasi, dan deskripsi tombol mata.
+- Notifikasi: banner "New episode alerts are off. / Turn on in Settings", "episode N is out", nama kanal notifikasi.
+- Unduhan & akun: seluruh toast (batal, sudah tersimpan, penyimpanan penuh, gagal dimulai, judul tak bisa diunduh, dihapus, dll.) dan pesan galat masuk/daftar/reset sandi.
+- Pemutar: deskripsi kontrol untuk TalkBack (episode sebelumnya/berikutnya, mundur/maju 10 dtk, layar penuh, buka kunci, jeda/putar) dan "Seek bar".
+- Lainnya: bilah "You're offline · downloads still work", "Sign in was cancelled.", serta `res/values-id/strings.xml` (baru) supaya nama kanal unduhan, widget, dan pintasan ikut berbahasa Indonesia.
+
+**Tes unit baru** (`SyncMergeTest`, `SearchLogicTest`, `MyListViewTest`, `StatsTest`): pencocokan nama profil abaikan huruf besar/kecil, profil terhapus yang ejaannya beda di server tetap hilang, kombinasi kueri+filter pencarian, urut A–Z memakai judul ternormalisasi, urut rating stabil untuk skor sama, filter "Belum ditonton" dengan progres saja, `scoreOf` jatuh ke teks rating lalu 0, ambang runtun harian, dan total bulan hanya menghitung bulan berjalan.
+
+- Rollback cepat: `git revert` commit ini (perubahan menyentuh `I18n.kt`, `AppVM.kt`, `data/Sync.kt`, `Notifier.kt`, `MainActivity.kt`, `ui/{Screens,AuthScreen,CalendarScreen,PlayerScreen,PlayerParts,WelcomeScreen}.kt`, `res/values-id/strings.xml`, dan 4 berkas tes; tidak ada perubahan perilaku selain tiga bug di atas).
+
 # Penyempurnaan layar Settings, Help, About (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/ProfileScreens.kt`, `AppVM.kt`, `I18n.kt`.
 - **Pengaturan baru di layar Settings:** Kualitas bawaan (Auto/1080p/720p/480p); grup Subtitle (bahasa bawaan, ukuran, warna, latar gelap, gaya sistem + pratinjau langsung); grup Penyimpanan (ringkasan unduhan + Hapus semua dengan konfirmasi); tombol Atur ulang pengaturan (bahasa, daftar, unduhan, dubbing per judul tetap). Sebelumnya opsi subtitle/kualitas hanya bisa diubah dari dalam pemutar.

@@ -1233,8 +1233,8 @@ fun NotifScreen(vm: AppVM) = Page {
     if (!vm.s.settings.alerts) {
         Row(Modifier.fillMaxWidth().padding(bottom = Sp.S8).clip(RoundedCornerShape(14.dp)).background(Bg2)
             .border(1.dp, Line, RoundedCornerShape(14.dp)).padding(Sp.S12)) {
-            Text("New episode alerts are off. ", fontSize = Ty.Small, color = InkSoft)
-            Text("Turn on in Settings", fontSize = Ty.Small, color = RedText, modifier = Modifier.clickable { vm.openSettings() })
+            Text(I18n.t("notif_off_t", "New episode alerts are off. "), fontSize = Ty.Small, color = InkSoft)
+            Text(I18n.t("notif_off_b", "Turn on in Settings"), fontSize = Ty.Small, color = RedText, modifier = Modifier.clickable { vm.openSettings() })
         }
     }
     if (Catalog.all.isEmpty()) SkeletonRows(4)
@@ -1246,7 +1246,7 @@ fun NotifScreen(vm: AppVM) = Page {
                 Box(Modifier.size(9.dp).clip(CircleShape).background(if (vm.s.notifRead) Color.Transparent else Red))
                 Text(androidx.compose.ui.text.buildAnnotatedString {
                     pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append(a.title); pop()
-                    append(" episode $ep is out")
+                    append(" " + I18n.t("notif_ep_out", "episode %d is out").format(ep))
                 }, Modifier.weight(1f), fontSize = Ty.Body)
                 Text(whenTxt, fontSize = Ty.Caption, color = NavOff)
             }
@@ -1353,8 +1353,8 @@ fun SearchScreen(vm: AppVM) {
                 Icon(AppIcons.Mic, I18n.t("voice_search", "Voice search"), Modifier.size(22.dp), tint = InkSoft)
             }
         }
-        group("Genre") { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }
-        group("Status") { Catalog.statuses.forEach { v -> Chip(statusText(v), st == v) { st = if (st == v) "" else v } } }
+        group(I18n.t("f_genre", "Genre")) { Catalog.chips.forEach { g -> Chip(g, g in gs) { gs = if (g in gs) gs - g else gs + g } } }
+        group(I18n.t("f_status", "Status")) { Catalog.statuses.forEach { v -> Chip(statusText(v), st == v) { st = if (st == v) "" else v } } }
         group(I18n.t("f_year", "Year")) {
             Catalog.years.forEach { v -> Chip(v, yr == v) { yr = if (yr == v) "" else v } }
         }

@@ -61,7 +61,8 @@ private fun AuthField(
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone() }, onNext = { }),
             )
             if (password) Box(Modifier.size(48.dp).clip(CircleShape).clickable { show = !show }, contentAlignment = Alignment.Center) {
-                Icon(if (show) AppIcons.EyeOff else AppIcons.Eye, if (show) "Hide password" else "Show password",
+                Icon(if (show) AppIcons.EyeOff else AppIcons.Eye,
+                    if (show) I18n.t("hide_password", "Hide password") else I18n.t("show_password", "Show password"),
                     Modifier.size(20.dp), tint = NavOff)
             }
         }
@@ -78,9 +79,9 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
     var confirm by rememberSaveable { mutableStateOf("") }
     var tried by rememberSaveable { mutableStateOf(false) }
 
-    val emailErr = if (tried && !EmailRx.matches(email.trim())) "Enter a valid email address." else null
-    val passErr = if (tried && pass.length < 8) "Use at least 8 characters." else null
-    val confErr = if (tried && signUp && confirm != pass) "Passwords do not match." else null
+    val emailErr = if (tried && !EmailRx.matches(email.trim())) I18n.t("err_email", "Enter a valid email address.") else null
+    val passErr = if (tried && pass.length < 8) I18n.t("err_pass_short", "Use at least 8 characters.") else null
+    val confErr = if (tried && signUp && confirm != pass) I18n.t("err_pass_match", "Passwords do not match.") else null
 
     fun submit() {
         tried = true
@@ -97,7 +98,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
 
         if (!AuthClient.configured) {
             CardBox(Modifier.padding(bottom = Sp.S16)) {
-                Text("Accounts aren't available yet.",
+                Text(I18n.t("auth_unavailable", "Accounts aren't available yet."),
                     Modifier.padding(Sp.S16), color = InkSoft, fontSize = Ty.Body)
             }
         }
@@ -105,7 +106,7 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
         AuthField(I18n.t("email", "Email"), email, { email = it }, emailErr, KeyboardType.Email, ImeAction.Next)
         AuthField(I18n.t("password", "Password"), pass, { pass = it }, passErr, KeyboardType.Password, if (signUp) ImeAction.Next else ImeAction.Done,
             password = true, onDone = { submit() })
-        if (signUp) AuthField("Confirm password", confirm, { confirm = it }, confErr, KeyboardType.Password, ImeAction.Done,
+        if (signUp) AuthField(I18n.t("conf_password", "Confirm password"), confirm, { confirm = it }, confErr, KeyboardType.Password, ImeAction.Done,
             password = true, onDone = { submit() })
 
         vm.authError?.let {
@@ -136,14 +137,14 @@ fun AuthScreen(vm: AppVM, startSignUp: Boolean) {
         }
 
         Row(Modifier.align(Alignment.CenterHorizontally).padding(top = Sp.S28), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (signUp) "Already have an account? " else "New to Onimeku? ", color = InkSoft, fontSize = Ty.Body)
+            Text(I18n.t(if (signUp) "have_account" else "new_here", if (signUp) "Already have an account? " else "New to Onimeku? "), color = InkSoft, fontSize = Ty.Body)
             Text(if (signUp) I18n.t("sign_in", "Sign in") else I18n.t("sign_up", "Sign up"), color = RedText, fontSize = Ty.Body, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { signUp = !signUp; tried = false; vm.authError = null }.padding(Sp.S8))
         }
 
         Row(Modifier.align(Alignment.CenterHorizontally).padding(top = Sp.S12, bottom = Sp.S8), horizontalArrangement = Arrangement.spacedBy(Sp.S20)) {
-            Text("Terms", color = RedText, fontSize = Ty.Small, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("terms")) }.padding(Sp.S8))
-            Text("Privacy", color = RedText, fontSize = Ty.Small, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("privacy")) }.padding(Sp.S8))
+            Text(I18n.t("terms", "Terms"), color = RedText, fontSize = Ty.Small, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("terms")) }.padding(Sp.S8))
+            Text(I18n.t("privacy", "Privacy"), color = RedText, fontSize = Ty.Small, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.go(Route.Sub("privacy")) }.padding(Sp.S8))
         }
     }
 }

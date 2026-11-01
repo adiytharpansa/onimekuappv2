@@ -27,4 +27,14 @@ class MyListViewTest {
         val started = MyListView.startedIds(Profile("t", prog = mapOf("1:3" to 10), seen = listOf("3:1")))
         assertEquals(listOf("2"), MyListView.apply(items, Sort.RECENT, Filter.NOT_STARTED, started).map { it.id })
     }
+
+    @Test fun notStartedExcludesAnyTitleWithProgress() {
+        val started = MyListView.startedIds(Profile("t", prog = mapOf("2:5" to 90)))
+        assertEquals(listOf("1", "3"), MyListView.apply(items, Sort.RECENT, Filter.NOT_STARTED, started).map { it.id })
+    }
+
+    @Test fun scoreFallsBackToRatingTextThenZero() {
+        assertEquals(8.2, MyListView.scoreOf(items.first { it.id == "3" }), 0.001)   // "★ 8.2"
+        assertEquals(0.0, MyListView.scoreOf(a("9", "No score", "RELEASING")), 0.001)
+    }
 }

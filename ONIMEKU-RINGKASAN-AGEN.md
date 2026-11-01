@@ -4,6 +4,8 @@
 
 **Status verifikasi:** seluruh kode (termasuk perbaikan di bagian 6) ditulis/ditinjau tanpa Android SDK. **Belum dikompilasi, belum dijalankan, belum diukur.** Langkah pertama agent: `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest`, perbaiki galat impor/tipe bila ada, lalu jalankan `emulator-test.yml`.
 
+Audit statis terakhir: **2 Nov 2026** (tanpa kompilasi — tidak ada Android SDK/JDK di lingkungan agen). Yang sudah diperiksa: kunci `I18n`, akses `Tipe.anggota`, deklarasi top-level kembar, teks antarmuka yang belum lewat `I18n`, plus logika murni. Hasilnya ada di entri teratas `CHANGELOG.md`; temuan yang **belum** dibenahi tercatat di bagian 6.
+
 ---
 
 ## 1. Apa ini
@@ -147,9 +149,22 @@ Hasil tinjauan statis; perubahan di `Reminders.kt` (**belum dikompilasi**):
 - Jalur utama MegaPlay lewat proksi worker menambah satu lompatan dan kena batas 600 GET/menit/IP.
 - Teks rilis `build.yml` masih menyebut `onimekuappv2-api` (usang).
 
+### Hasil audit 2 Nov 2026
+
+Diperbaiki: geseran waktu subtitle per judul tidak lagi hilang saat "Atur ulang pengaturan" (`AppVM.resetSettings`); `Sync.merge` mencocokkan nama profil tanpa beda huruf besar/kecil sehingga profil kembar tidak muncul lagi dari server; `slides` di `WelcomeScreen.kt` jadi fungsi (sebelumnya `val` top-level, jadi teks terjemahan terkunci pada bahasa bawaan); komposabel private `EpisodeCard` di `CalendarScreen.kt` diganti nama (`ScheduleEpisodeRow`) karena menaungi `EpisodeCard` publik di `Screens.kt`. Sekitar 40 teks antarmuka yang masih tertulis Inggris langsung kini lewat `I18n` (pencarian, masuk/daftar, notifikasi, toast unduhan & akun, deskripsi kontrol pemutar, bilah luring) + `res/values-id/strings.xml` baru. Tes unit ditambah di `SyncMergeTest`, `SearchLogicTest`, `MyListViewTest`, `StatsTest`.
+
+**Masih terbuka setelah audit** (perlu keputusan/perangkat, bukan sekadar penyuntingan):
+
+- Teks legal (`LegalScreens.kt`: Terms, Privacy, Licenses) masih Inggris saja — butuh terjemahan paragraf panjang dan sebaiknya tinjauan penasihat hukum (butir 7 di bawah).
+- Sebagian isi aplikasi belum lewat `I18n`: judul bagian Home sudah, tetapi beberapa string di `Components.kt` ("See all") dan sisa `Screens.kt` ("Coming Soon", "Browse all", "Surprise me", dll.) belum; pemeriksaan ulang setelah `assembleDebug` berhasil.
+- Pemeriksaan statis tidak bisa menggantikan kompilasi: nama parameter, impor, dan tipe belum terverifikasi.
+- Belum ada pemeriksaan Performa/R8 (butir 4–5 di bawah).
+
 ### File yang belum ditinjau
 
 `Screens.kt`, `ProfileScreens.kt`, `MainActivity.kt`, `Components.kt`, `Motion.kt`, `AuthScreen.kt`, `WelcomeScreen.kt`, `LegalScreens.kt`, `PosterHealer.kt`, `Notifier.kt`.
+
+(Catatan 2 Nov: sebagian besar `Screens.kt`, `ProfileScreens.kt`, `AuthScreen.kt`, dan `Notifier.kt` sudah ditelusuri pada audit i18n; yang belum ditinjau menyeluruh: `Components.kt`, `Motion.kt`, `LegalScreens.kt`, `PosterHealer.kt`, dan `data/{Gudang,GudangDl,DoorRace,Comments}.kt`.)
 
 ---
 
