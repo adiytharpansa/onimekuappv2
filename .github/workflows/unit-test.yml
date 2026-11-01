@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # perlu untuk mendorong ringkasan kegagalan
 
 jobs:
   test:
@@ -42,3 +42,38 @@ jobs:
           if-no-files-found: warn
           # Sama seperti artefak lain: hanya jembatan pemeriksaan, jangan ditumpuk.
           retention-days: 3
+
+      # Ringkasan yang bisa dibaca cepat. Log job tidak selalu praktis (harus
+      # mengunduh arsip log), jadi saat gagal ringkasannya ikut didorong ke
+      # cabang ini. Dorongan lewat GITHUB_TOKEN tidak memicu workflow baru.
+      - name: Write failure summary
+        if: failure()
+        run: |
+          mkdir -p ci
+          out=ci/unit-test-summary.txt
+          {
+            echo "run      : $GITHUB_RUN_ID (percobaan $GITHUB_RUN_ATTEMPT)"
+            echo "cabang   : $GITHUB_REF_NAME"
+            echo "komit    : $GITHUB_SHA"
+            echo "waktu    : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+          } > "$out"
+          for f in app/build/test-results/testDebugUnitTest/*.xml; do
+            [ -f "$f" ] || continue
+            tr -d '\n' < "$f" | sed 's/></>\n</g' | grep -E "<testsuite |<failure|<error" | head -20 >> "$out" || true
+          done
+          echo >> "$out"
+          echo "===== detail kegagalan (maks. 4 kB) =====" >> "$out"
+          grep -h -A 25 "<failure" app/build/test-results/testDebugUnitTest/*.xml 2>/dev/null | head -c 4000 >> "$out" || true
+
+      - name: Commit failure summary
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A ci
+          if git diff --cached --quiet; then echo "tidak ada ringkasan untuk disimpan"; exit 0; fi
+          git commit -m "CI: ringkasan uji unit gagal (run $GITHUB_RUN_ID)"
+          git push origin "HEAD:$GITHUB_REF_NAME" || echo "dorong ringkasan gagal"
