@@ -8,7 +8,9 @@ on:
         required: false
         type: string
   push:
-    branches: [main]
+    # Cabang kerja agen: supaya build bisa dipicu cukup dengan push (token integrasi
+    # tidak punya izin workflow_dispatch). Hapus baris cabang ini setelah selesai.
+    branches: [main, arena/dcb07728-onimekuappv2]
 
 permissions:
   contents: write
