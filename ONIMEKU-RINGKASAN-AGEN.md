@@ -2,9 +2,14 @@
 
 > Serah-terima untuk AI agent berikutnya. Merangkum `ONIMEKU-AGENT-GUIDE.md`, `CATATAN-ARSITEKTUR.md`, `CHANGELOG.md`, hasil tinjauan kode (18 Okt 2026), dan perbaikan bug terbaru. Paket: `com.onimeku.app` · Versi: 1.0.0 · Gradle 8.9, JDK 17, compileSdk/targetSdk 35, minSdk 26
 
-**Status verifikasi:** seluruh kode (termasuk perbaikan di bagian 6) ditulis/ditinjau tanpa Android SDK. **Belum dikompilasi, belum dijalankan, belum diukur.** Langkah pertama agent: `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest`, perbaiki galat impor/tipe bila ada, lalu jalankan `emulator-test.yml`.
+**Status verifikasi (2 Nov 2026): kompilasi dan uji unit SUDAH lolos di CI.**
+- `gradle :app:assembleDebug` **sukses** (GitHub Actions run 41356175302, 4m32s; artefak `app-debug` 22,1 MB, retensi 3 hari).
+- `gradle :app:testDebugUnitTest` **hijau 103/103** (run 41356175224) lewat workflow baru `unit-test.yml`.
+- **Belum ada:** uji emulator (`emulator-test.yml`), build rilis ber-R8 di perangkat, dan pengukuran performa — tiga butir pertama di bagian 7.
 
-Audit statis terakhir: **2 Nov 2026** (tanpa kompilasi — tidak ada Android SDK/JDK di lingkungan agen). Yang sudah diperiksa: kunci `I18n`, akses `Tipe.anggota`, deklarasi top-level kembar, teks antarmuka yang belum lewat `I18n`, plus logika murni. Hasilnya ada di entri teratas `CHANGELOG.md`; temuan yang **belum** dibenahi tercatat di bagian 6.
+Catatan untuk agent: komputer agen **tidak** punya Android SDK/JDK, jadi verifikasi harus lewat GitHub Actions. `workflow_dispatch` tidak bisa dipakai (token integrasi GitHub mengembalikan HTTP 403 pada `POST /actions/workflows/{id}/dispatches`); satu-satunya jalan adalah **push** ke cabang yang terdaftar di pemicu `on: push: branches:` (cabang kerja agen sudah ditambahkan sementara di `build.yml` dan `unit-test.yml` — hapus sebelum digabung ke `main`). Arsip log job dan artefak juga tidak bisa diunduh dari lingkungan agen (host `results-receiver.actions.githubusercontent.com` dan `blob.core.windows.net` diblokir), karena itu workflow uji menulis ringkasan kegagalan ke `ci/unit-test-summary.txt` di cabang.
+
+Audit statis terakhir: **2 Nov 2026**. Yang sudah diperiksa: kunci `I18n`, akses `Tipe.anggota`, deklarasi top-level kembar, teks antarmuka yang belum lewat `I18n`, plus logika murni. Hasilnya ada di entri teratas `CHANGELOG.md`; temuan yang **belum** dibenahi tercatat di bagian 6.
 
 ---
 
@@ -170,15 +175,15 @@ Diperbaiki: geseran waktu subtitle per judul tidak lagi hilang saat "Atur ulang 
 
 ## 7. Pekerjaan tersisa (urut prioritas)
 
-1. Kompilasi + uji unit + uji emulator (belum ada build setelah banyak perubahan).
+1. ~~Kompilasi + uji unit~~ **selesai 2 Nov 2026** (run Actions 41356175302 / 41356175224). Sisa: **uji emulator** (`emulator-test.yml`) + tinjau bukti layarnya.
 2. Isi kunci Supabase; atur Auth di dashboard (redirect URL, konfirmasi email, batas laju); deploy `backend/`.
 3. Putuskan soal `allowBackup` dan temuan di bagian 6.
 4. Uji build rilis ber-R8 (`bundleRelease`) di perangkat: R8 sering merusak serialisasi/refleksi diam-diam.
 5. Ukur performa (Macrobenchmark: startup dingin, jank Home, waktu Play -> frame pertama); ganti baseline profile tulis-tangan dengan hasil ukur.
-6. Bahasa Indonesia/日本語 masih "Coming soon"; pindahkan string ke `strings.xml` dulu.
-7. Teks legal: tinjau penasihat hukum, tambah kontak + URL kebijakan publik untuk Play Console.
+6. Bahasa Indonesia sudah berfungsi (I18n + `res/values-id/strings.xml`); 日本語 masih "Coming soon". Pindahkan string ke `strings.xml` bila ingin terjemahan per-bahasa penuh.
+7. Teks legal: tinjau penasihat hukum, tambah kontak + URL kebijakan publik untuk Play Console. Isinya masih Inggris saja.
 8. Pull-to-refresh Home dimatikan (crash `PullToRefreshBox` di emulator CI); `vm.refresh()` masih ada.
-9. Selaraskan `README.md` dan `build.yml` (masih menyebut API lama / Firebase).
+9. Selaraskan `README.md` dan `build.yml` (masih menyebut API lama / Firebase). **Termasuk:** hapus baris cabang `arena/dcb07728-onimekuappv2` dari pemicu `push` di `build.yml` dan `unit-test.yml` sebelum digabung ke `main`.
 
 > Catatan: butir 3–5 di bagian 8 panduan lama (hapus akun, token terenkripsi, sinkronisasi) **sudah ada di kode**; tinggal deploy backend dan uji.
 

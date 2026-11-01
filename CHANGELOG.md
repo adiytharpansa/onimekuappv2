@@ -1,7 +1,15 @@
-# Audit kode hasil polesan (belum dikompilasi)
-**Belum dikompilasi/dijalankan** — lingkungan ini tidak punya Android SDK maupun JDK (jaringan hanya mengizinkan github/npm/pypi), jadi perubahan di bawah diverifikasi dengan penelusuran statis + skrip pemeriksa, bukan `gradle :app:assembleDebug`. Jalankan `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest` dulu sebelum merilis.
+# Audit kode hasil polesan + verifikasi CI (SUDAH dikompilasi & lulus uji unit)
+**Status terverifikasi 2 Nov 2026:** `gradle :app:assembleDebug` **sukses** di GitHub Actions ([run 41356175302](https://github.com/adiytharpansa/onimekuappv2/actions/runs/41356175302), 4m32s, artefak `app-debug` 22,1 MB) dan `gradle :app:testDebugUnitTest` **hijau 103/103** ([run 41356175224](https://github.com/adiytharpansa/onimekuappv2/actions/runs/41356175224)). Jadi seluruh kode hasil polesan yang sebelumnya bertanda "belum dikompilasi" kini benar-benar lolos kompilasi. Yang **belum** ada: uji emulator, build rilis ber-R8, dan pengukuran performa.
 
-Cara audit: (1) semua kunci `I18n.t("...")` dibandingkan dengan peta terjemahan; (2) semua akses `Tipe.anggota` dibandingkan dengan deklarasi aslinya; (3) deklarasi top-level kembar dicari lintas berkas; (4) teks antarmuka berbahasa Inggris yang tidak lewat `I18n` dikumpulkan per berkas; (5) logika murni dibaca dan ditambah tesnya.
+Catatan: agen tidak bisa mengompilasi di komputernya sendiri (tidak ada Android SDK/JDK; jaringan hanya mengizinkan github/npm/pypi). Karena itu verifikasi dilakukan dengan (a) penelusuran statis + skrip pemeriksa, lalu (b) workflow GitHub Actions yang dipicu lewat push ke cabang kerja (`workflow_dispatch` tidak bisa: token integrasi GitHub mengembalikan HTTP 403).
+
+Cara audit statis: (1) semua kunci `I18n.t("...")` dibandingkan dengan peta terjemahan; (2) semua akses `Tipe.anggota` dibandingkan dengan deklarasi aslinya; (3) deklarasi top-level kembar dicari lintas berkas; (4) teks antarmuka berbahasa Inggris yang tidak lewat `I18n` dikumpulkan per berkas; (5) logika murni dibaca dan ditambah tesnya.
+
+## Yang ditemukan justru oleh CI (tidak ketahuan dari penelusuran statis)
+
+- **`PlayerLogicTest.fmtMinutesAndHours` selalu gagal sejak ditulis** (`ExceptionInInitializerError`). `fmt()` murni, tetapi ikut berada di `Components.kt`; berkas itu punya `val` top-level `LogoO` yang memakai grafis Android (`PathParser`/`Path`). Menyentuh `fmt()` dari uji unit JVM menginisialisasi SELURUH berkas itu lalu melempar galat. **Perbaikan:** `fmt()` dipindah ke berkas baru `ui/Format.kt` (paket sama, jadi pemanggil tidak berubah). Ini tidak pernah ketahuan karena CI tidak pernah menjalankan uji unit — pelajaran utamanya: tanpa workflow uji, tes yang gagal tetap "hijau" di mata tim.
+- **Workflow baru `.github/workflows/unit-test.yml`** menjalankan `gradle :app:testDebugUnitTest` tiap push ke `main` dan mengunggah laporan (retensi 3 hari). Saat gagal, ringkasannya juga didorong ke cabang (`ci/unit-test-summary.txt`) karena arsip log job tidak bisa dibaca dari luar Actions.
+- **`.github/workflows/build.yml`** untuk sementara ikut memicu pada push ke cabang kerja `arena/dcb07728-onimekuappv2` (baris ini **harus dihapus** sebelum/pada saat cabang ini digabung ke `main`).
 
 **Bug yang diperbaiki**
 - **Atur ulang pengaturan menghapus geseran waktu subtitle per judul.** `AppVM.resetSettings()` membuat `Settings(...)` baru tanpa menyalin `subOffsetByTitle`, padahal itu data yang dikumpulkan pengguna per judul (seperti `dubByTitle` yang memang dipertahankan). Setelan ulang kini menyalinnya juga.
