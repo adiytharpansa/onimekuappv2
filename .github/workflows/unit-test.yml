@@ -1,0 +1,44 @@
+name: Unit Tests
+
+on:
+  push:
+    # Cabang kerja agen: supaya uji bisa dipicu cukup dengan push (token integrasi
+    # tidak punya izin workflow_dispatch). Baris cabang ini aman dihapus nanti.
+    branches: [main, arena/dcb07728-onimekuappv2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      # Uji JVM murni (logika pencarian, My List, statistik, sinkronisasi, rantai putar).
+      # Tidak butuh emulator: jalannya cepat dan aman dipasang sebagai penjaga regresi.
+      - name: Run JVM unit tests
+        run: gradle :app:testDebugUnitTest --stacktrace
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest/**
+          if-no-files-found: warn
+          # Sama seperti artefak lain: hanya jembatan pemeriksaan, jangan ditumpuk.
+          retention-days: 3
