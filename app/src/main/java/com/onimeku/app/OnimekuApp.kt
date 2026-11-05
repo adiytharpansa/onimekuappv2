@@ -16,6 +16,7 @@ class OnimekuApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         com.onimeku.app.data.CrashLog.install(this)
+        com.onimeku.app.data.KeyLocker.init(this)
         // Panaskan Keystore/EncryptedSharedPreferences paralel dengan inisialisasi Activity + Compose,
         // supaya Store.load() di AppVM tidak menunggu inisialisasi dari nol di main thread.
         Thread { com.onimeku.app.data.Store.secureOf(this) }.apply { isDaemon = true }.start()
