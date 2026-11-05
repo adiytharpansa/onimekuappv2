@@ -1,17 +1,15 @@
 package com.onimeku.app.data
 
 import android.content.Context
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // ---------------------------------------------------------------------------
 // Gudang (salinan sendiri) — keadaan sisi aplikasi:
 // - Pintu terakhir yang BERHASIL memutar disimpan (nama pintu),
 //   menjadi pintu awal kunjungan berikutnya (pola pemutar V3).
-// - Laporan penonton: dikirim ke API; bila gagal, disimpan ke
-//   antrean lokal (berkas di filesDir) dan dicoba lagi nanti.
+// - Laporan penonton: server laporan sudah tidak ada (API lama
+//   dibuang); laporan disimpan ke antrean lokal saja.
 // - Subtitle luring: berkas en/id gudang yang diunduh bersama
 //   episode tersimpan di filesDir/gudang-subs untuk putar offline.
 // ---------------------------------------------------------------------------
@@ -20,7 +18,6 @@ object GudangStore {
     private const val PREFS = "gudang"
     private const val KEY_LAST_DOOR = "last_good_door"
     private const val QUEUE_FILE = "gudang_reports_queue.jsonl"
-    private val scope = CoroutineScope(Dispatchers.IO)
 
     fun lastDoor(ctx: Context): String? =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -63,42 +60,16 @@ object GudangStore {
     }
 
     /**
-     * Laporkan masalah putar (fire-and-forget): kirim ke API
-     * sekarang; gagal -> antrean lokal untuk dikirim ulang oleh
-     * flushReports() pada kesempatan berikutnya.
+     * Laporkan masalah putar (fire-and-forget): server laporan sudah
+     * tidak ada (API lama dibuang), jadi laporan disimpan ke antrean
+     * lokal saja dengan anggun — tanpa panggilan jaringan, tanpa galat.
      */
     fun report(ctx: Context, anilistId: Int?, slug: String, ep: Int, note: String) {
-        val app = ctx.applicationContext
-        scope.launch {
-            val ok = ApiClient.sendReport(anilistId, slug, ep, note)
-            if (!ok) enqueue(app, anilistId, slug, ep, note)
-        }
+        enqueue(ctx.applicationContext, anilistId, slug, ep, note)
     }
 
-    /** Kirim ulang laporan yang tertahan di antrean lokal. */
-    fun flushReports(ctx: Context) {
-        val app = ctx.applicationContext
-        scope.launch {
-            val f = queueFile(app)
-            if (!f.exists()) return@launch
-            val lines = try { f.readLines().filter { it.isNotBlank() } } catch (e: Exception) { return@launch }
-            if (lines.isEmpty()) { f.delete(); return@launch }
-            val remaining = ArrayList<String>()
-            for (line in lines) {
-                val ok = try {
-                    val o = org.json.JSONObject(line)
-                    ApiClient.sendReport(
-                        if (o.isNull("anilistId")) null else o.optInt("anilistId"),
-                        o.optString("slug"), o.optInt("episode"), o.optString("catatan"),
-                    )
-                } catch (e: Exception) { false }
-                if (!ok) remaining.add(line)
-            }
-            try {
-                if (remaining.isEmpty()) f.delete() else f.writeText(remaining.joinToString("\n") + "\n")
-            } catch (e: Exception) { /* abaikan */ }
-        }
-    }
+    /** Pengiriman ulang laporan dinonaktifkan (tidak ada server tujuan); antrean lokal dibiarkan apa adanya. */
+    fun flushReports(ctx: Context) { /* nonaktif */ }
 
     // ---------------- Subtitle luring gudang ----------------
 

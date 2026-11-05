@@ -13,7 +13,7 @@ import java.util.Collections
  * Poster ber-host s4.anilist.co tidak terjangkau dari jaringan pengguna
  * (CDN-nya membalas 403 dari mana pun). Penyembuhannya kini hidup di
  * SERVER (debug.31, perintah user: semua data poster dari API ini):
- * my-anime-app menyelesaikan padanan Kitsu per anilistId dan
+ * API lama menyelesaikan padanan Kitsu per anilistId dan
  * menyajikannya langsung di respons katalog/detail, jadi di sini
  * poster katalog yang masih ber-host rusak cukup disembunyikan
  * (null -> latar gradasi) sampai API menyembuhkannya — aplikasi

@@ -4,26 +4,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.net.URL
-import java.net.URLEncoder
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.OffsetDateTime
 
 // ---------------------------------------------------------------------------
-// Klien API katalog Onimeku — LANGSUNG ke my-anime-app (perintah user
-// 18 Okt 2026: "ganti pakai api ini saja", tanpa perantara onimekuappv2-api).
-// Kontrak terverifikasi live:
-//   GET /api/anime                  -> { ok, provider, data: [Anime] } (ringkasan, ~900KB)
-//   GET /api/anime?id=<slug>        -> { ok, provider, data: Anime (+episodes[]) }
-//   GET /api/anime?id=<slug>&ep=<n> -> { ok, provider, data: Playback }
-// Hulu TIDAK punya endpoint jadwal maupun poster pengganti; fungsi yang
-// bersangkutan dinonaktifkan dengan anggun di bawah.
-// Tugas yang dulu dikerjakan API perantara kini dikerjakan di klien:
-// stream MegaPlay (CDN nexabloom) dibungkus proksi media hulu
-// (/api/proxy?u=&ref=) dengan Referer akar origin — pola yang sama yang
-// membuat putar bekerja (host segmen acak tak terjangkau dari jaringan
-// sebagian pengguna; Referer halaman penuh ditolak CDN).
+// Lapisan data Onimeku TANPA API katalog (perintah user 6 Nov 2026:
+// "api buang, pakai cara simple-kuat").
+//
+// Katalog = katalog gudang salinan sendiri (bentuk project-X yang sama
+// dengan Anilover), dibaca lewat rantai:
+//   1. Salinan TERENKRIPSI AES-256-GCM khusus Onimeku di Cloudflare Pages
+//      (jalur tersamar khusus Onimeku; kuncinya dipecah dua — potongan A
+//      di aplikasi, potongan B di loker Firebase; lihat KeyLocker).
+//   2. Cermin-cermin katalog polos (jsDelivr -> gcore -> raw -> fastly)
+//      bila pintu utama/kunci tidak terjangkau — aplikasi tetap jalan.
+// Detail dibaca dari data katalog yang sama (tanpa panggilan terpisah).
+// Putar = playlist HLS gudang per episode lewat daftar pintu CDN
+// (doorVariants) dan mekanisme Gudang/DoorRace yang sudah ada;
+// subtitle adalah trek bawaan manifest HLS. Jadwal tetap AniList
+// langsung. TIDAK ada lagi panggilan ke API katalog lama mana pun.
 // ---------------------------------------------------------------------------
 
 @Serializable
@@ -43,18 +43,6 @@ data class ApiAnime(
     val updatedAt: String? = null,
     val anilistId: Int? = null,
     val country: String? = null,
-)
-
-@Serializable
-private data class ListResp(
-    val ok: Boolean = false,
-    val data: List<ApiAnime> = emptyList(),
-)
-
-@Serializable
-private data class DetailResp(
-    val ok: Boolean = false,
-    val data: ApiAnime? = null,
 )
 
 @Serializable
@@ -99,107 +87,251 @@ data class Playback(
     val poster: String? = null,
     val episode: Int = 0,
     val subtitles: List<ApiSubtitle> = emptyList(),
-    // Gudang (salinan sendiri): penanda internal + semua pintu putar
-    // (master.m3u8 per pintu) + sumber unduhan per pintu/kualitas.
     val source: String? = null,
     val doors: List<ApiDoor> = emptyList(),
     val durationSec: Int? = null,
     val download: ApiDownload? = null,
     val mediaKind: String? = null,
     val playable: String? = null,
-    // Posisi intro (detik) bila API menyediakannya; tombol Skip intro hanya muncul jika keduanya ada.
     val introStart: Int? = null,
     val introEnd: Int? = null,
-    // Posisi outro (detik) bila API menyediakannya; tombol Skip outro hanya muncul jika outroStart ada.
     val outroStart: Int? = null,
     val outroEnd: Int? = null,
 ) {
-    /**
-     * Punya minimal satu alamat yang bisa diputar (aliran langsung,
-     * aliran proksi, embed, atau pintu gudang ber-URL). Dipakai sejak
-     * debug.63 untuk menolak Playback "sukses tapi kosong" dari
-     * respons terdegradasi — lihat ApiClient.fetchPlayback.
-     */
     val hasStream: Boolean
         get() = !streamUrl.isNullOrBlank() || !streamProxyUrl.isNullOrBlank() ||
             !embedUrl.isNullOrBlank() || doors.any { it.url.isNotBlank() }
 }
 
-@Serializable
-private data class PlaybackResp(
-    val ok: Boolean = false,
-    val data: Playback? = null,
+/** Satu judul gudang hasil parse katalog (internal lapisan data). */
+private class WhTitle(
+    val api: ApiAnime,
+    /** nomor episode -> URL playlist master absolut. */
+    val playlists: Map<Int, String>,
 )
 
 object ApiClient {
-    const val BASE = "https://my-anime-app.adiyth-arpansa.workers.dev"
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+    // Pintu utama: katalog terenkripsi khusus Onimeku di Pages (jalur
+    // tersamar khusus Onimeku, token diisi saat build dari berkas rahasia).
+    private const val CATALOG_PAGES =
+        "https://anilover-catalog.pages.dev/265f5e92892cbb3dc1b3a8fc/lib.dat"
 
-    private fun originOf(url: String?): String? = try {
-        val u = URL(url ?: "")
-        "${u.protocol}://${u.host}/"
-    } catch (e: Exception) {
-        null
-    }
+    // Cermin katalog polos (repo katalog gudang yang sama).
+    private const val MIRROR_JSDELIVR =
+        "https://cdn.jsdelivr.net/gh/adiytharpansa/xjatxz2upew4@main/catalog.json"
+    private const val MIRROR_GCORE =
+        "https://gcore.jsdelivr.net/gh/adiytharpansa/xjatxz2upew4@main/catalog.json"
+    private const val MIRROR_RAW =
+        "https://raw.githubusercontent.com/adiytharpansa/xjatxz2upew4/main/catalog.json"
+    private const val MIRROR_FASTLY =
+        "https://fastly.jsdelivr.net/gh/adiytharpansa/xjatxz2upew4@main/catalog.json"
+    private const val PROJECT_REPO = "adiytharpansa/xjatxz2upew4"
 
-    private suspend fun getText(url: String, readTimeoutSec: Long = 60): String = withContext(Dispatchers.IO) {
-        // OkHttp bersama (Net): koneksi HTTP/2 ke worker dipakai ulang antar
-        // permintaan, jadi playback/detail tidak mengulang handshake TLS.
+    /** Rincian kegagalan terakhir tiap sumber katalog (untuk diagnosis). */
+    @Volatile
+    var lastCatalogError: String? = null
+
+    /** Peta gudang sesi ini: id judul -> data putar. Diisi fetchCatalog/ensureWarehouse. */
+    @Volatile
+    private var warehouse: Map<String, WhTitle> = emptyMap()
+
+    // ---------------- pengambilan jaringan dasar ----------------
+
+    private fun httpGetText(url: String, timeoutSec: Long = 30): String {
+        val client = Net.client.newBuilder()
+            .connectTimeout(timeoutSec, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(timeoutSec, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
         val req = okhttp3.Request.Builder().url(url)
             .header("Accept", "application/json")
             .header("User-Agent", "OnimekuApp/1.0 (Android)")
             .build()
-        val client = Net.client.newBuilder().readTimeout(readTimeoutSec, java.util.concurrent.TimeUnit.SECONDS).build()
         client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
-            resp.body?.string() ?: throw java.io.IOException("respons kosong")
+            return resp.body?.string() ?: throw java.io.IOException("respons kosong")
         }
     }
 
-    /** GET dengan percobaan ulang (jaringan seluler + hulu kadang goyah). */
-    private suspend fun getTextRetry(url: String, attempts: Int = 3): String {
-        var last: Exception? = null
-        for (i in 1..attempts) {
-            try {
-                return getText(url)
-            } catch (e: Exception) {
-                last = e
-                if (i < attempts) kotlinx.coroutines.delay(900L * i)
-            }
+    private fun httpGetBytes(url: String, timeoutSec: Long = 30): ByteArray {
+        val client = Net.client.newBuilder()
+            .connectTimeout(timeoutSec, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(timeoutSec, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+        val req = okhttp3.Request.Builder().url(url)
+            .header("User-Agent", "OnimekuApp/1.0 (Android)")
+            .build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
+            return resp.body?.bytes() ?: throw java.io.IOException("respons kosong")
         }
-        throw last ?: java.io.IOException("gagal memuat")
+    }
+
+    // ---------------- dekripsi katalog (AES-256-GCM, nonce||ct||tag) ----------------
+
+    private fun decryptCatalog(data: ByteArray, key: ByteArray): ByteArray {
+        require(data.size > 28) { "berkas terenkripsi terlalu pendek" }
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            javax.crypto.Cipher.DECRYPT_MODE,
+            javax.crypto.spec.SecretKeySpec(key, "AES"),
+            javax.crypto.spec.GCMParameterSpec(128, data.copyOfRange(0, 12)),
+        )
+        return cipher.doFinal(data.copyOfRange(12, data.size))
+    }
+
+    private fun decodeBody(bytes: ByteArray, key: ByteArray?): String {
+        if (bytes.isNotEmpty() && (bytes[0] == '{'.code.toByte() || bytes[0] == '['.code.toByte())) {
+            return String(bytes, Charsets.UTF_8)
+        }
+        if (key == null) throw java.io.IOException("kunci katalog tidak tersedia")
+        return String(decryptCatalog(bytes, key), Charsets.UTF_8)
     }
 
     /**
-     * Ambil seluruh katalog dalam SATU respons (hulu tidak berpaginasi).
-     * Memakai bentuk LITE (?lite=1, ~27% lebih kecil): sinopsis dipotong
-     * 240 karakter dan episodeNumbers dibuang — cukup untuk daftar/hero.
-     * Sinopsis penuh + nomor episode asli diambil per judul dari
-     * fetchDetail saat Detail dibuka (lihat AppVM.loadDetail).
-     * onProgress/onRaw dipanggil sekali dengan hasil final demi
-     * kompatibilitas pemanggil.
+     * Ambil badan katalog mentah: pintu Pages terenkripsi dulu (kunci dari
+     * loker), lalu cermin polos. Dua putaran; kegagalan dicatat di
+     * [lastCatalogError]. Jatuh ke cermin polos BUKAN kegagalan aplikasi.
      */
+    private suspend fun fetchRawCatalog(): String = withContext(Dispatchers.IO) {
+        val key = try { KeyLocker.fullKey() } catch (e: Exception) { null }
+        val sources: List<Pair<String, suspend () -> String>> = listOf(
+            "Pages" to { decodeBody(httpGetBytes(CATALOG_PAGES), key) },
+            "jsDelivr" to { httpGetText(MIRROR_JSDELIVR) },
+            "gcore" to { httpGetText(MIRROR_GCORE) },
+            "raw" to { httpGetText(MIRROR_RAW) },
+            "fastly" to { httpGetText(MIRROR_FASTLY) },
+        )
+        val errs = ArrayList<String>()
+        var last: Exception? = null
+        for (round in 1..2) {
+            for ((name, fetch) in sources) {
+                try {
+                    val body = fetch()
+                    if (!body.trimStart().startsWith("{")) {
+                        throw java.io.IOException("isi katalog tidak dikenal dari $name")
+                    }
+                    lastCatalogError = null
+                    return@withContext body
+                } catch (e: Exception) {
+                    last = e
+                    if (round == 2) errs.add("$name: ${e.javaClass.simpleName}: ${e.message?.take(90) ?: "?"}")
+                }
+            }
+        }
+        lastCatalogError = errs.joinToString(" · ")
+        throw last ?: java.io.IOException("semua sumber katalog gagal")
+    }
+
+    // ---------------- parse katalog gudang ----------------
+
+    private fun absolut(base: String?, path: String): String =
+        if (path.startsWith("http") || base == null) path else "$base/$path"
+
+    private fun parseWarehouse(body: String): List<WhTitle> {
+        val root = org.json.JSONObject(body)
+        val rootPin = root.optString("pin")
+        val arr = root.optJSONArray("titles") ?: org.json.JSONArray()
+        val out = ArrayList<WhTitle>()
+        for (i in 0 until arr.length()) {
+            try {
+                val t = arr.getJSONObject(i)
+                val id = t.optString("id")
+                val title = t.optString("title")
+                if (id.isBlank() || title.isBlank()) continue
+                var tRepo = t.optString("repo")
+                var tPin = t.optString("pin")
+                if (tRepo.isBlank() || tPin.isBlank()) {
+                    // Judul lama tanpa repo/pin: tebak dari URL poster
+                    // (pola .../gh/<owner>/<repo>@<pin>/...).
+                    val m = Regex("""/gh/([^/]+/[^/@]+)@([0-9a-f]{40})/""")
+                        .find(t.optString("poster"))
+                    if (m != null) {
+                        tRepo = m.groupValues[1]
+                        tPin = m.groupValues[2]
+                    }
+                }
+                val base = when {
+                    tRepo.isNotBlank() && tPin.isNotBlank() ->
+                        "https://cdn.jsdelivr.net/gh/$tRepo@$tPin"
+                    rootPin.isNotBlank() ->
+                        "https://cdn.jsdelivr.net/gh/$PROJECT_REPO@$rootPin"
+                    else -> null
+                }
+                val playlists = LinkedHashMap<Int, String>()
+                val ea = t.optJSONArray("episodes") ?: org.json.JSONArray()
+                for (j in 0 until ea.length()) {
+                    when (val item = ea.opt(j)) {
+                        is org.json.JSONObject -> {
+                            val n = item.optInt("number")
+                            val p = item.optString("playlist")
+                            if (n > 0 && p.isNotBlank()) playlists[n] = absolut(base, p)
+                        }
+                        is Number -> {
+                            val n = item.toInt()
+                            if (n > 0) playlists[n] = absolut(base, "$id/ep$n/playlist.m3u8")
+                        }
+                    }
+                }
+                if (playlists.isEmpty()) continue
+                val genres = ArrayList<String>()
+                val ga = t.optJSONArray("genres") ?: org.json.JSONArray()
+                for (j in 0 until ga.length()) genres.add(ga.optString(j))
+                val nums = playlists.keys.sorted()
+                val api = ApiAnime(
+                    id = id,
+                    title = title,
+                    poster = t.optString("poster").ifBlank { null },
+                    banner = t.optString("banner").ifBlank { null },
+                    synopsis = t.optString("synopsis").ifBlank { null },
+                    genres = genres,
+                    score = if (t.has("score") && !t.isNull("score")) t.optDouble("score") else null,
+                    year = if (t.has("year") && !t.isNull("year")) t.optInt("year") else null,
+                    status = t.optString("status").ifBlank { null },
+                    totalEpisodes = nums.size,
+                    latestEpisode = nums.maxOrNull() ?: 0,
+                    episodeNumbers = nums,
+                    updatedAt = null,
+                    anilistId = null,
+                    country = t.optString("country").ifBlank { null },
+                )
+                out += WhTitle(api, playlists)
+            } catch (e: Exception) {
+                // Satu judul rusak tidak boleh menggagalkan seluruh katalog.
+                continue
+            }
+        }
+        return out
+    }
+
+    // ---------------- katalog publik ----------------
+
     suspend fun fetchCatalog(
         onProgress: (List<Anime>) -> Unit = {},
         onRaw: (List<ApiAnime>) -> Unit = {},
     ): List<Anime> {
-        // Tampilan gudang-saja (perintah user 21 Okt 2026): katalog
-        // yang ditampilkan HANYA judul yang sudah tersalin ke
-        // gudang; metadata tetap dari API katalog kita.
-        val text = getTextRetry("$BASE/api/anime?lite=1&gudang=1")
-        // ±900 KB JSON: parse + pemetaan di thread latar agar UI tidak tersendat.
+        val text = fetchRawCatalog()
         val (raw, mapped) = withContext(Dispatchers.Default) {
-            val r = json.decodeFromString<ListResp>(text)
-            val rw = r.data.filter { it.id.isNotBlank() && it.title.isNotBlank() }.distinctBy { it.id }
+            val wh = parseWarehouse(text)
+            warehouse = wh.associateBy { it.api.id }
+            val rw = wh.map { it.api }
             val m = rw.map { it.toAnime() }
-            Catalog.warm(m) // daftar turunan dihitung di thread latar, bukan saat komposisi Home
+            Catalog.warm(m)
             rw to m
         }
         onProgress(mapped)
         onRaw(raw)
         return mapped
+    }
+
+    /** Pastikan peta gudang terisi (untuk detail/putar sebelum katalog selesai dimuat). */
+    private suspend fun ensureWarehouse(): Map<String, WhTitle> {
+        warehouse.takeIf { it.isNotEmpty() }?.let { return it }
+        val text = fetchRawCatalog()
+        val wh = withContext(Dispatchers.Default) { parseWarehouse(text) }
+        warehouse = wh.associateBy { it.api.id }
+        return warehouse
     }
 
     /** Katalog terakhir yang berhasil dimuat, disimpan di disk oleh aplikasi. */
@@ -233,15 +365,10 @@ object ApiClient {
         }
     }
 
-    /**
-     * Jadwal tayang ASLI 7 hari ke depan dari AniList (hulu Onimeku tidak punya
-     * endpoint jadwal). Hanya episode dengan airingAt > sekarang; dicocokkan ke
-     * katalog lewat anilistId. Melempar exception bila jaringan gagal agar UI
-     * bisa membedakan "gagal memuat" dari "memang kosong".
-     */
+    // ---------------- jadwal (AniList langsung, tidak berubah) ----------------
+
     suspend fun fetchSchedule(): List<ApiScheduleItem> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis() / 1000
-        // Kunci anilistId:ep menghapus duplikat bila halaman AniList bergeser antar-permintaan.
         val out = LinkedHashMap<String, ApiScheduleItem>()
         var page = 1
         while (page <= 8) {
@@ -267,11 +394,6 @@ object ApiClient {
         out.values.toList()
     }
 
-    /**
-     * POST ke AniList dengan percobaan ulang (maks 3x) untuk galat jaringan, HTTP 429, dan 5xx.
-     * 429 menghormati header Retry-After (dibatasi 1-10 dtk); selain itu jeda 1 dtk lalu 2 dtk.
-     * Kode 4xx lain tidak dicoba ulang (IllegalStateException agar lolos dari penangkap IOException).
-     */
     private suspend fun anilistPost(body: String): String {
         var last: java.io.IOException? = null
         for (attempt in 0 until 3) {
@@ -299,7 +421,6 @@ object ApiClient {
     private fun scheduleCacheFile(ctx: android.content.Context) =
         java.io.File(ctx.applicationContext.cacheDir, "schedule_cache.json")
 
-    /** Salinan jadwal terakhir di disk (cacheDir). Hanya episode yang belum tayang; null bila tak ada/rusak. */
     fun readScheduleCache(ctx: android.content.Context): ScheduleCache? = try {
         val f = scheduleCacheFile(ctx)
         if (!f.exists()) null else {
@@ -318,7 +439,6 @@ object ApiClient {
         null
     }
 
-    /** Tulis atomik (berkas sementara lalu rename) agar tak ada cache setengah jadi. Gagal diabaikan. */
     fun writeScheduleCache(ctx: android.content.Context, items: List<ApiScheduleItem>, savedAt: Long) {
         runCatching {
             val arr = org.json.JSONArray()
@@ -330,77 +450,59 @@ object ApiClient {
         }
     }
 
+    // ---------------- detail (dari katalog yang sama) ----------------
+
     suspend fun fetchDetail(id: String): Anime? {
-        val r = json.decodeFromString<DetailResp>(getTextRetry("$BASE/api/anime?id=${enc(id)}&gudang=1"))
-        return r.data?.takeIf { it.id.isNotBlank() }?.toAnime()
+        val hit = warehouse[id] ?: try { ensureWarehouse()[id] } catch (e: Exception) { null }
+        return hit?.api?.toAnime()
     }
 
     /**
-     * Kirim laporan penonton dari tombol lapor di pemutar ke API
-     * (POST /api/gudang-report; format mengikuti rancangan berkas
-     * laporan penyalin: anilistId + episode + catatan). true bila
-     * terkirim; false -> pemanggil menyimpan ke antrean lokal.
+     * Laporan penonton dinonaktifkan dengan anggun: tidak ada lagi
+     * server laporan (API lama dibuang). Mengembalikan false agar
+     * pemanggil menyimpan catatan secara lokal saja.
      */
-    suspend fun sendReport(anilistId: Int?, slug: String, ep: Int, note: String): Boolean =
-        withContext(Dispatchers.IO) {
-            try {
-                val body = org.json.JSONObject()
-                    .put("anilistId", anilistId ?: org.json.JSONObject.NULL)
-                    .put("slug", slug)
-                    .put("episode", ep)
-                    .put("catatan", note)
-                    .toString().toRequestBody("application/json".toMediaType())
-                val req = okhttp3.Request.Builder().url("$BASE/api/gudang-report")
-                    .header("User-Agent", "OnimekuApp/1.0 (Android)")
-                    .post(body).build()
-                Net.client.newCall(req).execute().use { it.isSuccessful }
-            } catch (e: Exception) {
-                false
-            }
-        }
+    suspend fun sendReport(anilistId: Int?, slug: String, ep: Int, note: String): Boolean = false
 
-    // Data putar yang diambil lebih dulu (episode berikutnya). URL stream
-    // bertoken kedaluwarsa, jadi hanya dipakai sekali dan dalam TTL pendek.
+    // ---------------- putar (playlist gudang + pintu CDN) ----------------
+
+    /** Pintu-pintu CDN untuk satu URL playlist gudang (pola yang sama dengan Anilover). */
+    fun doorVariants(url: String): List<ApiDoor> {
+        val m = Regex("""^https://[A-Za-z0-9.-]+/gh/([^/]+)/([^/@]+)@([^/]+)/(.+)$""").find(url)
+            ?: return listOf(ApiDoor("jsDelivr", url))
+        val (owner, repo, pin, path) = m.destructured
+        val gh = "$owner/$repo@$pin/$path"
+        val raw = "$owner/$repo/$pin/$path"
+        return listOf(
+            ApiDoor("jsDelivr", "https://cdn.jsdelivr.net/gh/$gh"),
+            ApiDoor("jsDelivr Fastly", "https://fastly.jsdelivr.net/gh/$gh"),
+            ApiDoor("jsDelivr Gcore", "https://gcore.jsdelivr.net/gh/$gh"),
+            ApiDoor("jsDelivr Quantil", "https://quantil.jsdelivr.net/gh/$gh"),
+            ApiDoor("jsDelivr Testing", "https://testingcf.jsdelivr.net/gh/$gh"),
+            ApiDoor("jsDelivr B-CDN", "https://jsdelivr.b-cdn.net/gh/$gh"),
+            ApiDoor("JSDMirror", "https://cdn.jsdmirror.com/gh/$gh"),
+            ApiDoor("GitHack", "https://raw.githack.com/$raw"),
+            ApiDoor("GitHub Raw", "https://raw.githubusercontent.com/$raw"),
+            ApiDoor("GHProxy", "https://ghproxy.net/https://raw.githubusercontent.com/$raw"),
+            ApiDoor("Statically", "https://cdn.statically.io/gh/$gh"),
+        )
+    }
+
     private class Prefetched(val at: Long, val pb: Playback)
     private val prefetched = java.util.concurrent.ConcurrentHashMap<String, Prefetched>()
-    // 10 menit: URL nexabloom berumur jam-jaman; jendela
-    // prefetch panjang membuat ketukan Play lama sesudah Detail dibuka
-    // tetap mengenai hasil pemanasan.
     private const val PREFETCH_TTL_MS = 600_000L
 
-    /** Lihat data putar yang sudah di-prefetch TANPA mengambilnya (null bila tak ada/kedaluwarsa). */
     fun peekPrefetched(id: String, ep: Int): Playback? =
         prefetched["$id:$ep"]?.takeIf { System.currentTimeMillis() - it.at < PREFETCH_TTL_MS }?.pb
 
-    /** Panggil saat episode hampir habis: episode berikutnya langsung siap diputar. */
     suspend fun prefetchPlayback(id: String, ep: Int) {
         val k = "$id:$ep"
         if (prefetched[k]?.let { System.currentTimeMillis() - it.at < PREFETCH_TTL_MS } == true) return
-        val pb = try { fetchPlaybackNet(id, ep) } catch (e: Exception) { null } ?: return
-        // debug.63: jangan simpan Playback tanpa aliran — prefetch yang
-        // menangkap momen hulu terdegradasi akan meracuni putar
-        // berikutnya selama sisa TTL (10 mnt).
+        val pb = try { buildPlayback(id, ep) } catch (e: Exception) { null } ?: return
         if (!pb.hasStream) return
         prefetched[k] = Prefetched(System.currentTimeMillis(), pb)
     }
 
-    /**
-     * [fresh] = true mengabaikan hasil prefetch (mis. untuk unduhan, yang
-     * butuh URL segar).
-     *
-     * debug.63 — ketahanan terhadap hulu/fasad goyah (regresi lapangan
-     * debug.62: Chainsaw Man ep1 "Stream unavailable" total padahal
-     * unduhan lokal episode itu ada dan sehat): versi lama menerima
-     * hasil prefetch maupun jaringan APA ADANYA, jadi Playback yang
-     * tiba tanpa satu pun alamat aliran (respons terdegradasi sesaat)
-     * lolos sebagai "sukses" dan pemutar menyerah tanpa pernah
-     * mencoba cadangan unduhan. Kini Playback tanpa aliran dianggap
-     * GAGAL: hit prefetch semacam itu dibuang, jaringan dicoba sampai
-     * 3x dengan jeda tumbuh (0 / 600 mdt / 1,5 dtk), dan null
-     * dikembalikan bila tak ada yang layak — pemanggil (pemutar) lalu
-     * memakai cadangan unduhan lokalnya. Jalur sehat tidak berubah:
-     * keberhasilan pertama langsung dikembalikan tanpa jeda.
-     */
     suspend fun fetchPlayback(id: String, ep: Int, fresh: Boolean = false): Playback? {
         val k = "$id:$ep"
         val hit = prefetched.remove(k)
@@ -409,7 +511,7 @@ object ApiClient {
         for (w in waits) {
             if (w > 0) kotlinx.coroutines.delay(w)
             val got = try {
-                fetchPlaybackNet(id, ep)
+                buildPlayback(id, ep)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -420,65 +522,87 @@ object ApiClient {
         return null
     }
 
-    private suspend fun fetchPlaybackNet(id: String, ep: Int): Playback? {
-        // Timeout baca 12 dtk: endpoint ini normalnya menjawab
-        // <5 dtk; 20 dtk x 2 putaran membuat layar memuat menggantung
-        // terlalu lama di jaringan seluler saat hulu goyah.
-        val r = json.decodeFromString<PlaybackResp>(getText("$BASE/api/anime?id=${enc(id)}&ep=$ep", readTimeoutSec = 12))
-        val pb = r.data ?: return null
-        // Normalisasi label subtitle hulu ({label, lang, url}) ke lang.
-        val subs = pb.subtitles.map { s -> if (s.lang.isBlank() && s.label.isNotBlank()) s.copy(lang = s.label) else s }
-        val raw = pb.streamUrl
-        // Stream MegaPlay (CDN nexabloom): bungkus lewat proksi media
-        // hulu, MENIRU pemutar web persis: ref = referer UTUH dari API
-        // (proksi yang memilah kandidat referer di sisi server); field
-        // referer sendiri tetap akar origin untuk header jalur langsung.
-        // Rantai cadangan di pemutar meniru web: proksi -> langsung ->
-        // gagal jujur (embed BUKAN cadangan untuk judul ber-stream).
-        return if (raw != null && raw.contains("nexabloom", ignoreCase = true)) {
-            val origin = originOf(pb.referer) ?: "https://megaplay.buzz/"
-            val proxied = "$BASE/api/proxy?u=${enc(raw)}&ref=${enc(pb.referer?.takeIf { it.isNotBlank() } ?: origin)}"
-            pb.copy(
-                streamUrl = proxied,
-                streamProxyUrl = proxied,
-                directUrl = raw,
-                pageUrl = pb.referer?.takeIf { it.contains("/stream/") },
-                referer = origin,
-                subtitles = subs,
-            )
-        } else {
-            pb.copy(subtitles = subs)
+    /**
+     * Bangun data putar dari katalog: playlist master episode ini,
+     * daftar pintu CDN, dan tangga unduhan per pintu dari varian
+     * manifest. Subtitle tidak dimodelkan di sini — trek teks bawaan
+     * manifest HLS dibaca pemutar langsung (pola gudang yang sudah ada).
+     */
+    private suspend fun buildPlayback(id: String, ep: Int): Playback? = withContext(Dispatchers.IO) {
+        val t = warehouse[id] ?: try { ensureWarehouse()[id] } catch (e: Exception) { null }
+            ?: return@withContext null
+        val master = t.playlists[ep] ?: return@withContext null
+        val doors = doorVariants(master)
+        // Ambil manifest master dari pintu pertama yang menjawab sah.
+        var masterText: String? = null
+        var usedDoor: ApiDoor? = null
+        for (d in doors) {
+            try {
+                val txt = httpGetText(d.url, timeoutSec = 8)
+                if (txt.trimStart().startsWith("#EXTM3U")) {
+                    masterText = txt
+                    usedDoor = d
+                    break
+                }
+            } catch (e: Exception) { /* coba pintu berikutnya */ }
         }
+        val dlDoors = ArrayList<ApiDownloadDoor>()
+        val mt = masterText
+        val ud = usedDoor
+        if (mt != null && ud != null) {
+            val variants = DoorMath.parseVariants(mt, ud.url)
+            val masterDir = DoorMath.dirOf(ud.url)
+            fun relOf(abs: String): String? =
+                if (abs.startsWith(masterDir)) abs.removePrefix(masterDir) else null
+            // Trek subtitle bawaan manifest (untuk unduhan luring per pintu).
+            var subEn: String? = null
+            var subId: String? = null
+            for (line in mt.lineSequence()) {
+                if (!line.startsWith("#EXT-X-MEDIA:") || !line.contains("TYPE=SUBTITLES")) continue
+                val uri = Regex("""URI="([^"]+)"""").find(line)?.groupValues?.get(1) ?: continue
+                val lang = Regex("""LANGUAGE="([^"]+)"""").find(line)?.groupValues?.get(1)?.lowercase().orEmpty()
+                val abs = DoorMath.resolve(ud.url, uri)
+                val rel = relOf(abs) ?: continue
+                when {
+                    lang.startsWith("en") && subEn == null -> subEn = rel
+                    (lang.startsWith("id") || lang.startsWith("in")) && subId == null -> subId = rel
+                }
+            }
+            fun variantRel(height: Int): String? {
+                val v = variants.filter { it.height == height }.firstOrNull()
+                    ?: variants.minByOrNull { kotlin.math.abs(it.height - height) }
+                    ?: return null
+                return relOf(v.uri)
+            }
+            val r1080 = variantRel(1080)
+            val r720 = variantRel(720)
+            val r480 = variantRel(480)
+            for (d in doors) {
+                val dir = DoorMath.dirOf(d.url)
+                fun at(rel: String?): String = if (rel.isNullOrBlank()) "" else dir + rel
+                dlDoors += ApiDownloadDoor(
+                    name = d.name,
+                    q1080 = at(r1080), q720 = at(r720), q480 = at(r480),
+                    subsEn = subEn?.let { dir + it },
+                    subsId = subId?.let { dir + it },
+                )
+            }
+        }
+        Playback(
+            streamUrl = master,
+            episode = ep,
+            subtitles = emptyList(),
+            source = "gudang",
+            doors = doors,
+            download = if (dlDoors.isNotEmpty()) ApiDownload(downloadable = true, doors = dlDoors) else null,
+        )
     }
 
-    /**
-     * Resolusi poster pengganti TIDAK lagi dilakukan aplikasi
-     * (debug.31, perintah user): semua data poster wajib berasal dari
-     * API my-anime-app. Penyembuhan poster ber-host rusak (s4.anilist.co
-     * 403) kini hidup di server (poster_map + resolusi Kitsu di
-     * my-anime-app/src/lib/store.ts: healPosters), sehingga respons
-     * /api/anime sudah membawa poster sembuh. Di sini tetap null agar
-     * tidak ada panggilan keluar selain ke API sendiri; PosterHealer
-     * menampilkan gradasi untuk poster yang memang belum sembuh.
-     */
+    /** Poster selalu dari katalog; tidak ada resolusi poster terpisah. */
     suspend fun resolvePoster(anilistId: Int): PosterResp? = null
 
-    /**
-     * Kirim log diagnostik lokal ke server: kegagalan putar di
-     * HP user tak terlihat dari server (permintaan varian/segmen tak
-     * pernah tiba), jadi aplikasi melaporkan lognya sendiri ke
-     * /api/app-log (KV app_log_v1) untuk dibaca agen dari server.
-     * Usaha terbaik — kegagalan kirim diabaikan.
-     */
-    suspend fun uploadDiag(tag: String) {
-        try {
-            val text = CrashLog.read()
-            val body = org.json.JSONObject().put("tag", tag).put("msg", text).toString()
-                .toRequestBody("application/json".toMediaType())
-            val req = okhttp3.Request.Builder().url("$BASE/api/app-log").post(body).build()
-            withContext(Dispatchers.IO) { Net.client.newCall(req).execute().use { } }
-        } catch (e: Exception) { /* abaikan */ }
-    }
+    /** Log diagnostik ke server dinonaktifkan (tidak ada server log lagi); diabaikan dengan anggun. */
+    suspend fun uploadDiag(tag: String) { /* nonaktif */ }
 }
 
 /** Jadwal tersimpan di disk + waktu simpan (epoch ms). */
@@ -517,7 +641,7 @@ private fun ApiAnime.toAnime(): Anime {
         title = title,
         genres = genres,
         rating = scoreTxt,
-        hd = false, // API tidak menyediakan info kualitas; jangan klaim HD
+        hd = false, // katalog tidak menyediakan info kualitas; jangan klaim HD
         eps = maxOf(total, latest, episodeNumbers.maxOrNull() ?: 0),
         ep = latest,
         label = false,
