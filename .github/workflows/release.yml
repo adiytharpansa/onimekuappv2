@@ -1,6 +1,11 @@
 name: release
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag GitHub Release untuk APK release (kosongkan bila tanpa rilis)"
+        required: false
+        default: ""
 jobs:
   bundle:
     runs-on: ubuntu-latest
@@ -14,9 +19,9 @@ jobs:
         run: gradle :app:testDebugUnitTest
       - name: Decode keystore
         run: echo "${{ secrets.ONIMEKU_STORE_B64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
-      - name: Build signed AAB (R8)
+      - name: Build signed APK + AAB (R8)
         run: >
-          gradle :app:bundleRelease
+          gradle :app:assembleRelease :app:bundleRelease
           -PONIMEKU_STORE_FILE="$RUNNER_TEMP/release.jks"
           -PONIMEKU_STORE_PASS="${{ secrets.ONIMEKU_STORE_PASS }}"
           -PONIMEKU_KEY_ALIAS="${{ secrets.ONIMEKU_KEY_ALIAS }}"
@@ -25,3 +30,17 @@ jobs:
           -PONIMEKU_FIREBASE_API_KEY="${{ secrets.ONIMEKU_FIREBASE_API_KEY }}"
       - uses: actions/upload-artifact@v4
         with: { name: onimeku-release-aab, path: app/build/outputs/bundle/release/*.aab }
+      - uses: actions/upload-artifact@v4
+        with: { name: onimeku-release-apk, path: app/build/outputs/apk/release/*.apk }
+      - name: Create GitHub Release with release APK
+        if: ${{ inputs.release_tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: Onimeku Release ${{ inputs.release_tag }}
+          body: |
+            APK RELEASE penuh Onimeku (Kotlin / Jetpack Compose) dari branch main.
+
+            - assembleRelease + R8 (minify + shrink resources), ditandatangani keystore rilis khusus Onimeku Kotlin.
+            - Tanpa API katalog: daftar, detail, dan stream dibaca dari katalog gudang terenkripsi + cermin; akun/komentar/sinkron + loker kunci memakai Firebase proyek khusus Onimeku.
+          files: app/build/outputs/apk/release/*.apk
