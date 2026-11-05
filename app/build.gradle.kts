@@ -16,10 +16,12 @@ android {
         versionName = "1.0.0"
         // Aplikasi hanya punya bahasa en + id: buang string terjemahan 80+ bahasa dari Compose/Material (APK lebih kecil).
         resourceConfigurations += listOf("en", "id")
-        // Kunci publik Supabase untuk Sign in/Sign up (isi di gradle.properties; kosong = fitur akun nonaktif anggun)
+        // Konfigurasi Firebase proyek khusus Onimeku (isi di gradle.properties; kosong = fitur Firebase nonaktif anggun)
         fun prop(n: String) = (project.findProperty(n) as String?)?.replace("\"", "") ?: ""
-        buildConfigField("String", "SUPABASE_URL", "\"${prop("ONIMEKU_SUPABASE_URL")}\"")
-        buildConfigField("String", "SUPABASE_KEY", "\"${prop("ONIMEKU_SUPABASE_KEY")}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${prop("ONIMEKU_FIREBASE_PROJECT_ID")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${prop("ONIMEKU_FIREBASE_API_KEY")}\"")
+        // Mekanisme uji loker kunci (potongan B tersamar) — hanya dibaca build DEBUG; kosong di rilis.
+        buildConfigField("String", "KEY_B_TEST", "\"${prop("ONIMEKU_KEY_B_TEST")}\"")
     }
     // Tanda tangan rilis: aktif hanya bila ONIMEKU_STORE_FILE diberikan (gradle.properties / -P / CI).
     signingConfigs {

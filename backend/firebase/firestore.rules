@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Aturan Firestore proyek Firebase khusus Onimeku.
+// - app_keys: loker potongan kunci katalog; hanya sesi terautentikasi
+//   (termasuk anonim) yang boleh MEMBACA; tidak ada tulis dari klien.
+// - user_state: sinkronisasi profil/My List/progres; hanya pemilik.
+// - comments: baca publik; tulis wajib masuk dan user_id harus = uid;
+//   hapus hanya komentar sendiri.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /app_keys/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /user_state/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /comments/{docId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.body is string
+        && request.resource.data.body.size() >= 1
+        && request.resource.data.body.size() <= 1000;
+      allow delete: if request.auth != null && resource.data.user_id == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}

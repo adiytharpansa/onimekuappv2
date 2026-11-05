@@ -1,63 +1,49 @@
 package com.onimeku.app.data
 
-import com.onimeku.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.put
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * Sinkronisasi My List + progres tonton ke Supabase (tabel `user_state`,
- * RLS per auth.uid(); skema di backend/supabase/schema.sql). Satu baris per
- * pengguna berisi daftar profil. Penggabungan myList/seen memakai cap waktu
- * per id (lihat [mergeStamped]): penghapusan yang lebih baru menang; tanpa cap
- * (data lama) tetap union seperti dulu.
+ * Sinkronisasi My List + progres tonton ke Firestore (dokumen
+ * `user_state/<uid>`; rules: hanya pemilik yang bisa membaca/menulis).
+ * Daftar profil disimpan sebagai satu field string JSON agar bentuk
+ * datanya persis seperti yang dikenal logika penggabungan di bawah.
+ * Penggabungan myList/seen memakai cap waktu per id (lihat [mergeStamped]):
+ * penghapusan yang lebih baru menang; tanpa cap (data lama) tetap union.
  */
 object Sync {
     class Unauthorized : Exception("unauthorized")
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-    private val JSON = "application/json".toMediaType()
-    private val base get() = BuildConfig.SUPABASE_URL.trimEnd('/')
-    val enabled: Boolean get() = BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_KEY.isNotBlank()
-
-    private fun req(path: String, acc: Account) = Request.Builder().url(base + path)
-        .header("apikey", BuildConfig.SUPABASE_KEY)
-        .header("Authorization", "Bearer ${acc.accessToken}")
+    val enabled: Boolean get() = AuthClient.configured
 
     suspend fun pull(acc: Account): List<Profile>? = withContext(Dispatchers.IO) {
         if (!enabled) return@withContext null
-        Net.client.newCall(req("/rest/v1/user_state?user_id=eq.${acc.userId}&select=data", acc).get().build()).execute().use { r ->
-            if (r.code == 401) throw Unauthorized()
-            if (!r.isSuccessful) return@withContext null
-            val arr = json.parseToJsonElement(r.body?.string().orEmpty()).jsonArray
-            val data = arr.firstOrNull()?.jsonObject?.get("data")?.jsonObject?.get("profiles") ?: return@withContext null
-            json.decodeFromJsonElement(ListSerializer(Profile.serializer()), data)
+        val r = Firestore.request("GET", "/user_state/${acc.userId}", acc.accessToken)
+        if (r.code == 401 || r.code == 403) throw Unauthorized()
+        if (r.code == 404) return@withContext null
+        if (r.code !in 200..299) return@withContext null
+        val raw = Firestore.fieldStr(r.body, "profiles") ?: return@withContext null
+        try {
+            json.decodeFromString(ListSerializer(Profile.serializer()), raw)
+        } catch (e: Exception) {
+            null
         }
     }
 
     suspend fun push(acc: Account, profiles: List<Profile>) = withContext(Dispatchers.IO) {
         if (!enabled) return@withContext
-        val body = buildJsonObject {
-            put("user_id", acc.userId)
-            put("data", buildJsonObject {
-                put("profiles", json.encodeToJsonElement(ListSerializer(Profile.serializer()), profiles))
-            })
-        }.toString()
-        val rq = req("/rest/v1/user_state?on_conflict=user_id", acc)
-            .header("Prefer", "resolution=merge-duplicates,return=minimal")
-            .post(body.toRequestBody(JSON)).build()
-        Net.client.newCall(rq).execute().use { r ->
-            if (r.code == 401) throw Unauthorized()
-            if (!r.isSuccessful) throw java.io.IOException("sync push gagal: ${r.code}")
-        }
+        val payload = Firestore.doc(
+            mapOf(
+                "user_id" to Firestore.sv(acc.userId),
+                "profiles" to Firestore.sv(json.encodeToString(ListSerializer(Profile.serializer()), profiles)),
+            ),
+        )
+        val r = Firestore.request("PATCH", "/user_state/${acc.userId}", acc.accessToken, payload)
+        if (r.code == 401 || r.code == 403) throw Unauthorized()
+        if (r.code !in 200..299) throw java.io.IOException("sync push gagal: ${r.code}")
     }
 
     /**

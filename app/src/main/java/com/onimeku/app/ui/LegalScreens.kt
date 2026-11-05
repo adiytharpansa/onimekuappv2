@@ -22,7 +22,7 @@ private val terms = listOf(
 
 private val privacy = listOf(
     Sec("What stays on your device", "Your profiles, My List, watch progress, search history, reminders, settings and offline downloads are stored on your device."),
-    Sec("Account data", "If you create an account, your email address and an encrypted password are handled by our authentication provider (Supabase) so you can sign in. We do not see your plain password."),
+    Sec("Account data", "If you create an account, your email address and an encrypted password are handled by our authentication provider (Firebase) so you can sign in. We do not see your plain password."),
     Sec("Network requests", "To show the catalog and play episodes, the app contacts our API and streaming hosts. These servers may receive technical data such as your IP address and device type, as with any internet service."),
     Sec("Notifications", "If you allow notifications, the app uses them for episode reminders and download progress. You can turn them off in Settings or in your device settings."),
     Sec("No ads, no selling data", "Onimeku does not show ads and does not sell your personal data."),

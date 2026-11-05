@@ -280,7 +280,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     private fun pctOf(d: androidx.media3.exoplayer.offline.Download): Int =
         d.percentDownloaded.toInt().coerceIn(0, 99)
 
-    /** Muat katalog dari API Onimeku; dipanggil saat aplikasi dibuka dan dari tombol coba lagi. */
+    /** Muat katalog gudang; dipanggil saat aplikasi dibuka dan dari tombol coba lagi. */
     fun reloadCatalog() {
         // Tampilkan dulu katalog terakhir dari disk (seketika), jaringan
         // menyegarkannya di latar — katalog tidak boleh kosong hanya karena
@@ -433,7 +433,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     /**
      * Segarkan token SEKALI untuk semua pemanggil serentak. [stale] = akun yang ditolak server.
      * Bila pemanggil lain sudah menyegarkan saat kita antre, pakai hasilnya (refresh token dirotasi
-     * Supabase; memakai token lama dua kali bisa mencabut sesi).
+     * server; memakai token lama dua kali bisa mencabut sesi).
      */
     private suspend fun refreshSession(stale: Account): Account? = authMutex.withLock {
         val cur = s.account ?: return@withLock null
@@ -898,14 +898,23 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Masuk/daftar dengan Google atau Discord: buka halaman OAuth di browser; hasilnya kembali lewat finishSocial. */
+    /**
+     * Masuk/daftar dengan Google atau Discord: pada backend Firebase
+     * jalur REST murni, login sosial belum tersedia — tampilkan pesan
+     * anggun dan arahkan ke email + kata sandi (tampilan tidak berubah).
+     */
     fun socialSignIn(provider: String) {
         if (authBusy) return
         if (!AuthClient.configured) { toast("Accounts are not available in this build yet"); return }
+        val url = AuthClient.socialUrl(provider)
+        if (url.isBlank()) {
+            authError = I18n.t("auth_social_unavailable", "Google/Discord sign-in is not available yet. Please use email and password.")
+            return
+        }
         authError = null
         try {
             app.startActivity(
-                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(AuthClient.socialUrl(provider)))
+                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (e: Exception) { authError = "No browser found to continue." }
