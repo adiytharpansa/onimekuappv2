@@ -76,11 +76,12 @@ fun fmt(t: Int): String {
 }
 
 /** Huruf "O" yang sama persis dengan ikon launcher (ic_launcher_foreground.xml), kisi 108. */
-private val LogoO: androidx.compose.ui.graphics.Path =
+private val LogoO: androidx.compose.ui.graphics.Path by lazy {
     androidx.compose.ui.graphics.vector.PathParser()
         .parsePathString("M53.98 78.08C66.54 78.08 76 68.88 76 54.03C76 39.16 66.54 29.92 53.98 29.92C41.43 29.92 32 39.16 32 54.03C32 68.81 41.43 78.08 53.98 78.08ZM53.98 69.56C46.78 69.56 41.71 63.93 41.71 54.03C41.71 44.07 46.78 38.44 53.98 38.44C61.19 38.44 66.29 44.07 66.29 54.03C66.29 63.93 61.19 69.56 53.98 69.56Z")
         .toPath()
         .apply { fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd }
+}
 
 /** Logo aplikasi: lingkaran merah + "O" putih, senada ikon launcher (zona 72 dari kisi 108). */
 @Composable
