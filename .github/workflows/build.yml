@@ -34,8 +34,9 @@ jobs:
       - name: Build debug APK
         env:
           # Opsional: aktifkan Sign in/Sign up (secret repo; kunci PUBLIK saja)
-          ORG_GRADLE_PROJECT_ONIMEKU_SUPABASE_URL: ${{ secrets.ONIMEKU_SUPABASE_URL }}
-          ORG_GRADLE_PROJECT_ONIMEKU_SUPABASE_KEY: ${{ secrets.ONIMEKU_SUPABASE_KEY }}
+          ORG_GRADLE_PROJECT_ONIMEKU_FIREBASE_PROJECT_ID: ${{ secrets.ONIMEKU_FIREBASE_PROJECT_ID }}
+          ORG_GRADLE_PROJECT_ONIMEKU_FIREBASE_API_KEY: ${{ secrets.ONIMEKU_FIREBASE_API_KEY }}
+          ORG_GRADLE_PROJECT_ONIMEKU_KEY_B_TEST: ${{ secrets.ONIMEKU_KEY_B_TEST }}
           ORG_GRADLE_PROJECT_ONIMEKU_TR_URL: ${{ secrets.ONIMEKU_TR_URL }}
           ORG_GRADLE_PROJECT_ONIMEKU_TR_KEY: ${{ secrets.ONIMEKU_TR_KEY }}
         run: gradle :app:assembleDebug --stacktrace
@@ -59,6 +60,6 @@ jobs:
             APK debug Onimeku (Kotlin / Jetpack Compose) dari branch main.
 
             - Build debug resmi dari GitHub Actions repo ini (ditandatangani kunci debug Android, siap pasang untuk pengujian).
-            - Aplikasi sudah tersambung ke API katalog Onimeku (onimekuappv2-api): daftar, detail, dan stream episode diambil langsung dari API.
+            - Aplikasi tanpa API katalog: daftar, detail, dan stream episode dibaca dari katalog gudang terenkripsi + cermin (Firebase hanya untuk akun/komentar/sinkron + loker kunci).
           files: app/build/outputs/apk/debug/*.apk
           fail_on_unmatched_files: true

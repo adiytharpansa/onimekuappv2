@@ -21,7 +21,7 @@ jobs:
           -PONIMEKU_STORE_PASS="${{ secrets.ONIMEKU_STORE_PASS }}"
           -PONIMEKU_KEY_ALIAS="${{ secrets.ONIMEKU_KEY_ALIAS }}"
           -PONIMEKU_KEY_PASS="${{ secrets.ONIMEKU_KEY_PASS }}"
-          -PONIMEKU_SUPABASE_URL="${{ secrets.ONIMEKU_SUPABASE_URL }}"
-          -PONIMEKU_SUPABASE_KEY="${{ secrets.ONIMEKU_SUPABASE_KEY }}"
+          -PONIMEKU_FIREBASE_PROJECT_ID="${{ secrets.ONIMEKU_FIREBASE_PROJECT_ID }}"
+          -PONIMEKU_FIREBASE_API_KEY="${{ secrets.ONIMEKU_FIREBASE_API_KEY }}"
       - uses: actions/upload-artifact@v4
         with: { name: onimeku-release-aab, path: app/build/outputs/bundle/release/*.aab }

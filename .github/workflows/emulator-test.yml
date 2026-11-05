@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       anime_id:
-        description: "Slug katalog yang diuji putar"
+        description: "Id judul katalog gudang yang diuji putar"
         required: false
         type: string
-        default: "attack-on-titan-season-3-part-2"
+        default: "jjk-s3"
       ep:
         description: "Nomor episode"
         required: false

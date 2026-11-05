@@ -1,5 +1,16 @@
 # Onimeku — Panduan Lengkap untuk AI Agent
 
+> **PEMBARUAN ARSITEKTUR — 6 Nov 2026 (berlaku penuh, menggantikan uraian lama di dokumen ini):**
+> - API katalog lama **dibuang total** dari aplikasi. Katalog/detail/putar kini dari katalog gudang
+>   terenkripsi AES-256-GCM (Pages, jalur tersamar khusus Onimeku) + cermin polos jsDelivr/gcore/raw/fastly;
+>   kunci katalog dipecah dua (potongan A di aplikasi, potongan B di loker Firebase) — lihat `data/Api.kt` + `data/KeyLocker.kt`.
+> - Backend akun **Supabase dibuang penuh**, diganti Firebase proyek khusus Onimeku (REST):
+>   Auth = identitytoolkit (`data/Auth.kt`), sinkronisasi = dokumen Firestore `user_state/<uid>` (`data/Sync.kt`),
+>   komentar = koleksi Firestore `comments` (`data/Comments.kt`). Konfigurasi: `ONIMEKU_FIREBASE_PROJECT_ID` +
+>   `ONIMEKU_FIREBASE_API_KEY` -> BuildConfig; kosong = fitur Firebase nonaktif anggun.
+> - Semua uraian lama di bawah yang menyebut API katalog lama / Supabase adalah catatan sejarah dan TIDAK berlaku lagi.
+
+
 > Dokumen serah-terima. Baca seluruhnya sebelum mengubah kode. Bagian 1–6 menjelaskan sistem; bagian 7 mencatat perubahan terbaru; bagian 8–9 berisi pekerjaan tersisa dan aturan kerja.
 > Tanggal: 19 Okt 2026 · Paket: `com.onimeku.app` · Versi: 1.0.0
 
@@ -13,7 +24,7 @@ Onimeku adalah aplikasi Android native (Kotlin + Jetpack Compose + Media3) untuk
 |---|---|---|
 | Aplikasi Android | Kotlin, Compose Material 3, Media3 (ExoPlayer/HLS), OkHttp, Coil, WorkManager | `Onimeku-Kotlin-Terbaru.zip` |
 | API katalog | Next.js 15 + OpenNext di Cloudflare Workers, katalog di Turso (utama) / D1 (cadangan) | `Onimeku-API-Terbaru.zip` |
-| Akun (baru) | Supabase Auth via REST (email + kata sandi) | `data/Auth.kt` |
+| Akun (baru) | Firebase Auth via REST (email + kata sandi) | `data/Auth.kt` |
 
 Keputusan yang harus dihormati:
 - BASE API: `https://my-anime-app.adiyth-arpansa.workers.dev` (di `data/Api.kt`). Jangan menambah API perantara tanpa perintah pemilik proyek.
@@ -50,7 +61,7 @@ AppVM (satu-satunya ViewModel)
 | `AppVM.kt` | `Route`, navigasi, My List, progres tonton, unduhan, profil, **akun (BARU)** |
 | `Notifier.kt`, `Reminders.kt` | Notifikasi dan pengingat episode (WorkManager) |
 | `data/Api.kt` | `ApiClient` (katalog, detail, playback, proksi stream), model `ApiAnime`, `Playback` |
-| `data/Auth.kt` | **BARU** `AuthClient` (Supabase GoTrue REST), `AuthException` |
+| `data/Auth.kt` | **BARU** `AuthClient` (Firebase Auth REST (identitytoolkit)), `AuthException` |
 | `data/Catalog.kt` | Model `Anime`, `object Catalog` (daftar turunan di-cache per perubahan katalog) |
 | `data/State.kt` | `AppState`, `Profile`, `Settings`, `Account` (BARU), `Store` |
 | `data/Downloads.kt` | Unduhan offline HLS (Media3) |
@@ -104,7 +115,7 @@ Semua perubahan state lewat `upd { it.copy(...) }` (menyimpan otomatis). Untuk d
 ### 2.6 Akun (baru)
 
 - `AuthClient` memanggil `POST {SUPABASE_URL}/auth/v1/token?grant_type=password`, `/auth/v1/signup`, `/auth/v1/recover`, `/auth/v1/logout` dengan header `apikey` = kunci publik.
-- Konfigurasi lewat `gradle.properties` atau CI: `ONIMEKU_SUPABASE_URL`, `ONIMEKU_SUPABASE_KEY` → `BuildConfig.SUPABASE_URL/KEY`. Bila kosong: `AuthClient.configured == false`, halaman Auth menampilkan catatan dan pemanggilan gagal dengan pesan ramah (aplikasi tetap berjalan sebagai tamu).
+- Konfigurasi lewat `gradle.properties` atau CI: `ONIMEKU_FIREBASE_PROJECT_ID`, `ONIMEKU_FIREBASE_API_KEY` → `BuildConfig.SUPABASE_URL/KEY`. Bila kosong: `AuthClient.configured == false`, halaman Auth menampilkan catatan dan pemanggilan gagal dengan pesan ramah (aplikasi tetap berjalan sebagai tamu).
 - Sign up: bila konfirmasi email aktif di Supabase, respons tanpa token → `signUp` mengembalikan `null` → toast "Check your email…" lalu pindah ke Sign in.
 - Hanya kunci PUBLIK (`sb_publishable_…`/anon). Jangan pernah `service_role`.
 
@@ -196,7 +207,7 @@ gradle :app:bundleRelease        # butuh signing (di bawah)
 ```
 
 - CI: `.github/workflows/build.yml` (build debug APK), `emulator-test.yml` (uji emulator). Hook uji: intent extra `test_id`, `test_ep`, `test_home`.
-- Secret CI opsional: `ONIMEKU_SUPABASE_URL`, `ONIMEKU_SUPABASE_KEY` (sudah dipetakan ke `ORG_GRADLE_PROJECT_*`).
+- Secret CI opsional: `ONIMEKU_FIREBASE_PROJECT_ID`, `ONIMEKU_FIREBASE_API_KEY` (sudah dipetakan ke `ORG_GRADLE_PROJECT_*`).
 - Signing rilis: `ONIMEKU_STORE_FILE`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS` di `gradle.properties`.
 - **Status verifikasi:** perubahan di bagian 7 ditulis tanpa Android SDK, jadi **belum dikompilasi**. Langkah pertama agent berikutnya: jalankan build, perbaiki galat impor/tipe bila ada, lalu jalankan emulator-test.
 
@@ -257,7 +268,7 @@ Belum dikompilasi/diuji. Titik rawan kompilasi: API Media3 session (`MediaSessio
 ## 8. Pekerjaan tersisa (urut prioritas)
 
 1. **Kompilasi dan uji** (bagian 6). Belum ada build setelah perubahan 7.
-2. **Isi kunci Supabase** (`ONIMEKU_SUPABASE_URL/KEY`) dan atur Auth di dashboard: URL redirect, apakah konfirmasi email wajib, batas laju.
+2. **Isi kunci Supabase** (`ONIMEKU_FIREBASE_PROJECT_ID/KEY`) dan atur Auth di dashboard: URL redirect, apakah konfirmasi email wajib, batas laju.
 3. **Hapus akun** — kebijakan Google Play mewajibkan jalur hapus akun bila ada pembuatan akun. Butuh endpoint server (Edge Function) yang memverifikasi token lalu menghapus pengguna; klien tidak boleh memakai `service_role`.
 4. **Simpan token dengan aman** — sekarang `Account` ada di SharedPreferences biasa. Pindahkan ke `EncryptedSharedPreferences`/Keystore; tambahkan refresh token (`/auth/v1/token?grant_type=refresh_token`) saat 401.
 5. **Sinkronisasi** My List/progres ke akun (tabel Supabase dengan RLS per `auth.uid()`); sekarang semua lokal.

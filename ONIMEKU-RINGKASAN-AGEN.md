@@ -1,5 +1,16 @@
 # Onimeku — Ringkasan & Panduan AI Agent
 
+> **PEMBARUAN ARSITEKTUR — 6 Nov 2026 (berlaku penuh, menggantikan uraian lama di dokumen ini):**
+> - API katalog lama **dibuang total** dari aplikasi. Katalog/detail/putar kini dari katalog gudang
+>   terenkripsi AES-256-GCM (Pages, jalur tersamar khusus Onimeku) + cermin polos jsDelivr/gcore/raw/fastly;
+>   kunci katalog dipecah dua (potongan A di aplikasi, potongan B di loker Firebase) — lihat `data/Api.kt` + `data/KeyLocker.kt`.
+> - Backend akun **Supabase dibuang penuh**, diganti Firebase proyek khusus Onimeku (REST):
+>   Auth = identitytoolkit (`data/Auth.kt`), sinkronisasi = dokumen Firestore `user_state/<uid>` (`data/Sync.kt`),
+>   komentar = koleksi Firestore `comments` (`data/Comments.kt`). Konfigurasi: `ONIMEKU_FIREBASE_PROJECT_ID` +
+>   `ONIMEKU_FIREBASE_API_KEY` -> BuildConfig; kosong = fitur Firebase nonaktif anggun.
+> - Semua uraian lama di bawah yang menyebut API katalog lama / Supabase adalah catatan sejarah dan TIDAK berlaku lagi.
+
+
 > Serah-terima untuk AI agent berikutnya. Merangkum `ONIMEKU-AGENT-GUIDE.md`, `CATATAN-ARSITEKTUR.md`, `CHANGELOG.md`, hasil tinjauan kode (18 Okt 2026), dan perbaikan bug terbaru. Paket: `com.onimeku.app` · Versi: 1.0.0 · Gradle 8.9, JDK 17, compileSdk/targetSdk 35, minSdk 26
 
 **Status verifikasi:** seluruh kode (termasuk perbaikan di bagian 6) ditulis/ditinjau tanpa Android SDK. **Belum dikompilasi, belum dijalankan, belum diukur.** Langkah pertama agent: `gradle :app:assembleDebug` dan `gradle :app:testDebugUnitTest`, perbaiki galat impor/tipe bila ada, lalu jalankan `emulator-test.yml`.
@@ -13,8 +24,8 @@ Aplikasi Android native untuk menonton anime: Kotlin + Jetpack Compose (Material
 | Bagian | Teknologi | Lokasi |
 | --- | --- | --- |
 | Aplikasi | Kotlin, Compose, Media3 | `app/` |
-| API katalog | Next.js di Cloudflare Workers (Turso utama / D1 cadangan) | proyek terpisah `my-anime-app` |
-| Akun & sinkronisasi | Supabase Auth + tabel `user_state` (RLS) + Edge Function | `backend/` |
+| Katalog | Berkas gudang terenkripsi AES-GCM di Pages + cermin jsDelivr/gcore/raw/fastly (tanpa API) | `data/Api.kt` |
+| Akun & sinkronisasi | Firebase Auth + dokumen Firestore `user_state` (rules per pemilik) | `backend/` |
 
 **Keputusan pemilik yang wajib dihormati**
 
@@ -50,8 +61,8 @@ AppVM (satu-satunya ViewModel)
 | `PlaybackService.kt` | `MediaSessionService` (notifikasi/layar kunci/latar); sesi dibuat di `PlayerScreen` |
 | `data/Api.kt` | `ApiClient` (katalog, detail, playback, proksi stream, prefetch) + model |
 | `data/Net.kt` | Satu `OkHttpClient` bersama + cookie jar per host |
-| `data/Auth.kt` | `AuthClient` (Supabase GoTrue REST) |
-| `data/Sync.kt` | Sinkronisasi My List/progres ke Supabase (merge union, maks 4 profil) |
+| `data/Auth.kt` | `AuthClient` (Firebase Auth REST (identitytoolkit)) |
+| `data/Sync.kt` | Sinkronisasi My List/progres ke Firestore (merge union, maks 4 profil) |
 | `data/State.kt` | `AppState`, `Profile`, `Settings`, `Account`, `Store` (token di EncryptedSharedPreferences) |
 | `data/Catalog.kt` | Model `Anime`, `Catalog` (daftar turunan di-cache per perubahan) |
 | `data/Downloads.kt` | Unduhan HLS offline + `OnimekuDownloadService` |
@@ -109,7 +120,7 @@ Fullscreen/landscape, kontrol auto-sembunyi 3,5 dtk, ketuk dua kali ±10 dtk, ge
 ## 4. Akun & backend
 
 - `AuthClient`: `/auth/v1/token?grant_type=password|refresh_token`, `/auth/v1/signup`, `/auth/v1/recover`, `/auth/v1/logout`. Hanya kunci PUBLIK di klien; jangan pernah `service_role`.
-- Konfigurasi: `ONIMEKU_SUPABASE_URL`, `ONIMEKU_SUPABASE_KEY` (gradle.properties atau secret CI) -> `BuildConfig`. Kosong = mode tamu, fitur akun nonaktif anggun.
+- Konfigurasi: `ONIMEKU_FIREBASE_PROJECT_ID`, `ONIMEKU_FIREBASE_API_KEY` (gradle.properties atau secret CI) -> `BuildConfig`. Kosong = mode tamu, fitur akun nonaktif anggun.
 - `AppVM.withAccount`: retry sekali dengan refresh token saat 401. `scheduleSync` debounce 15 dtk. `deleteAccount` memanggil Edge Function.
 - `backend/supabase/schema.sql` (tabel `user_state` + RLS per `auth.uid()`) dan `functions/delete-account` **harus dideploy** sebelum fitur akun berfungsi.
 - Sinkronisasi bersifat union: penghapusan di satu perangkat bisa muncul lagi dari perangkat lain (by design).
@@ -193,7 +204,7 @@ gradle :app:bundleRelease \
   -PONIMEKU_KEY_ALIAS=... -PONIMEKU_KEY_PASS=...   # AAB rilis (R8)
 ```
 
-CI: `build.yml` (debug APK), `emulator-test.yml` (hook uji: intent extra `test_id`, `test_ep`, `test_home`), `release.yml` (uji unit + AAB bertanda tangan; secret `ONIMEKU_STORE_B64`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS`, `ONIMEKU_KEY_PASS`, `ONIMEKU_SUPABASE_URL`, `ONIMEKU_SUPABASE_KEY`).
+CI: `build.yml` (debug APK), `emulator-test.yml` (hook uji: intent extra `test_id`, `test_ep`, `test_home`), `release.yml` (uji unit + AAB bertanda tangan; secret `ONIMEKU_STORE_B64`, `ONIMEKU_STORE_PASS`, `ONIMEKU_KEY_ALIAS`, `ONIMEKU_KEY_PASS`, `ONIMEKU_FIREBASE_PROJECT_ID`, `ONIMEKU_FIREBASE_API_KEY`).
 
 ---
 

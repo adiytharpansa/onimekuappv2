@@ -1,11 +1,22 @@
 # Catatan Arsitektur — Onimeku (18 Okt 2026)
 
-Perintah user: aplikasi Kotlin memakai API my-anime-app LANGSUNG, tanpa
-perantara onimekuappv2-api. Projek Flutter sudah dihapus permanen
+> **PEMBARUAN ARSITEKTUR — 6 Nov 2026 (berlaku penuh, menggantikan uraian lama di dokumen ini):**
+> - API katalog lama **dibuang total** dari aplikasi. Katalog/detail/putar kini dari katalog gudang
+>   terenkripsi AES-256-GCM (Pages, jalur tersamar khusus Onimeku) + cermin polos jsDelivr/gcore/raw/fastly;
+>   kunci katalog dipecah dua (potongan A di aplikasi, potongan B di loker Firebase) — lihat `data/Api.kt` + `data/KeyLocker.kt`.
+> - Backend akun **Supabase dibuang penuh**, diganti Firebase proyek khusus Onimeku (REST):
+>   Auth = identitytoolkit (`data/Auth.kt`), sinkronisasi = dokumen Firestore `user_state/<uid>` (`data/Sync.kt`),
+>   komentar = koleksi Firestore `comments` (`data/Comments.kt`). Konfigurasi: `ONIMEKU_FIREBASE_PROJECT_ID` +
+>   `ONIMEKU_FIREBASE_API_KEY` -> BuildConfig; kosong = fitur Firebase nonaktif anggun.
+> - Semua uraian lama di bawah yang menyebut API katalog lama / Supabase adalah catatan sejarah dan TIDAK berlaku lagi.
+
+
+[SEJARAH — sudah digantikan pembaruan 6 Nov 2026 di atas] Perintah user lama: aplikasi Kotlin memakai API katalog lama LANGSUNG, tanpa
+perantara. Projek Flutter sudah dihapus permanen
 (lokal + repo GitHub) — jangan dihidupkan lagi tanpa perintah user.
 
 ## Aplikasi (Onimeku-Kotlin-Terbaru.zip)
-- BASE = https://my-anime-app.adiyth-arpansa.workers.dev (data/Api.kt)
+- BASE lama (sudah tidak ada di kode): alamat API katalog lama (data/Api.kt versi lama)
 - Kontrak: GET /api/anime -> {ok, data:[ringkasan]} (satu panggilan, tanpa
   paginasi); GET /api/anime?id=<slug> -> detail; GET /api/anime?id=&ep= -> putar.
 - Tugas yang pindah ke klien (dulu di API perantara), semua di ApiClient:
@@ -23,7 +34,7 @@ perantara onimekuappv2-api. Projek Flutter sudah dihapus permanen
 - Cache katalog di disk berganti nama: catalog_cache_direct.json.
 
 ## API (Onimeku-API-Terbaru.zip)
-Ekstrak dari proyek my-anime-app (Next.js di Cloudflare Workers):
+Ekstrak dari proyek API lama (Next.js di Cloudflare Workers) — sejarah:
 src/app/api (route anime/proxy/img/dll), src/lib (store.ts = katalog
 Turso-utama/D1-cadangan), src/providers, wrangler.jsonc, package.json.
 Inilah API yang sekarang dipakai aplikasi secara langsung.
