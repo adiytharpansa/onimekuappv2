@@ -1,3 +1,8 @@
+# v1.0.1 — Sinkronisasi settings akun + pengingat dari My List (perilaku saja, tanpa perubahan tampilan)
+- **Settings ikut tersinkron antar-perangkat:** dokumen `user_state/<uid>` kini juga menyimpan `settings` (JSON) + `settings_ts`. Gabung last-write-wins berdasar cap waktu (`Sync.mergeSettings`, murni + teruji): remote dipakai hanya bila capnya lebih baru; dokumen lama tanpa field diabaikan aman. `AppState.settingsTs` dicap tiap `AppVM.setSettings`.
+- **Pengingat mingguan digerakkan My List:** himpunan efektif = `remind ∪ myList` dibatasi judul berkatalog + berjadwal (day != 0) + belum Completed (`data/ReminderLogic.effectiveIds`, murni + teruji). `Reminders.rescheduleAll` memakai himpunan efektif, `ReminderWorker` menerima id dari remind ATAU myList, dan `AppVM.toggleML` kini memicu `rescheduleAll`.
+- Gaya subtitle sistem (pola caption perangkat) tidak diubah. versionCode 2, versionName 1.0.1.
+
 # Penyempurnaan layar Settings, Help, About (belum dikompilasi)
 **Belum dikompilasi/dijalankan** (tanpa Android SDK). Jalankan `gradle :app:assembleDebug` dulu. Perubahan di `ui/ProfileScreens.kt`, `AppVM.kt`, `I18n.kt`.
 - **Pengaturan baru di layar Settings:** Kualitas bawaan (Auto/1080p/720p/480p); grup Subtitle (bahasa bawaan, ukuran, warna, latar gelap, gaya sistem + pratinjau langsung); grup Penyimpanan (ringkasan unduhan + Hapus semua dengan konfirmasi); tombol Atur ulang pengaturan (bahasa, daftar, unduhan, dubbing per judul tetap). Sebelumnya opsi subtitle/kualitas hanya bisa diubah dari dalam pemutar.

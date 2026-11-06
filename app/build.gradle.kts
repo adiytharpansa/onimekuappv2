@@ -12,8 +12,8 @@ android {
         applicationId = "com.onimeku.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         // Aplikasi hanya punya bahasa en + id: buang string terjemahan 80+ bahasa dari Compose/Material (APK lebih kecil).
         resourceConfigurations += listOf("en", "id")
         // Konfigurasi Firebase proyek khusus Onimeku (isi di gradle.properties; kosong = fitur Firebase nonaktif anggun)

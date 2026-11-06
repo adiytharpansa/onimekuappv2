@@ -411,7 +411,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     private suspend fun pushNow() {
         try {
-            withAccount { Sync.push(it, s.profiles) }
+            withAccount { Sync.push(it, s.profiles, s.settings, s.settingsTs) }
             syncFails = 0; syncProblem = false
         } catch (e: Exception) { onSyncError(e) }
     }
@@ -459,7 +459,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val remote = withAccount { Sync.pull(it) } ?: return@launch
-                upd { st -> st.copy(profiles = Sync.merge(st.profiles, remote, st.goneProfiles)) }
+                upd { st ->
+                    val (mergedSettings, mergedTs) =
+                        Sync.mergeSettings(st.settings, st.settingsTs, remote.settings, remote.settingsTs)
+                    st.copy(
+                        profiles = Sync.merge(st.profiles, remote.profiles, st.goneProfiles),
+                        settings = mergedSettings, settingsTs = mergedTs,
+                    )
+                }
             } catch (e: Exception) { onSyncError(e) }
         }
     }
@@ -473,6 +480,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             myList = if (on) it.myList - id else listOf(id) + it.myList,
             myListTs = it.myListTs.stamped(listOf(id), now),
         ) }
+        // My List kini ikut menggerakkan pengingat mingguan (remind ∪ myList): jadwalkan ulang.
+        Reminders.rescheduleAll(app, s)
         toast(if (on) I18n.t("ml_removed", "Removed from My List") else I18n.t("ml_added", "Added to My List"))
     }
 
@@ -799,7 +808,8 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     fun setSettings(f: (Settings) -> Settings) {
         val oldAlerts = s.settings.alerts
         val oldWifi = s.settings.wifi
-        upd { it.copy(settings = f(it.settings)) }
+        // Cap waktu tiap perubahan: dasar last-write-wins sinkronisasi settings antar-perangkat.
+        upd { it.copy(settings = f(it.settings), settingsTs = System.currentTimeMillis()) }
         if (oldAlerts != s.settings.alerts) Reminders.rescheduleAll(app, s)
         if (oldWifi != s.settings.wifi) Downloads.setWifiOnly(app, s.settings.wifi)
     }

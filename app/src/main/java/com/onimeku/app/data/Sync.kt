@@ -19,32 +19,59 @@ object Sync {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     val enabled: Boolean get() = AuthClient.configured
 
-    suspend fun pull(acc: Account): List<Profile>? = withContext(Dispatchers.IO) {
+    /** Hasil tarikan dokumen user_state: profil + settings akun (null bila dokumen lama tanpa field settings). */
+    data class Pulled(val profiles: List<Profile>, val settings: Settings?, val settingsTs: Long)
+
+    suspend fun pull(acc: Account): Pulled? = withContext(Dispatchers.IO) {
         if (!enabled) return@withContext null
         val r = Firestore.request("GET", "/user_state/${acc.userId}", acc.accessToken)
         if (r.code == 401 || r.code == 403) throw Unauthorized()
         if (r.code == 404) return@withContext null
         if (r.code !in 200..299) return@withContext null
         val raw = Firestore.fieldStr(r.body, "profiles") ?: return@withContext null
-        try {
+        val profiles = try {
             json.decodeFromString(ListSerializer(Profile.serializer()), raw)
         } catch (e: Exception) {
-            null
+            return@withContext null
         }
+        // Field settings/settings_ts opsional: dokumen lama tidak punya -> settings null, ts 0 (diabaikan).
+        val rawSettings = Firestore.fieldStr(r.body, "settings")
+        val settings = rawSettings?.let {
+            try { json.decodeFromString(Settings.serializer(), it) } catch (e: Exception) { null }
+        }
+        val settingsTs = if (settings == null) 0L else (
+            r.body?.optJSONObject("fields")?.optJSONObject("settings_ts")
+                ?.optString("integerValue")?.toLongOrNull() ?: 0L
+            )
+        Pulled(profiles, settings, settingsTs)
     }
 
-    suspend fun push(acc: Account, profiles: List<Profile>) = withContext(Dispatchers.IO) {
-        if (!enabled) return@withContext
-        val payload = Firestore.doc(
-            mapOf(
-                "user_id" to Firestore.sv(acc.userId),
-                "profiles" to Firestore.sv(json.encodeToString(ListSerializer(Profile.serializer()), profiles)),
-            ),
-        )
-        val r = Firestore.request("PATCH", "/user_state/${acc.userId}", acc.accessToken, payload)
-        if (r.code == 401 || r.code == 403) throw Unauthorized()
-        if (r.code !in 200..299) throw java.io.IOException("sync push gagal: ${r.code}")
-    }
+    suspend fun push(acc: Account, profiles: List<Profile>, settings: Settings? = null, settingsTs: Long = 0) =
+        withContext(Dispatchers.IO) {
+            if (!enabled) return@withContext
+            val fields = LinkedHashMap<String, org.json.JSONObject>()
+            fields["user_id"] = Firestore.sv(acc.userId)
+            fields["profiles"] = Firestore.sv(json.encodeToString(ListSerializer(Profile.serializer()), profiles))
+            if (settings != null) {
+                fields["settings"] = Firestore.sv(json.encodeToString(Settings.serializer(), settings))
+                fields["settings_ts"] = Firestore.iv(settingsTs)
+            }
+            val payload = Firestore.doc(fields)
+            val r = Firestore.request("PATCH", "/user_state/${acc.userId}", acc.accessToken, payload)
+            if (r.code == 401 || r.code == 403) throw Unauthorized()
+            if (r.code !in 200..299) throw java.io.IOException("sync push gagal: ${r.code}")
+        }
+
+    /**
+     * Keputusan gabung settings antar-perangkat (murni, bisa diuji): last-write-wins.
+     * Settings jarak jauh dipakai hanya bila capnya lebih baru dari cap lokal;
+     * selain itu lokal dipertahankan apa adanya (termasuk capnya).
+     */
+    fun mergeSettings(
+        local: Settings, localTs: Long,
+        remote: Settings?, remoteTs: Long,
+    ): Pair<Settings, Long> =
+        if (remote != null && remoteTs > localTs) remote to remoteTs else local to localTs
 
     /**
      * Gabung satu himpunan ber-cap: sisi dengan cap lebih baru menentukan apakah id ada.

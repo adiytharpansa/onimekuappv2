@@ -69,7 +69,9 @@ object Reminders {
         if (Catalog.all.isEmpty()) return
         WorkManager.getInstance(ctx).cancelAllWorkByTag(TAG)
         if (!s.settings.alerts) return
-        s.profiles.forEachIndexed { pi, p -> p.remind.forEach { schedule(ctx, pi, it) } }
+        s.profiles.forEachIndexed { pi, p ->
+            com.onimeku.app.data.ReminderLogic.effectiveIds(p, Catalog.byId).forEach { schedule(ctx, pi, it) }
+        }
     }
 }
 
@@ -78,7 +80,8 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         val pi = inputData.getInt("pi", 0)
         val id = inputData.getString("id") ?: return Result.success()
         val st = Store(applicationContext).load()
-        val still = st.settings.alerts && st.profiles.getOrNull(pi)?.remind?.contains(id) == true
+        val prof = st.profiles.getOrNull(pi)
+        val still = st.settings.alerts && prof != null && (id in prof.remind || id in prof.myList)
         if (!still) return Result.success()
         // Katalog tidak dimuat di proses worker; ambil detail judul ini dari API.
         val c = try { com.onimeku.app.data.ApiClient.fetchDetail(id) } catch (e: Exception) { null }

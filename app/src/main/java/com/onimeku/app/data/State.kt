@@ -90,6 +90,9 @@ data class AppState(
     val hist: List<String> = emptyList(),
     val fired: Map<String, String> = emptyMap(),
     val settings: Settings = Settings(),
+    // Cap waktu (epoch ms) perubahan settings terakhir di perangkat ini; dasar last-write-wins
+    // sinkronisasi settings antar-perangkat (lihat Sync.mergeSettings). 0 = belum pernah dicap.
+    val settingsTs: Long = 0,
     val profiles: List<Profile> = listOf(Profile("Me")),
     val pi: Int = 0,
     val account: Account? = null,
