@@ -211,3 +211,6 @@ CI: `build.yml` (debug APK), `emulator-test.yml` (hook uji: intent extra `test_i
 
 ## Tata letak (debug.71)
 Spasi pakai `Sp.S*` (kisi 4dp, `ui/Spacing.kt`), huruf pakai `Ty.*` (`ui/Type.kt`), area ketuk ikon minimal 48dp. Jangan menulis angka dp/sp lepas di layar baru.
+
+## Subtitle gudang (debug.75 — 7 Nov 2026)
+`Playback.subtitles` untuk episode gudang **diisi dari rendition `#EXT-X-MEDIA:TYPE=SUBTITLES`** playlist master (`data/SubRenditions.kt`, teruji). Jangan dikembalikan ke `emptyList()`: daftar kosong mematikan seluruh trek teks lewat `applySub(-1)` dan menyembunyikan tombol CC. Rendition `.vtt` mentah tidak bisa dipakai Media3 sebagai rendition HLS → dipasang sebagai `SubtitleConfiguration` samping (`LOCAL_SUB_ID_PREFIX`); jalur "native" hanya untuk rendition playlist atau episode tanpa trek samping.

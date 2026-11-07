@@ -96,7 +96,8 @@ class SubRenditionsTest {
     }
 
     @Test fun attributesWithCommasInsideQuotesStayIntact() {
-        val line = """#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Indonesian, SDH",LANGUAGE="id",URI="subs/id.vtt""""
+        // String biasa (bukan raw string) karena isinya berakhir dengan tanda kutip.
+        val line = "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"Indonesian, SDH\",LANGUAGE=\"id\",URI=\"subs/id.vtt\""
         val a = SubRenditions.attrs(line)
         assertEquals("Indonesian, SDH", a["NAME"])
         assertEquals("subs/id.vtt", a["URI"])
