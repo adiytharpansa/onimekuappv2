@@ -1177,6 +1177,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             // Pemutar sudah diambil alih episode/pintu berikutnya: berhenti (jangan menyimpan posisi episode lain).
             if (!PlayerHolder.isOwner(token)) break
             val sec = (player.currentPosition / 1000).toInt()
+            // Debug-only evidence for CI: no media URLs or account data.
+            if (com.onimeku.app.BuildConfig.DEBUG && player.isPlaying) {
+                android.util.Log.d("OnimekuPlayback", "position_ms=${player.currentPosition}")
+            }
             if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
             // Lewati intro otomatis (opsional): sekali per episode, hanya bila API memberi penanda intro.
             if (!introAutoDone) {

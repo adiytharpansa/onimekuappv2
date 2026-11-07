@@ -36,6 +36,10 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build debug APK
+        env:
+          ORG_GRADLE_PROJECT_ONIMEKU_FIREBASE_PROJECT_ID: ${{ secrets.ONIMEKU_FIREBASE_PROJECT_ID }}
+          ORG_GRADLE_PROJECT_ONIMEKU_FIREBASE_API_KEY: ${{ secrets.ONIMEKU_FIREBASE_API_KEY }}
+          ORG_GRADLE_PROJECT_ONIMEKU_KEY_B_TEST: ${{ secrets.ONIMEKU_KEY_B_TEST }}
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Enable KVM
@@ -60,6 +64,7 @@ jobs:
             adb pull /sdcard/uih.xml uih.xml || true
             adb shell am force-stop com.onimeku.app
             sleep 2
+            adb logcat -c
             adb shell am start -n com.onimeku.app/.MainActivity --es test_id "${{ inputs.anime_id }}" --ei test_ep ${{ inputs.ep }}
             sleep 30
             adb exec-out screencap -p > shot1.png
@@ -73,7 +78,11 @@ jobs:
             adb shell dumpsys activity processes > processes.txt || true
             adb exec-out run-as com.onimeku.app cat shared_prefs/poster_cache.xml > poster_cache.xml 2>/dev/null || true
 
+      - name: Verify playback advanced
+        run: python3 scripts/check-playback.py logcat.txt
+
       - name: Upload test evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: emulator-evidence
