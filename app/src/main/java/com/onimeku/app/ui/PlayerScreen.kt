@@ -420,20 +420,17 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // Perbaikan agen (berulang dari v6): tipe eksplisit non-null —
             // var tertangkap closure + diubah isinya tidak bisa smart-cast.
             var ready: com.onimeku.app.data.Playback = res
-            // Opsi 2: putar GUDANG tidak lagi melokalkan subtitle —
-            // subtitle gudang adalah trek teks bawaan manifest HLS;
-            // daftar payload (en/id) hanya menjadi model menu, URL-nya
-            // tidak diunduh dan tidak ditempel ke pemutar.
             // debug.75: trek subtitle gudang (en/id dari manifest) KINI ikut
             // dilokalkan seperti sumber lain — dulu dilewati karena dianggap
             // trek bawaan manifest, padahal Media3 tidak bisa merender .vtt
-            // mentah sebagai rendition. Anggaran 6 dtk cukup untuk dua berkas
-            // kecil; yang gagal tetap memakai URL pintu (dipasang ExoPlayer
-            // saat dibutuhkan), jadi subtitle tidak hilang karena jaringan.
+            // mentah sebagai rendition. Anggaran 4 dtk (sama dengan sumber
+            // lain) membatasi tunda putar; trek yang gagal/lambat tetap
+            // memakai URL pintu (diambil ExoPlayer saat dibutuhkan), jadi
+            // subtitle tidak hilang hanya karena jaringan lambat.
             if (ready.subtitles.isNotEmpty()) {
                 ready = localizeSubtitles(
                     ctx, r, ready,
-                    budgetMs = if (ready.source == "gudang") 6_000L else null,
+                    budgetMs = 4_000L,
                     offsetMs = vm.s.settings.subOffsetByTitle[r.id] ?: 0,
                 )
             }
@@ -717,11 +714,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         .setArtworkUri(com.onimeku.app.data.PosterHealer.posterFor(a)?.let { android.net.Uri.parse(it) })
                         .build()
                 )
-            // Opsi 2: putar gudang daring TIDAK diberi konfigurasi
-            // subtitle samping — subtitle datang dari grup teks bawaan
-            // manifest HLS (master menunjuk playlist WebVTT yang sah).
-            // Jalur lain (non-gudang dan luring) tetap memasang
-            // konfigurasi samping seperti sebelumnya.
+            // debug.75: putar gudang daring MEMASANG konfigurasi subtitle
+            // samping selama rendition .vtt-nya terbaca (lihat nativeNow).
             // debug.75: putar gudang daring hanya dilewati bila memang TIDAK
             // ada trek samping (murni mengandalkan grup teks bawaan manifest).
             // Selama rendition .vtt terbaca, konfigurasi samping dipasang —
@@ -975,11 +969,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
             subLocalApplied = false
         } else if (groups.isEmpty()) {
-            // Trek belum termuat sama sekali: ingat saja pilihannya —
-            // jangan matikan teks; onTracksChanged menerapkannya begitu
-            // trek samping tiba (cabang subLocalApplied).
+            // Belum ada grup teks yang bisa dirender. Trek samping lokal
+            // (SubtitleConfiguration) menyusul beberapa event kemudian;
+            // grup teks manifest gudang menunjuk .vtt mentah sehingga
+            // memuatnya bisa memicu galat parser HLS. Jadi tipe teks
+            // DIMATIKAN dulu (bukan dibiarkan menyala) dan pilihan
+            // diterapkan ulang begitu trek lokal tiba (cabang subLocalApplied).
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
             subLocalApplied = false
             subIdx = i
+            player.trackSelectionParameters = b.build()
             return
         } else {
             // Cocokkan trek menurut bahasa (urutan ke-n untuk bahasa yang sama); cadangan: indeks.
