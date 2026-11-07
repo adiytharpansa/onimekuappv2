@@ -234,7 +234,8 @@ private fun fetchOneSub(
     if (bytes.isEmpty()) return null
     val kind = sniffSub(bytes.copyOf(minOf(bytes.size, 2048)))
     if (kind == "") return null // 200 OK tetapi isinya halaman galat
-    val ext = kind ?: SUB_EXTS.firstOrNull { s.url.contains(it) } ?: ".vtt"
+    val subPath = s.url.substringBefore('?').substringBefore('#').lowercase()
+    val ext = kind ?: SUB_EXTS.firstOrNull { subPath.endsWith(it) } ?: ".vtt"
     val f = java.io.File(dir, base + ext)
     val tmp = java.io.File(dir, "$base$ext.tmp")
     tmp.writeBytes(bytes)
@@ -419,12 +420,19 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
             // Perbaikan agen (berulang dari v6): tipe eksplisit non-null —
             // var tertangkap closure + diubah isinya tidak bisa smart-cast.
             var ready: com.onimeku.app.data.Playback = res
-            // Opsi 2: putar GUDANG tidak lagi melokalkan subtitle —
-            // subtitle gudang adalah trek teks bawaan manifest HLS;
-            // daftar payload (en/id) hanya menjadi model menu, URL-nya
-            // tidak diunduh dan tidak ditempel ke pemutar.
-            if (ready.subtitles.isNotEmpty() && ready.source != "gudang") {
-                ready = localizeSubtitles(ctx, r, ready, offsetMs = vm.s.settings.subOffsetByTitle[r.id] ?: 0)
+            // debug.75: trek subtitle gudang (en/id dari manifest) KINI ikut
+            // dilokalkan seperti sumber lain — dulu dilewati karena dianggap
+            // trek bawaan manifest, padahal Media3 tidak bisa merender .vtt
+            // mentah sebagai rendition. Anggaran 4 dtk (sama dengan sumber
+            // lain) membatasi tunda putar; trek yang gagal/lambat tetap
+            // memakai URL pintu (diambil ExoPlayer saat dibutuhkan), jadi
+            // subtitle tidak hilang hanya karena jaringan lambat.
+            if (ready.subtitles.isNotEmpty()) {
+                ready = localizeSubtitles(
+                    ctx, r, ready,
+                    budgetMs = 4_000L,
+                    offsetMs = vm.s.settings.subOffsetByTitle[r.id] ?: 0,
+                )
             }
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} stream=${if (ready.streamUrl.isNullOrBlank()) "none" else "ada"} embed=${if (ready.embedUrl.isNullOrBlank()) "no" else "yes"} subs=${ready.subtitles.size}")
             settle()
@@ -592,13 +600,18 @@ private fun isLocalSubtitleGroup(g: androidx.media3.common.Tracks.Group): Boolea
 
 private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.SubtitleConfiguration> =
     playback.subtitles.filter { it.url.isNotBlank() }.mapIndexed { idx, s ->
+        // Ekstensi dibaca dari path saja: URL pintu gudang membawa token di
+        // query, dan dulu ".srt" yang kebetulan muncul di query bisa memilih
+        // mime yang salah.
+        val path = s.url.substringBefore('?').substringBefore('#').lowercase()
         val mime = when {
-            s.url.contains(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
-            s.url.contains(".ass") || s.url.contains(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
+            path.endsWith(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
+            path.endsWith(".ass") || path.endsWith(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
             else -> androidx.media3.common.MimeTypes.TEXT_VTT
         }
         MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
-            .setMimeType(mime).setLanguage(s.lang).setLabel(s.lang.uppercase())
+            .setMimeType(mime).setLanguage(s.lang)
+            .setLabel(s.label.ifBlank { s.lang.uppercase().ifBlank { "SUB" } })
             .setId(LOCAL_SUB_ID_PREFIX + idx).build()
     }
 
@@ -701,12 +714,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         .setArtworkUri(com.onimeku.app.data.PosterHealer.posterFor(a)?.let { android.net.Uri.parse(it) })
                         .build()
                 )
-            // Opsi 2: putar gudang daring TIDAK diberi konfigurasi
-            // subtitle samping — subtitle datang dari grup teks bawaan
-            // manifest HLS (master menunjuk playlist WebVTT yang sah).
-            // Jalur lain (non-gudang dan luring) tetap memasang
-            // konfigurasi samping seperti sebelumnya.
-            if (!(playback.source == "gudang" && !offline)) {
+            // debug.75: putar gudang daring MEMASANG konfigurasi subtitle
+            // samping selama rendition .vtt-nya terbaca (lihat nativeNow).
+            // debug.75: putar gudang daring hanya dilewati bila memang TIDAK
+            // ada trek samping (murni mengandalkan grup teks bawaan manifest).
+            // Selama rendition .vtt terbaca, konfigurasi samping dipasang —
+            // tanpa ini menu CC tidak punya apa pun untuk dipilih.
+            if (!(playback.source == "gudang" && !offline && playback.subtitles.none { it.url.isNotBlank() })) {
                 itemBuilder.setSubtitleConfigurations(subConfigs(playback))
             }
             // AKAR KEGAGALAN PUTAR DI HP: URL proksi ber-path "/api/proxy" —
@@ -776,7 +790,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // trek teks manifest HLS (dibaca saat dipanggil, jadi tidak basi di dalam listener).
     var liveSubs by remember(r) { mutableStateOf<List<com.onimeku.app.data.ApiSubtitle>?>(null) }
     var gudangSide by remember(r) { mutableStateOf(false) }
-    fun nativeNow(): Boolean = playback.source == "gudang" && !offline && !gudangSide
+    // Subtitle "native" = putar gudang daring yang HANYA punya grup teks bawaan
+    // manifest (tidak ada trek samping yang bisa dipasang). Bila rendition
+    // subtitle gudang berhasil dibaca sebagai berkas (.vtt), jalur samping
+    // dipakai seperti putar luring — itulah satu-satunya jalur yang benar-benar
+    // menghasilkan cue, karena parser HLS Media3 menolak .vtt mentah sebagai
+    // rendition.
+    fun nativeNow(): Boolean = playback.source == "gudang" && !offline && !gudangSide && subTracks.isEmpty()
     // Daftar trek subtitle berubah saat video sudah berjalan (mis. efek pemulihan trek): pasang ulang
     // konfigurasinya ke item yang sama, lanjut dari posisi terakhir, lalu pilih ulang sesuai preferensi.
     val subCount = playback.subtitles.count { it.url.isNotBlank() }
@@ -949,11 +969,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
             subLocalApplied = false
         } else if (groups.isEmpty()) {
-            // Trek belum termuat sama sekali: ingat saja pilihannya —
-            // jangan matikan teks; onTracksChanged menerapkannya begitu
-            // trek samping tiba (cabang subLocalApplied).
+            // Belum ada grup teks yang bisa dirender. Trek samping lokal
+            // (SubtitleConfiguration) menyusul beberapa event kemudian;
+            // grup teks manifest gudang menunjuk .vtt mentah sehingga
+            // memuatnya bisa memicu galat parser HLS. Jadi tipe teks
+            // DIMATIKAN dulu (bukan dibiarkan menyala) dan pilihan
+            // diterapkan ulang begitu trek lokal tiba (cabang subLocalApplied).
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
             subLocalApplied = false
             subIdx = i
+            player.trackSelectionParameters = b.build()
             return
         } else {
             // Cocokkan trek menurut bahasa (urutan ke-n untuk bahasa yang sama); cadangan: indeks.
@@ -1064,12 +1089,31 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     val pref = vm.s.settings.subLang
                     val kept = keepSel
                     keepSel = false
-                    val pick = SubLang.restore(kept, subIdx, subTracks, pref, vm.s.settings.lang)
-                    // Bahasa pilihan tidak tersedia di episode ini -> beri tahu, lalu pakai bahasa cadangan.
-                    // (Tidak diulang saat trek hanya dipasang ulang karena geseran.)
-                    if (!kept && pref != "auto" && pref != "off" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
-                        vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
-                    applySub(pick)
+                    // debug.75: daftar trek samping KOSONG (manifest tanpa rendition
+                    // .vtt yang bisa dipasang) JANGAN dianggap "mati". Dulu
+                    // SubLang.pick(emptyList) = -1 lalu applySub(-1) mematikan
+                    // seluruh tipe trek teks — subtitle bawaan manifest ikut
+                    // lenyap. Kini hanya preferensi "off" yang mematikan teks;
+                    // selain itu bahasa pilihan diminta langsung ke Media3.
+                    if (subTracks.isEmpty()) {
+                        val nb = player.trackSelectionParameters.buildUpon()
+                        if (pref == "off") {
+                            nb.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                        } else {
+                            val want = if (pref == "auto") (if (vm.s.settings.lang == "id") "id" else "en") else pref
+                            nb.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                            if (want.isNotBlank()) nb.setPreferredTextLanguage(want)
+                        }
+                        player.trackSelectionParameters = nb.build()
+                        com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} trek teks manifest (pref=$pref, tanpa trek samping)")
+                    } else {
+                        val pick = SubLang.restore(kept, subIdx, subTracks, pref, vm.s.settings.lang)
+                        // Bahasa pilihan tidak tersedia di episode ini -> beri tahu, lalu pakai bahasa cadangan.
+                        // (Tidak diulang saat trek hanya dipasang ulang karena geseran.)
+                        if (!kept && pref != "auto" && pref != "off" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
+                            vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
+                        applySub(pick)
+                    }
                 } else if (subReady && subIdx >= 0 && !subLocalApplied && tracks.groups.any { isLocalSubtitleGroup(it) }) {
                     // debug.60: trek samping lokal tiba SESUDAH grup teks
                     // manifest (pilihan awal jatuh ke grup manifest yang
