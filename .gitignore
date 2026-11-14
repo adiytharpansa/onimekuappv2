@@ -33,3 +33,5 @@ server/.appkey
 server/.wrangler/
 server/wrangler.local.toml
 server/cfdeploy.py
+
+__pycache__/

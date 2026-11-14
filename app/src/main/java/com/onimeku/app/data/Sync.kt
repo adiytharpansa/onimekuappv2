@@ -28,11 +28,16 @@ object Sync {
         if (r.code == 401 || r.code == 403) throw Unauthorized()
         if (r.code == 404) return@withContext null
         if (r.code !in 200..299) return@withContext null
+        // Field profiles TIDAK ADA = dokumen lama/kosong: sah dianggap
+        // belum ada data. Field ADA tapi gagal dibaca = dokumen rusak /
+        // format berubah: LEMPAR galat, jangan kembalikan null — pemanggil
+        // menyamakan null dengan "server kosong" lalu push berikutnya
+        // menimpa dokumen server dengan data lokal saja (audit 2026-11-15).
         val raw = Firestore.fieldStr(r.body, "profiles") ?: return@withContext null
         val profiles = try {
             json.decodeFromString(ListSerializer(Profile.serializer()), raw)
         } catch (e: Exception) {
-            return@withContext null
+            throw java.io.IOException("sync pull: dokumen server tidak bisa dibaca", e)
         }
         // Field settings/settings_ts opsional: dokumen lama tidak punya -> settings null, ts 0 (diabaikan).
         val rawSettings = Firestore.fieldStr(r.body, "settings")
@@ -67,11 +72,21 @@ object Sync {
      * Settings jarak jauh dipakai hanya bila capnya lebih baru dari cap lokal;
      * selain itu lokal dipertahankan apa adanya (termasuk capnya).
      */
+    /** Cap waktu maksimum yang dipercaya: jam perangkat boleh meleset
+     *  sedikit ke depan, tetapi cap "masa depan jauh" (jam rusak/diubah)
+     *  dijepit agar tidak menang selamanya atas semua perangkat lain. */
+    private const val MAX_FUTURE_SKEW_MS = 300_000L
+    private fun clampTs(ts: Long, now: Long): Long = minOf(ts, now + MAX_FUTURE_SKEW_MS)
+
     fun mergeSettings(
         local: Settings, localTs: Long,
         remote: Settings?, remoteTs: Long,
-    ): Pair<Settings, Long> =
-        if (remote != null && remoteTs > localTs) remote to remoteTs else local to localTs
+        now: Long = System.currentTimeMillis(),
+    ): Pair<Settings, Long> {
+        val l = clampTs(localTs, now)
+        val r = clampTs(remoteTs, now)
+        return if (remote != null && r > l) remote to r else local to l
+    }
 
     /**
      * Gabung satu himpunan ber-cap: sisi dengan cap lebih baru menentukan apakah id ada.
@@ -80,12 +95,13 @@ object Sync {
     internal fun mergeStamped(
         lList: List<String>, lTs: Map<String, Long>,
         rList: List<String>, rTs: Map<String, Long>,
+        now: Long = System.currentTimeMillis(),
     ): Pair<List<String>, Map<String, Long>> {
         val lSet = lList.toHashSet(); val rSet = rList.toHashSet()
         val ts = HashMap<String, Long>()
         val kept = HashSet<String>()
         for (id in (lList + rList + lTs.keys + rTs.keys).distinct()) {
-            val lt = lTs[id] ?: 0L; val rt = rTs[id] ?: 0L
+            val lt = clampTs(lTs[id] ?: 0L, now); val rt = clampTs(rTs[id] ?: 0L, now)
             ts[id] = maxOf(lt, rt)
             val present = when {
                 lt > rt -> id in lSet
@@ -108,6 +124,7 @@ object Sync {
             val r = byName[l.name] ?: return@map l
             val (seen, seenTs) = mergeStamped(l.seen, l.seenTs, r.seen, r.seenTs)
             val (myList, myListTs) = mergeStamped(l.myList, l.myListTs, r.myList, r.myListTs)
+            val (remind, remindTs) = mergeStamped(l.remind, l.remindTs, r.remind, r.remindTs)
             val seenSet = seen.toHashSet()
             val prog = (l.prog.keys + r.prog.keys)
                 .filter { it !in seenSet }
@@ -117,7 +134,7 @@ object Sync {
             l.copy(
                 myList = myList, myListTs = myListTs,
                 prog = prog, seen = seen, seenTs = seenTs, watch = watch,
-                remind = (l.remind + r.remind).distinct(),
+                remind = remind, remindTs = remindTs,
                 last = l.last ?: r.last, base = l.base ?: r.base,
             )
         }

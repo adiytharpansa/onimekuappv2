@@ -22,6 +22,10 @@ android {
         buildConfigField("String", "FIREBASE_API_KEY", "\"${prop("ONIMEKU_FIREBASE_API_KEY")}\"")
         // Mekanisme uji loker kunci (potongan B tersamar) — hanya dibaca build DEBUG; kosong di rilis.
         buildConfigField("String", "KEY_B_TEST", "\"${prop("ONIMEKU_KEY_B_TEST")}\"")
+        // Potongan A kunci katalog (tersamar): TIDAK lagi tertulis di repo.
+        // Diisi dari secret CI ONIMEKU_KEY_A_MASKED; kosong = loker nonaktif
+        // dan aplikasi jatuh ke cermin katalog polos (perilaku anggun lama).
+        buildConfigField("String", "KEY_A_MASKED", "\"${prop("ONIMEKU_KEY_A_MASKED")}\"")
     }
     // Tanda tangan rilis: aktif hanya bila ONIMEKU_STORE_FILE diberikan (gradle.properties / -P / CI).
     signingConfigs {

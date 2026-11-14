@@ -203,6 +203,15 @@ object GudangDl {
         val playlist = fetchText(primaryLadderUrl) ?: return@withContext 0
         val segments = DoorMath.parseSegments(playlist, primaryLadderUrl)
         if (segments.isEmpty()) return@withContext 0
+        // Catat tanda prefetch agar segmen yang tidak pernah menjadi
+        // unduhan resmi bisa dibuang Downloads.cleanupStalePrefetch
+        // sesudah 48 jam (cache bersama memakai NoOpCacheEvictor).
+        DoorMath.canonicalDir(primaryLadderUrl)?.let { canon ->
+            try {
+                app.getSharedPreferences("prefetch_marks", Context.MODE_PRIVATE)
+                    .edit().putLong(canon, System.currentTimeMillis()).apply()
+            } catch (e: Exception) { /* tanda usaha terbaik */ }
+        }
         val done = AtomicInteger(0)
         val ok = AtomicInteger(0)
         coroutineScope {

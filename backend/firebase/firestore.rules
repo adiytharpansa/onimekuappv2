@@ -3,8 +3,15 @@ rules_version = '2';
 // Aturan Firestore proyek Firebase khusus Onimeku.
 // - app_keys: loker potongan kunci katalog; hanya sesi terautentikasi
 //   (termasuk anonim) yang boleh MEMBACA; tidak ada tulis dari klien.
-// - user_state: sinkronisasi profil/My List/progres; hanya pemilik.
-// - comments: baca publik; tulis wajib masuk dan user_id harus = uid;
+//   CATATAN: ini hanya penahan kasual — potongan A tidak lagi ada di repo
+//   (disuntik saat build dari secret CI), tetapi kunci yang tertanam di
+//   aplikasi tidak pernah benar-benar rahasia; jangan simpan rahasia
+//   bernilai tinggi di app_keys.
+// - user_state: sinkronisasi profil/My List/progres; hanya pemilik,
+//   field dibatasi pada yang dikenal aplikasi + ukuran wajar.
+// - comments: baca publik; tulis wajib akun NON-anonim dan user_id = uid;
+//   semua field divalidasi (nama penulis, cap waktu dekat waktu server,
+//   id anime) agar tidak bisa menyamar / memanipulasi urutan tampil;
 //   hapus hanya komentar sendiri.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -13,15 +20,33 @@ service cloud.firestore {
       allow write: if false;
     }
     match /user_state/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['user_id', 'profiles', 'settings', 'settings_ts'])
+        && request.resource.data.user_id == uid
+        && request.resource.data.profiles is string
+        && request.resource.data.profiles.size() <= 900000;
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
     match /comments/{docId} {
       allow read: if true;
       allow create: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.resource.data.keys().hasOnly(['n', 'anime_id', 'user_id', 'author', 'body', 'created_at'])
         && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.n is int
+        && request.resource.data.anime_id is string
+        && request.resource.data.anime_id.size() >= 1
+        && request.resource.data.anime_id.size() <= 128
+        && request.resource.data.author is string
+        && request.resource.data.author.size() >= 1
+        && request.resource.data.author.size() <= 40
         && request.resource.data.body is string
         && request.resource.data.body.size() >= 1
-        && request.resource.data.body.size() <= 1000;
+        && request.resource.data.body.size() <= 1000
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.created_at <= request.time
+        && request.resource.data.created_at >= request.time - duration.value(10, 'm');
       allow delete: if request.auth != null && resource.data.user_id == request.auth.uid;
       allow update: if false;
     }

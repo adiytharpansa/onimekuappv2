@@ -91,6 +91,18 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             Reminders.schedule(applicationContext, pi, id, c)
             return Result.success()
         }
+        // Sudah tamat: berhenti — jangan kabari dan jangan jadwalkan lagi.
+        if (c.status == "Completed") return Result.success()
+        // Kabari HANYA bila nomor episode benar-benar bertambah sejak
+        // kabar terakhir (dulu worker mengabari "Episode N is out now"
+        // yang sama tiap minggu walau tidak ada episode baru).
+        val seen = applicationContext.getSharedPreferences("remind_state", android.content.Context.MODE_PRIVATE)
+        val key = "ep:$pi:$id"
+        if (c.ep <= seen.getInt(key, 0)) {
+            Reminders.schedule(applicationContext, pi, id, c)
+            return Result.success()
+        }
+        seen.edit().putInt(key, c.ep).apply()
         Notifier.show(applicationContext, "New episode: ${c.title}", "Episode ${c.ep} is out now")
         // Katalog kosong di proses worker: kirim detail yang baru diambil agar
         // jadwal minggu depan benar-benar dibuat (sebelumnya diam-diam batal).
