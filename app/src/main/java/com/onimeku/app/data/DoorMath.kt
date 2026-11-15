@@ -35,6 +35,12 @@ object DoorMath {
         if (r.isEmpty()) return baseUrl
         if (r.startsWith("http://") || r.startsWith("https://")) return r
         if (r.startsWith("//")) return "https:$r"
+        if (r.startsWith("/")) {
+            // Relatif ke AKAR host ("/x/y.m3u8"): dulu jatuh ke cabang
+            // gabung-direktori dan menghasilkan jalur ganda yang 404.
+            val u = try { java.net.URL(baseUrl) } catch (e: Exception) { return dirOf(baseUrl) + r }
+            return u.protocol + "://" + u.host + (if (u.port > 0) ":" + u.port else "") + r
+        }
         var dir = dirOf(baseUrl)
         var rest = r
         while (rest.startsWith("../")) {

@@ -29,8 +29,10 @@ import java.security.MessageDigest
  * katalog polos — aplikasi tetap jalan penuh.
  */
 object KeyLocker {
-    // Potongan A tersamar (diisi saat build dari berkas rahasia di luar repo).
-    private const val PART_A_MASKED = "6bQOy7gueEB0csnLEN93K1eCzucE5rRjZXxXZEvOJuI="
+    // Potongan A tersamar: disuntik saat build lewat BuildConfig
+    // (properti ONIMEKU_KEY_A_MASKED dari secret CI). SENGAJA tidak ada
+    // nilai bawaan di kode: versi lama menuliskannya sebagai konstanta di
+    // repo publik sehingga siapa pun bisa menurunkannya (audit 2026-11-15).
     private const val MASK_A_CONST = "onimeku-katalog-a-v1"
     private const val MASK_B_CONST = "onimeku-katalog-b-v1"
     private const val PREFS = "keylocker"
@@ -53,7 +55,8 @@ object KeyLocker {
         null
     }
 
-    private fun partA(): ByteArray? = unmask(PART_A_MASKED, MASK_A_CONST)
+    private fun partA(): ByteArray? =
+        BuildConfig.KEY_A_MASKED.takeIf { it.isNotBlank() }?.let { unmask(it, MASK_A_CONST) }
 
     // ---- salinan potongan B terenkripsi di perangkat ----
     private fun prefs(): EncryptedSharedPreferences? {

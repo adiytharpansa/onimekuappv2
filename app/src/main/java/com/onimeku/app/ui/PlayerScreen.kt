@@ -224,22 +224,52 @@ private fun fetchOneSub(
         }
         old.delete() // berkas rusak / halaman galat tersimpan: unduh ulang
     }
-    val req = okhttp3.Request.Builder().url(s.url)
-        .header("Referer", s.referer ?: ready.referer ?: "")
-        .header("User-Agent", com.onimeku.app.data.Net.UA).build()
-    val bytes = com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
-        if (!resp.isSuccessful) return null
-        resp.body?.bytes() ?: return null
+    // Berkas subtitle yang sama ada di SEMUA pintu (isi identik, beda
+    // awalan direktori): coba pintu asal dulu, lalu pintu lain satu per
+    // satu. Dulu hanya pintu asal yang dicoba — pintu itu mati/lambat
+    // sesudah memberi manifest, subtitle hilang walau pintu lain sehat.
+    val candUrls = run {
+        val list = ArrayList<String>()
+        list += s.url
+        val hitDoor = ready.doors.firstOrNull { d ->
+            s.url.startsWith(com.onimeku.app.data.DoorMath.dirOf(d.url))
+        }
+        if (hitDoor != null) {
+            val rel = s.url.removePrefix(com.onimeku.app.data.DoorMath.dirOf(hitDoor.url))
+            for (d in ready.doors) {
+                val u = com.onimeku.app.data.DoorMath.dirOf(d.url) + rel
+                if (u !in list) list += u
+            }
+        }
+        list
     }
-    if (bytes.isEmpty()) return null
-    val kind = sniffSub(bytes.copyOf(minOf(bytes.size, 2048)))
-    if (kind == "") return null // 200 OK tetapi isinya halaman galat
+    var bytes: ByteArray? = null
+    var kind: String? = null
+    for (u in candUrls) {
+        val got = try {
+            val req = okhttp3.Request.Builder().url(u)
+                .header("Referer", s.referer ?: ready.referer ?: "")
+                .header("User-Agent", com.onimeku.app.data.Net.UA).build()
+            com.onimeku.app.data.Net.client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) null else resp.body?.bytes()
+            }
+        } catch (e: Exception) {
+            null
+        }
+        if (got == null || got.isEmpty()) continue
+        val k = sniffSub(got.copyOf(minOf(got.size, 2048)))
+        if (k == "") continue // 200 OK tetapi isinya halaman galat: coba pintu lain
+        bytes = got
+        kind = k
+        break
+    }
+    val data = bytes ?: return null
     val subPath = s.url.substringBefore('?').substringBefore('#').lowercase()
     val ext = kind ?: SUB_EXTS.firstOrNull { subPath.endsWith(it) } ?: ".vtt"
     val f = java.io.File(dir, base + ext)
     val tmp = java.io.File(dir, "$base$ext.tmp")
-    tmp.writeBytes(bytes)
-    if (!tmp.renameTo(f)) { f.writeBytes(bytes); tmp.delete() }
+    tmp.writeBytes(data)
+    if (!tmp.renameTo(f)) { f.writeBytes(data); tmp.delete() }
     return s.copy(url = android.net.Uri.fromFile(f).toString())
 }
 
@@ -470,10 +500,12 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     LaunchedEffect(r, needSubs, pbFailed) {
         if (pbFailed || !needSubs) return@LaunchedEffect
         val cur = pb ?: return@LaunchedEffect
-        // Opsi 2: putar gudang TIDAK dipulihkan lewat efek ini —
-        // subtitle gudang kini trek teks bawaan manifest HLS, bukan
-        // trek samping, jadi tidak ada daftar samping yang diisi ulang.
-        if (cur.source == "gudang") return@LaunchedEffect
+        // Putar gudang IKUT dipulihkan lewat efek ini (audit 2026-11-15):
+        // dulu gudang dikecualikan sehingga sekali daftar subtitle kosong
+        // saat buildPlayback (semua pintu lambat), subtitle hilang total
+        // sepanjang sesi tanpa jalan kembali. fetchPlayback(fresh=true)
+        // kini membalap manifest secara paralel, jadi percobaan ulang di
+        // sini benar-benar punya peluang berhasil.
         if (subRecoverTried[0]) return@LaunchedEffect
         subRecoverTried[0] = true
         val waits = longArrayOf(4_000L, 8_000L, 15_000L, 25_000L)
@@ -549,7 +581,14 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 
     key(r, useDirect, mainRetry, doorIdx) {
         PlayerReady(vm, r, a, ctx, act, audio, quality, playback, streamUrl, offline = pbOffline,
-            onDoorSuccess = if (doors.isNotEmpty()) {
+            // Bila balapan pintu aktif (gudang daring, >=2 pintu), pemenang
+            // dicatat oleh DoorRaceSession sendiri; callback frame-pertama
+            // di sini WAJIB kosong — dulu ia menimpa pemenang balapan
+            // dengan pintu awal sesi sehingga kunjungan berikutnya mulai
+            // lagi dari pintu lambat (audit 2026-11-15).
+            onDoorSuccess = if (doors.isNotEmpty() &&
+                !(playback.source == "gudang" && doors.size >= 2 && !pbOffline)
+            ) {
                 { doors.getOrNull(doorIdx)?.let { com.onimeku.app.data.GudangStore.saveDoor(ctx, it.name) } }
             } else {
                 null
@@ -1183,7 +1222,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     LaunchedEffect(player, buffering, rendered) {
         if (!buffering || !rendered) return@LaunchedEffect
         var tries = 0
-        while (tries < 3) {
+        // Dulu berhenti sesudah 3 siklus: kemacetan yang sama tidak pernah
+        // diawasi lagi dan video menggantung sampai timeout baca. Kini
+        // pengawas terus berputar selama efek hidup (buffering masih true);
+        // efek mati sendiri begitu buffering selesai / pemutar berganti.
+        while (true) {
             delay(StallPolicy.delayMs(tries))
             if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@LaunchedEffect
             tries++
@@ -1221,6 +1264,10 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             // Pemutar sudah diambil alih episode/pintu berikutnya: berhenti (jangan menyimpan posisi episode lain).
             if (!PlayerHolder.isOwner(token)) break
             val sec = (player.currentPosition / 1000).toInt()
+            // Debug-only evidence for CI: no media URLs or account data.
+            if (com.onimeku.app.BuildConfig.DEBUG && player.isPlaying) {
+                android.util.Log.d("OnimekuPlayback", "position_ms=${player.currentPosition}")
+            }
             if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
             // Lewati intro otomatis (opsional): sekali per episode, hanya bila API memberi penanda intro.
             if (!introAutoDone) {
