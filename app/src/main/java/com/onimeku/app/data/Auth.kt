@@ -2,9 +2,6 @@ package com.onimeku.app.data
 
 import com.onimeku.app.BuildConfig
 import com.onimeku.app.I18n
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -89,17 +86,12 @@ object AuthClient {
         return (users?.firstOrNull() as? JsonObject) ?: JsonObject(emptyMap())
     }
 
-    private suspend fun session(
-        idToken: String, refreshToken: String, fallbackUid: String, fallbackEmail: String = "",
-    ): Account {
-        val u = try { lookup(idToken) }
-        catch (e: CancellationException) { throw e }
-        catch (e: Exception) { JsonObject(emptyMap()) }
-        val uid = str(u, "localId").ifBlank { fallbackUid }
-        if (uid.isBlank()) throw AuthException(I18n.t("auth_failed", "Sign in failed. Please try again."))
+    private suspend fun session(idToken: String, refreshToken: String): Account {
+        val u = try { lookup(idToken) } catch (e: Exception) { JsonObject(emptyMap()) }
+        val uid = str(u, "localId")
         return Account(
             userId = uid,
-            email = str(u, "email").ifBlank { fallbackEmail },
+            email = str(u, "email"),
             accessToken = idToken,
             refreshToken = refreshToken,
             avatarUrl = str(u, "photoUrl"),
@@ -117,7 +109,7 @@ object AuthClient {
         val o = call("signInWithPassword", creds(email, password))
         val at = str(o, "idToken")
         if (at.isBlank()) throw AuthException(I18n.t("auth_failed", "Sign in failed. Please try again."))
-        return session(at, str(o, "refreshToken"), str(o, "localId"), str(o, "email").ifBlank { email })
+        return session(at, str(o, "refreshToken"))
     }
 
     /**
@@ -135,7 +127,7 @@ object AuthClient {
                 put("idToken", at)
             }.toString())
         } catch (e: Exception) { /* verifikasi usaha terbaik */ }
-        return session(at, str(o, "refreshToken"), str(o, "localId"), str(o, "email").ifBlank { email })
+        return session(at, str(o, "refreshToken"))
     }
 
     suspend fun recover(email: String) {
@@ -187,7 +179,7 @@ object AuthClient {
         }
         val at = str(o, "id_token")
         if (at.isBlank()) throw AuthException(I18n.t("auth_expired", "Session expired. Please sign in again."))
-        session(at, str(o, "refresh_token").ifBlank { refreshToken }, str(o, "user_id"))
+        session(at, str(o, "refresh_token"))
     }
 
     /**
@@ -199,25 +191,14 @@ object AuthClient {
     }
 
     // Sesi anonim untuk membaca dokumen loker (app_keys) — bukan akun pengguna.
-    private val anonLock = Mutex()
-    private var anonToken: String? = null
-    private var anonExpiresAt = 0L
+    @Volatile private var anonToken: String? = null
 
-    suspend fun anonymousIdToken(): String? = anonLock.withLock {
-        val now = android.os.SystemClock.elapsedRealtime()
-        anonToken?.takeIf { now < anonExpiresAt }?.let { return@withLock it }
-        if (!configured) return@withLock null
-        // Serialize renewal: parallel catalog requests must not create multiple anonymous users.
-        try {
+    suspend fun anonymousIdToken(): String? {
+        anonToken?.let { return it }
+        if (!configured) return null
+        return try {
             val o = call("signUp", buildJsonObject { put("returnSecureToken", true) }.toString())
-            val token = str(o, "idToken").takeIf { it.isNotBlank() } ?: return@withLock null
-            val lifetime = str(o, "expiresIn").toLongOrNull()?.coerceIn(0L, 86400L) ?: 3600L
-            anonToken = token
-            // Renew one minute early; never reuse an expired cached token.
-            anonExpiresAt = now + (lifetime - 60L).coerceAtLeast(0L) * 1000L
-            token
-        } catch (e: CancellationException) {
-            throw e
+            str(o, "idToken").takeIf { it.isNotBlank() }?.also { anonToken = it }
         } catch (e: Exception) {
             null
         }

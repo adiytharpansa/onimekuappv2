@@ -177,8 +177,6 @@ object GudangStore {
                     "gudang-warm",
                     "$id ep$ep pintu=${doors.first().name} varian=${variant.height}p segmen=$warmed/${segs.size}",
                 )
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e // pembatalan korutin bukan kegagalan pemanasan; jangan ditelan
             } catch (e: Exception) { /* pemanasan usaha terbaik */ }
         }
     }

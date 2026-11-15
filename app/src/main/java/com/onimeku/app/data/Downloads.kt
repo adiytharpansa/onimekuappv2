@@ -75,17 +75,14 @@ object Downloads {
         val app = ctx.applicationContext
         val prefs = app.getSharedPreferences("dl_state", Context.MODE_PRIVATE)
         if (prefs.getBoolean("reset_v13", false)) return
-        // Bendera hanya dipasang bila reset BENAR-BENAR berjalan (pola yang
-        // sama seperti cleanup_v23): dulu bendera dipasang tanpa syarat
-        // sehingga instalasi yang cache-nya terlanjur tersentuh tidak
-        // pernah direset sama sekali (audit 2026-11-15).
-        val done = simpleCache == null && manager == null && runCatching {
-            File(app.filesDir, "media_downloads").deleteRecursively()
-            val m = manager(ctx)
-            for ((k, _) in states(ctx)) m.removeDownload(k)
-            true
-        }.getOrDefault(false)
-        if (done) prefs.edit().putBoolean("reset_v13", true).apply()
+        if (simpleCache == null && manager == null) {
+            runCatching { File(app.filesDir, "media_downloads").deleteRecursively() }
+            runCatching {
+                val m = manager(ctx)
+                for ((k, _) in states(ctx)) m.removeDownload(k)
+            }
+        }
+        prefs.edit().putBoolean("reset_v13", true).apply()
     }
 
     /**
@@ -113,48 +110,6 @@ object Downloads {
             true
         }.getOrDefault(false)
         if (done) prefs.edit().putBoolean("cleanup_v23", true).apply()
-    }
-
-    /**
-     * Buang segmen hasil PEMANASAN (prefetch) yang tidak pernah menjadi
-     * unduhan resmi sesudah 48 jam. Segmen prefetch ditulis ke cache
-     * bersama di luar indeks unduhan; bila aplikasi mati di tengah
-     * prefetch atau pengguna membatalkan sebelum unduhan dibuat, segmen
-     * itu yatim selamanya dan cache tumbuh tanpa batas (evictor memang
-     * NoOp demi keutuhan unduhan). Tanda prefetch dicatat GudangDl di
-     * prefs "prefetch_marks" (kunci kanonis direktori -> waktu); yang
-     * dibuang hanya sumber daya berkunci kanonis sama dan BUKAN milik
-     * unduhan terdaftar. Indeks unduhan belum siap = jangan hapus apa pun.
-     */
-    fun cleanupStalePrefetch(ctx: Context) {
-        val app = ctx.applicationContext
-        val prefs = app.getSharedPreferences("prefetch_marks", Context.MODE_PRIVATE)
-        val marks = prefs.all
-        if (marks.isEmpty()) return
-        val keepCanon = try {
-            states(app).values.mapNotNull { DoorMath.canonicalDir(it.request.uri.toString()) }
-        } catch (e: Exception) {
-            return
-        }
-        val now = System.currentTimeMillis()
-        val staleMs = 48L * 60 * 60 * 1000
-        val c = cache(app)
-        val edit = prefs.edit()
-        for ((canon, v) in marks) {
-            val at = (v as? Long) ?: 0L
-            if (keepCanon.any { canon.startsWith(it) }) {
-                edit.remove(canon) // sudah jadi unduhan resmi; tanda tak diperlukan lagi
-                continue
-            }
-            if (now - at < staleMs) continue
-            runCatching {
-                for (k in c.keys.toList()) {
-                    if (DoorMath.canonicalDir(k) == canon) c.removeResource(k)
-                }
-            }
-            edit.remove(canon)
-        }
-        edit.apply()
     }
 
     // ---- Referer per unduhan ----

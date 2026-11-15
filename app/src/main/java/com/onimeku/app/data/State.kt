@@ -35,10 +35,6 @@ data class Profile(
     // Cap waktu (epoch ms) perubahan terakhir tiap id (ditambah ATAU dihapus), untuk penggabungan sinkron.
     val myListTs: Map<String, Long> = emptyMap(),
     val seenTs: Map<String, Long> = emptyMap(),
-    // Cap waktu perubahan terakhir tiap id pengingat mingguan (sama seperti
-    // myListTs): dulu remind digabung union polos sehingga pengingat yang
-    // dihapus di satu perangkat bangkit lagi dari salinan perangkat lain.
-    val remindTs: Map<String, Long> = emptyMap(),
 )
 
 /** Beri cap [now] pada [ids]; dibatasi 1500 entri terbaru agar tidak membengkak. */
