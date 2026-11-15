@@ -76,7 +76,7 @@ jobs:
             adb logcat -d > logcat.txt || true
             adb shell dumpsys activity processes > processes.txt || true
           adb exec-out run-as com.onimeku.app cat shared_prefs/poster_cache.xml > poster_cache.xml 2>/dev/null || true
-          name: Verify playback advanced
+      - name: Verify playback advanced
           run: python3 scripts/check-playback.py logcat.txt
         - name: Upload test evidence
           if: ${{ always() }}
