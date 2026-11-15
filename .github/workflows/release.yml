@@ -30,7 +30,6 @@ jobs:
           -PONIMEKU_KEY_PASS="${{ secrets.ONIMEKU_KEY_PASS }}"
           -PONIMEKU_FIREBASE_PROJECT_ID="${{ secrets.ONIMEKU_FIREBASE_PROJECT_ID }}"
           -PONIMEKU_FIREBASE_API_KEY="${{ secrets.ONIMEKU_FIREBASE_API_KEY }}"
-          -PONIMEKU_KEY_A_MASKED="${{ secrets.ONIMEKU_KEY_A_MASKED }}"
       - uses: actions/upload-artifact@v4
         with: { name: onimeku-release-aab, path: app/build/outputs/bundle/release/*.aab }
       - uses: actions/upload-artifact@v4

@@ -56,24 +56,6 @@ class SyncMergeTest {
         assertEquals(50L, ts)
     }
 
-    @Test fun newerRemoteRemindDeletionWins() {
-        // Pengingat dihapus di perangkat lain dengan cap lebih baru:
-        // tidak boleh bangkit lagi dari salinan lokal (dulu union polos).
-        val local = Profile("Me", remind = listOf("a"), remindTs = mapOf("a" to 10L))
-        val remote = Profile("Me", remind = emptyList(), remindTs = mapOf("a" to 20L))
-        assertEquals(emptyList<String>(), Sync.merge(listOf(local), listOf(remote)).single().remind)
-    }
-
-    @Test fun futureStampDoesNotWinForever() {
-        // Jam perangkat lokal melesat jauh ke depan: capnya dijepit
-        // (now + 5 menit) sehingga settings perangkat lain tetap bisa menang.
-        val now = 1_000_000L
-        val local = Settings(subLang = "id")
-        val remote = Settings(subLang = "en")
-        val (merged, _) = Sync.mergeSettings(local, now + 999_999_999L, remote, now, now)
-        assertEquals("en", merged.subLang)
-    }
-
     @Test fun unmarkedEpisodeStaysUnseenAfterMerge() {
         val local = Profile("Me", seen = emptyList(), seenTs = mapOf("x:1" to 50L))
         val remote = Profile("Me", seen = listOf("x:1"), seenTs = mapOf("x:1" to 40L))

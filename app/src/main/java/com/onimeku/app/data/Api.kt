@@ -1,7 +1,6 @@
 package com.onimeku.app.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -489,10 +488,6 @@ object ApiClient {
         )
     }
 
-    /** Pintu yang terakhir berhasil memberi manifest sah (memori sesi):
-     *  balapan manifest berikutnya mulai darinya. */
-    @Volatile private var lastManifestDoor: String? = null
-
     private class Prefetched(val at: Long, val pb: Playback)
     private val prefetched = java.util.concurrent.ConcurrentHashMap<String, Prefetched>()
     private const val PREFETCH_TTL_MS = 600_000L
@@ -503,9 +498,7 @@ object ApiClient {
     suspend fun prefetchPlayback(id: String, ep: Int) {
         val k = "$id:$ep"
         if (prefetched[k]?.let { System.currentTimeMillis() - it.at < PREFETCH_TTL_MS } == true) return
-        val pb = try { buildPlayback(id, ep) } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) { null } ?: return
+        val pb = try { buildPlayback(id, ep) } catch (e: Exception) { null } ?: return
         if (!pb.hasStream) return
         prefetched[k] = Prefetched(System.currentTimeMillis(), pb)
     }
@@ -540,34 +533,18 @@ object ApiClient {
             ?: return@withContext null
         val master = t.playlists[ep] ?: return@withContext null
         val doors = doorVariants(master)
-        // Ambil manifest master dengan BALAPAN PARALEL dari semua pintu,
-        // dimulai dari pintu yang terakhir berhasil. Dulu dicoba satu per
-        // satu dari pintu pertama (terburuk 11 pintu x 8 dtk = +-88 dtk,
-        // terpotong batas putar 35 dtk sehingga putar dinyatakan gagal
-        // padahal ada pintu sehat) — kini jawaban sah pertama yang menang,
-        // terburuk sebatas satu kali timeout.
-        val startAt = lastManifestDoor?.let { n -> doors.indexOfFirst { it.name == n } } ?: -1
-        val ordered = if (startAt > 0) doors.drop(startAt) + doors.take(startAt) else doors
+        // Ambil manifest master dari pintu pertama yang menjawab sah.
         var masterText: String? = null
         var usedDoor: ApiDoor? = null
-        val found = kotlinx.coroutines.coroutineScope {
-            val ch = kotlinx.coroutines.channels.Channel<Pair<ApiDoor, String>>(ordered.size)
-            val jobs = ordered.map { d ->
-                async {
-                    try {
-                        val txt = httpGetText(d.url, timeoutSec = 8)
-                        if (txt.trimStart().startsWith("#EXTM3U")) ch.trySend(d to txt)
-                    } catch (e: Exception) { /* pintu ini kalah; yang lain lanjut */ }
+        for (d in doors) {
+            try {
+                val txt = httpGetText(d.url, timeoutSec = 8)
+                if (txt.trimStart().startsWith("#EXTM3U")) {
+                    masterText = txt
+                    usedDoor = d
+                    break
                 }
-            }
-            val first = kotlinx.coroutines.withTimeoutOrNull(9_000) { ch.receive() }
-            jobs.forEach { it.cancel() }
-            first
-        }
-        if (found != null) {
-            usedDoor = found.first
-            masterText = found.second
-            lastManifestDoor = found.first.name
+            } catch (e: Exception) { /* coba pintu berikutnya */ }
         }
         val dlDoors = ArrayList<ApiDownloadDoor>()
         val mt = masterText
@@ -586,12 +563,7 @@ object ApiClient {
             val subEn: String? = SubRenditions.firstEnglish(renditions)?.url?.let { relOf(it) }
             val subId: String? = SubRenditions.firstIndonesian(renditions)?.url?.let { relOf(it) }
             fun variantRel(height: Int): String? {
-                // Label harus jujur: varian persis dulu, lalu yang tertinggi
-                // DI BAWAH label (berkas lebih kecil dari labelnya), dan hanya
-                // bila tidak ada keduanya barulah terdekat di atas. Dulu
-                // "terdekat ke segala arah" membuat q480 bisa berisi 720p.
                 val v = variants.filter { it.height == height }.firstOrNull()
-                    ?: variants.filter { it.height < height }.maxByOrNull { it.height }
                     ?: variants.minByOrNull { kotlin.math.abs(it.height - height) }
                     ?: return null
                 return relOf(v.uri)

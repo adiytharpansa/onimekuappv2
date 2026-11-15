@@ -247,12 +247,6 @@ class DoorRaceDataSource(
                 break
             }
         }
-        // Balapan kalah/timeout: tandai selesai LEBIH DULU agar kaki yang
-        // open()-nya baru selesai sesudah ini memenangkan CAS secara
-        // keliru lalu bocor (tidak ditutup siapa pun), lalu batalkan
-        // future-nya dan tutup kaki yang sudah ada.
-        resolved.set(true)
-        for (f in futures) f.cancel(true)
         for (leg in legs) closeQuiet(leg)
         session.onSlowOrError()
         throw errors.firstOrNull() ?: IOException("balapan pintu: semua pintu gagal/gantung")

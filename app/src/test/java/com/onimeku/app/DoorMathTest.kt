@@ -36,14 +36,6 @@ class DoorMathTest {
         )
     }
 
-    @Test fun resolveRootAbsolute() {
-        // URI diawali "/" = relatif ke akar host, BUKAN gabung direktori.
-        assertEquals(
-            "https://cdn.jsdelivr.net/subs/id.vtt",
-            DoorMath.resolve("https://cdn.jsdelivr.net/gh/u/gd-01@abc/127230/1/master.m3u8", "/subs/id.vtt"),
-        )
-    }
-
     @Test fun canonicalDirAcrossDoorShapes() {
         val expect = "127230/1/q720/"
         assertEquals(

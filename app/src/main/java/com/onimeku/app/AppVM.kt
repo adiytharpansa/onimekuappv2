@@ -192,7 +192,6 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 Downloads.oneTimeResetV13(app)
                 Downloads.oneTimeCleanupV23(app)
-                Downloads.cleanupStalePrefetch(app)
                 // Pembersihan sekali (debug.31, perintah user: semua data harus
                 // realtime dari API): snapshot katalog disk + cache gambar lama
                 // dibuang agar buka pertama build ini 100% data API live —
@@ -412,36 +411,9 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     private suspend fun pushNow() {
         try {
-            withAccount { acc ->
-                // Tarik + gabung DULU, baru dorong (audit 2026-11-15): dulu
-                // push menimpa dokumen server utuh dengan keadaan lokal,
-                // jadi perubahan dari perangkat lain yang belum sempat
-                // ditarik hilang ditimpa. Sekarang yang didorong adalah
-                // hasil gabungan terbaru.
-                val remote = Sync.pull(acc)
-                if (remote != null) mergeRemote(remote, schedule = false)
-                Sync.push(acc, s.profiles, s.settings, s.settingsTs)
-            }
+            withAccount { Sync.push(it, s.profiles, s.settings, s.settingsTs) }
             syncFails = 0; syncProblem = false
         } catch (e: Exception) { onSyncError(e) }
-    }
-
-    /**
-     * Terapkan hasil tarikan server ke state lokal (gabung, bukan timpa).
-     * [schedule] false bila dipanggil dari dalam pushNow: upd() selalu
-     * menjadwalkan sinkron, dan menjadwalkan dari dalam push yang sedang
-     * berjalan membuat putaran tarik-dorong tidak pernah berhenti.
-     */
-    private fun mergeRemote(remote: Sync.Pulled, schedule: Boolean = true) {
-        val transform: (AppState) -> AppState = { st ->
-            val (mergedSettings, mergedTs) =
-                Sync.mergeSettings(st.settings, st.settingsTs, remote.settings, remote.settingsTs)
-            st.copy(
-                profiles = Sync.merge(st.profiles, remote.profiles, st.goneProfiles),
-                settings = mergedSettings, settingsTs = mergedTs,
-            )
-        }
-        if (schedule) upd(transform) else { s = transform(s); store.save(s) }
     }
 
     private fun onSyncError(e: Exception) {
@@ -487,7 +459,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val remote = withAccount { Sync.pull(it) } ?: return@launch
-                mergeRemote(remote)
+                upd { st ->
+                    val (mergedSettings, mergedTs) =
+                        Sync.mergeSettings(st.settings, st.settingsTs, remote.settings, remote.settingsTs)
+                    st.copy(
+                        profiles = Sync.merge(st.profiles, remote.profiles, st.goneProfiles),
+                        settings = mergedSettings, settingsTs = mergedTs,
+                    )
+                }
             } catch (e: Exception) { onSyncError(e) }
         }
     }
@@ -508,11 +487,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun toggleRemind(id: String, ensure: ((Boolean) -> Unit) -> Unit) {
         val on = id in p.remind
-        val now = System.currentTimeMillis()
-        updP { it.copy(
-            remind = if (on) it.remind - id else it.remind + id,
-            remindTs = it.remindTs.stamped(listOf(id), now),
-        ) }
+        updP { it.copy(remind = if (on) it.remind - id else it.remind + id) }
         if (on) Reminders.cancel(app, s.pi, id) else Reminders.schedule(app, s.pi, id)
         if (on) toast(I18n.t("remind_removed", "Reminder removed")) else {
             val c = Catalog.byId[id] ?: return
@@ -953,6 +928,14 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (e: Exception) { authError = "No browser found to continue." }
+    }
+
+    fun finishSocial(accessToken: String, refreshToken: String) = runAuth {
+        val acc = AuthClient.fromTokens(accessToken, refreshToken)
+        upd { it.copy(account = acc) }
+        pullAndMerge()
+        toast(I18n.t("auth_welcome", "Welcome back"))
+        setTab(Route.ProfileTab)
     }
 
     fun resetPassword(email: String) = runAuth {
