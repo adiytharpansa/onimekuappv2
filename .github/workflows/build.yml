@@ -38,7 +38,7 @@ jobs:
           ORG_GRADLE_PROJECT_ONIMEKU_FIREBASE_API_KEY: ${{ secrets.ONIMEKU_FIREBASE_API_KEY }}
           ORG_GRADLE_PROJECT_ONIMEKU_KEY_B_TEST: ${{ secrets.ONIMEKU_KEY_B_TEST }}
           ORG_GRADLE_PROJECT_ONIMEKU_KEY_A_MASKED: ${{ secrets.ONIMEKU_KEY_A_MASKED }}
-          run: gradle :app:assembleDebug --stacktrace
+        run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
