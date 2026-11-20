@@ -15,7 +15,8 @@ import java.time.OffsetDateTime
 // Katalog = katalog gudang salinan sendiri (bentuk project-X yang sama
 // dengan Anilover), dibaca lewat rantai:
 //   1. Salinan TERENKRIPSI AES-256-GCM khusus Onimeku di Cloudflare Pages
-//      (jalur tersamar khusus Onimeku; kuncinya dipecah dua — potongan A
+//      proyek SENDIRI onimeku-catalog (jalur tersamar khusus Onimeku;
+//      kuncinya dipecah dua — potongan A
 //      di aplikasi, potongan B di loker Firebase; lihat KeyLocker).
 //   2. Cermin-cermin katalog polos (jsDelivr -> gcore -> raw -> fastly)
 //      bila pintu utama/kunci tidak terjangkau — aplikasi tetap jalan.
@@ -113,10 +114,10 @@ private class WhTitle(
 object ApiClient {
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Pintu utama: katalog terenkripsi khusus Onimeku di Pages (jalur
-    // tersamar khusus Onimeku, token diisi saat build dari berkas rahasia).
+    // Pintu utama: katalog terenkripsi khusus Onimeku di Pages proyek
+    // SENDIRI onimeku-catalog (jalur tersamar khusus Onimeku).
     private const val CATALOG_PAGES =
-        "https://anilover-catalog.pages.dev/265f5e92892cbb3dc1b3a8fc/lib.dat"
+        "https://onimeku-catalog.pages.dev/177f5be8bb3916c39376e97e/lib.dat"
 
     // Cermin katalog polos (repo katalog gudang yang sama).
     private const val MIRROR_JSDELIVR =
@@ -549,19 +550,25 @@ object ApiClient {
         val dlDoors = ArrayList<ApiDownloadDoor>()
         val mt = masterText
         val ud = usedDoor
-        // Trek subtitle yang diumumkan manifest master (bahasa + label + URL
-        // absolut). Dipakai untuk unduhan luring per pintu DAN untuk daftar
-        // trek subtitle putar daring — lihat catatan di bawah soal rendition
-        // mentah vs playlist.
-        var renditions: List<SubRendition> = emptyList()
         if (mt != null && ud != null) {
             val variants = DoorMath.parseVariants(mt, ud.url)
             val masterDir = DoorMath.dirOf(ud.url)
             fun relOf(abs: String): String? =
                 if (abs.startsWith(masterDir)) abs.removePrefix(masterDir) else null
-            renditions = SubRenditions.parse(mt, ud.url)
-            val subEn: String? = SubRenditions.firstEnglish(renditions)?.url?.let { relOf(it) }
-            val subId: String? = SubRenditions.firstIndonesian(renditions)?.url?.let { relOf(it) }
+            // Trek subtitle bawaan manifest (untuk unduhan luring per pintu).
+            var subEn: String? = null
+            var subId: String? = null
+            for (line in mt.lineSequence()) {
+                if (!line.startsWith("#EXT-X-MEDIA:") || !line.contains("TYPE=SUBTITLES")) continue
+                val uri = Regex("""URI="([^"]+)"""").find(line)?.groupValues?.get(1) ?: continue
+                val lang = Regex("""LANGUAGE="([^"]+)"""").find(line)?.groupValues?.get(1)?.lowercase().orEmpty()
+                val abs = DoorMath.resolve(ud.url, uri)
+                val rel = relOf(abs) ?: continue
+                when {
+                    lang.startsWith("en") && subEn == null -> subEn = rel
+                    (lang.startsWith("id") || lang.startsWith("in")) && subId == null -> subId = rel
+                }
+            }
             fun variantRel(height: Int): String? {
                 val v = variants.filter { it.height == height }.firstOrNull()
                     ?: variants.minByOrNull { kotlin.math.abs(it.height - height) }
@@ -585,16 +592,7 @@ object ApiClient {
         Playback(
             streamUrl = master,
             episode = ep,
-            // debug.75: SUBTITLE GUDANG DARING KOSONG = BUG "subtitle Indonesia
-            // tidak tampil". Daftar kosong membuat menu menulis "Not available",
-            // tombol CC disembunyikan, dan onTracksChanged memanggil applySub(-1)
-            // yang MEMATIKAN seluruh tipe trek teks — termasuk grup teks bawaan
-            // manifest. Trek rendition kini dibawa di sini sebagai trek samping
-            // (Media3 menolak URI .vtt mentah sebagai rendition HLS); rendition
-            // yang benar-benar playlist (.m3u8) dibiarkan ke Media3.
-            subtitles = renditions.filter { it.sideLoadable }.map {
-                ApiSubtitle(lang = it.lang, label = it.label, url = it.url)
-            },
+            subtitles = emptyList(),
             source = "gudang",
             doors = doors,
             download = if (dlDoors.isNotEmpty()) ApiDownload(downloadable = true, doors = dlDoors) else null,
