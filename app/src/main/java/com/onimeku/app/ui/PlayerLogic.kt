@@ -1,7 +1,5 @@
 package com.onimeku.app.ui
 
-import androidx.media3.common.PlaybackException
-
 /** Langkah berikutnya di rantai cadangan putar setelah galat fatal. */
 internal sealed interface ChainStep {
     /** Jalur utama (proksi) dicoba sekali lagi. */
@@ -27,16 +25,11 @@ internal object PlaybackChain {
         else -> ChainStep.Dead
     }
 
-    /**
-     * Galat jaringan sesaat yang layak dicoba lanjutkan di tempat: koneksi gagal/timeout, IO tak spesifik, dan segmen
-     * 5xx/429. 4xx lain (403/404: token/segmen mati) langsung ke rantai cadangan.
-     */
-    fun isTransient(errorCode: Int, httpCode: Int?): Boolean =
-        errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-            errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
-            errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
-            errorCode == PlaybackException.ERROR_CODE_TIMEOUT ||
-            (errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS && httpCode != null && (httpCode >= 500 || httpCode == 429))
+    // Dunia mpv: galat muat bersifat terminal dari sudut pandang aplikasi.
+    // Pemulihan jaringan sesaat (reconnect, cache demuxer) ditangani mpv
+    // sendiri di dalam; begitu muatan dinyatakan gagal, rantai cadangan di
+    // atas yang mengambil alih. Karena itu tidak ada lagi klasifikasi
+    // "galat sesaat" ala kode galat ExoPlayer di sini.
 }
 
 /** Pengawas macet: jeda antar siklus dan kapan kualitas diturunkan. */

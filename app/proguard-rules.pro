@@ -1,4 +1,5 @@
--keep class androidx.media3.** { *; }
+# libmpv adalah pustaka native (AAR); kelas Java-nya dirujuk lewat JNI oleh kode aplikasi.
+-keep class dev.jdtech.mpv.** { *; }
 -keepattributes Signature, *Annotation*, InnerClasses
 -dontwarn org.slf4j.**
 -keep,includedescriptorclasses class com.onimeku.app.**$$serializer { *; }

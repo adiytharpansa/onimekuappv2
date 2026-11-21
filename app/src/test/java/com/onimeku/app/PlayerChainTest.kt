@@ -1,6 +1,5 @@
 package com.onimeku.app
 
-import androidx.media3.common.PlaybackException
 import com.onimeku.app.data.LogRedact
 import com.onimeku.app.ui.ChainStep
 import com.onimeku.app.ui.EpisodeMath
@@ -31,22 +30,9 @@ class PlayerChainTest {
         assertEquals(ChainStep.Dead, PlaybackChain.onFatal(0, 0, true, 1, true))
     }
 
-    @Test fun transientErrorsAreRetriedInPlace() {
-        assertTrue(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, null))
-        assertTrue(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, null))
-        assertTrue(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_UNSPECIFIED, null))
-        assertTrue(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_TIMEOUT, null))
-        assertTrue(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, 503))
-        assertTrue(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, 429))
-    }
-
-    @Test fun deadTokensAndDecodeErrorsGoStraightToFallback() {
-        assertFalse(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, 403))
-        assertFalse(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, 404))
-        assertFalse(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, null))
-        assertFalse(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, null))
-        assertFalse(PlaybackChain.isTransient(PlaybackException.ERROR_CODE_DECODING_FAILED, null))
-    }
+    // Dunia mpv: tidak ada lagi klasifikasi galat sesaat ala ExoPlayer —
+    // pemulihan jaringan di dalam mpv, galat muat terminal masuk rantai
+    // cadangan (diuji oleh dua kasus onFatal di atas).
 
     // ---- pengawas macet ----
     @Test fun stallPolicyTimingAndQualityDrop() {

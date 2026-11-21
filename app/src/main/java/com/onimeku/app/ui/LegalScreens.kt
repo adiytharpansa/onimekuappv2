@@ -31,7 +31,7 @@ private val privacy = listOf(
 
 private val licenses = listOf(
     Sec("Jetpack Compose, Material 3, AndroidX", "Copyright The Android Open Source Project. Licensed under the Apache License 2.0."),
-    Sec("Media3 (ExoPlayer)", "Copyright The Android Open Source Project. Licensed under the Apache License 2.0."),
+    Sec("mpv / libmpv (pemutar video)", "Copyright the mpv team and FFmpeg contributors. Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later)."),
     Sec("OkHttp", "Copyright Square, Inc. Licensed under the Apache License 2.0."),
     Sec("Coil", "Copyright Coil Contributors. Licensed under the Apache License 2.0."),
     Sec("kotlinx.serialization and Kotlin", "Copyright JetBrains s.r.o. Licensed under the Apache License 2.0."),

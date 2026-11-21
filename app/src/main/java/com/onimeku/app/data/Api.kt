@@ -22,7 +22,7 @@ import java.time.OffsetDateTime
 //      bila pintu utama/kunci tidak terjangkau — aplikasi tetap jalan.
 // Detail dibaca dari data katalog yang sama (tanpa panggilan terpisah).
 // Putar = playlist HLS gudang per episode lewat daftar pintu CDN
-// (doorVariants) dan mekanisme Gudang/DoorRace yang sudah ada;
+// (doorVariants) dan rantai pintu tingkat URL di pemutar mpv;
 // subtitle adalah trek bawaan manifest HLS. Jadwal tetap AniList
 // langsung. TIDAK ada lagi panggilan ke API katalog lama mana pun.
 // ---------------------------------------------------------------------------

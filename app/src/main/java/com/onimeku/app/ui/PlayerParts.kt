@@ -69,14 +69,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import com.onimeku.app.AppVM
 import com.onimeku.app.I18n
-import com.onimeku.app.PlaybackService
 import com.onimeku.app.Route
 import com.onimeku.app.data.Catalog
 import kotlinx.coroutines.async
@@ -371,10 +365,10 @@ internal fun SheetOption(label: String, selected: Boolean, onClick: () -> Unit) 
 
 // ------------------------------------------------------------------ Dubbing (trek audio)
 /** Nama dubbing yang ramah dibaca: label trek bila bermakna, kalau tidak nama bahasa dari kodenya ("ja" -> Japanese / Jepang). */
-internal fun dubName(f: androidx.media3.common.Format, i: Int): String {
-    val label = f.label?.trim().orEmpty()
+internal fun dubName(lang: String?, rawLabel: String?, i: Int): String {
+    val label = rawLabel?.trim().orEmpty()
     if (label.length > 3 && !DubLogic.isGenericLabel(label)) return label
-    val code = DubLogic.normalize(f.language).ifEmpty { if (DubLogic.isGenericLabel(label)) "" else DubLogic.normalize(label) }
+    val code = DubLogic.normalize(lang).ifEmpty { if (DubLogic.isGenericLabel(label)) "" else DubLogic.normalize(label) }
     if (code.isNotEmpty()) dubLangName(code)?.let { return it }
     // Trek pertama tanpa bahasa umumnya audio asli stream; lebih jelas daripada "Track 1".
     return if (i == 0) I18n.t("dub_original", "Original") else "Track ${i + 1}"
@@ -387,8 +381,8 @@ internal fun dubLangName(code: String): String? {
 }
 
 /** Kunci stabil sebuah trek audio, dipakai mengingat pilihan dubbing antar episode. */
-internal fun audioKey(f: androidx.media3.common.Format): String {
-    return DubLogic.normalize(f.language).ifEmpty { if (DubLogic.isGenericLabel(f.label)) "" else DubLogic.normalize(f.label) }
+internal fun audioKey(lang: String?, label: String?): String {
+    return DubLogic.normalize(lang).ifEmpty { if (DubLogic.isGenericLabel(label)) "" else DubLogic.normalize(label) }
 }
 
 /** Bendera kecil untuk kode bahasa trek audio; null bila tak dikenal (chip/baris memakai ikon not musik). */

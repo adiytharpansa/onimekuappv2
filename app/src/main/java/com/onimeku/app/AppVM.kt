@@ -186,12 +186,11 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         reloadCatalog()
         pullAndMerge()
         // Pekerjaan berat start dipindah dari main thread (sebelumnya menahan frame pertama):
-        // pembersihan sekali, lalu DownloadManager Media3 (buka SQLite + pindai SimpleCache).
-        // Urutan di dalam satu coroutine tetap: pembersihan dulu, baru manager/cache dibuat.
+        // pembersihan warisan sekali (cache SimpleCache Media3 lama dibuang),
+        // lalu daftar unduhan dipulihkan dari berkas lokal.
         viewModelScope.launch {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                Downloads.oneTimeResetV13(app)
-                Downloads.oneTimeCleanupV23(app)
+                Downloads.cleanupLegacyCache(app)
                 // Pembersihan sekali (debug.31, perintah user: semua data harus
                 // realtime dari API): snapshot katalog disk + cache gambar lama
                 // dibuang agar buka pertama build ini 100% data API live —
@@ -213,72 +212,22 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
                     }
                 } catch (e: Exception) { /* abaikan */ }
             }
-            initDownloads()
+            restoreDownloads()
         }
     }
 
-    /** Sambungkan DownloadManager Media3 ke state aplikasi (progres asli). */
-    private suspend fun initDownloads() {
-        // Membangun DownloadManager + membaca indeks unduhan = I/O berat: lakukan di thread IO.
-        val (dm, existing) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val m = Downloads.manager(app)
-            m to Downloads.states(app)
+    /**
+     * Pulihkan daftar unduhan dari berkas lokal: entri tersimpan yang
+     * berkasnya sudah tidak utuh (dihapus dari pengelola berkas, atau sisa
+     * era unduhan Media3 yang formatnya tak terbaca lagi) dibuang.
+     */
+    private suspend fun restoreDownloads() {
+        val kept = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            Downloads.cleanupLegacyCache(app)
+            s.downloads.filter { Downloads.isComplete(app, it.id, it.ep) }
         }
-        Downloads.setWifiOnly(app, s.settings.wifi)
-        // Pulihkan tampilan untuk unduhan dari sesi sebelumnya.
-        for ((contentKey, d) in existing) {
-            val (id, ep) = Downloads.parseKey(contentKey) ?: continue
-            val k = "$id:$ep"
-            when (d.state) {
-                androidx.media3.exoplayer.offline.Download.STATE_DOWNLOADING,
-                androidx.media3.exoplayer.offline.Download.STATE_QUEUED,
-                androidx.media3.exoplayer.offline.Download.STATE_RESTARTING ->
-                    downloading[k] = pctOf(d)
-                androidx.media3.exoplayer.offline.Download.STATE_COMPLETED ->
-                    if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
-            }
-        }
-        dm.addListener(object : androidx.media3.exoplayer.offline.DownloadManager.Listener {
-            override fun onDownloadChanged(
-                dm: androidx.media3.exoplayer.offline.DownloadManager,
-                download: androidx.media3.exoplayer.offline.Download,
-                finalException: Exception?,
-            ) {
-                val (id, ep) = Downloads.parseKey(download.request.id) ?: return
-                val k = "$id:$ep"
-                when (download.state) {
-                    androidx.media3.exoplayer.offline.Download.STATE_DOWNLOADING,
-                    androidx.media3.exoplayer.offline.Download.STATE_QUEUED,
-                    androidx.media3.exoplayer.offline.Download.STATE_RESTARTING ->
-                        downloading[k] = pctOf(download)
-                    androidx.media3.exoplayer.offline.Download.STATE_COMPLETED -> {
-                        downloading.remove(k)
-                        if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
-                        toast(String.format(I18n.t("dl_saved", "Episode %d saved for offline watching"), ep))
-                    }
-                    androidx.media3.exoplayer.offline.Download.STATE_FAILED -> {
-                        downloading.remove(k)
-                        if (hasDl(id, ep)) {
-                            upd { st -> st.copy(downloads = st.downloads.filterNot { it.id == id && it.ep == ep }) }
-                            toast(String.format(I18n.t("dl_failed", "Download failed: Episode %d"), ep))
-                        }
-                    }
-                    androidx.media3.exoplayer.offline.Download.STATE_REMOVING -> downloading.remove(k)
-                }
-            }
-
-            override fun onDownloadRemoved(
-                dm: androidx.media3.exoplayer.offline.DownloadManager,
-                download: androidx.media3.exoplayer.offline.Download,
-            ) {
-                val (id, ep) = Downloads.parseKey(download.request.id) ?: return
-                downloading.remove("$id:$ep")
-            }
-        })
+        if (kept.size != s.downloads.size) upd { it.copy(downloads = kept) }
     }
-
-    private fun pctOf(d: androidx.media3.exoplayer.offline.Download): Int =
-        d.percentDownloaded.toInt().coerceIn(0, 99)
 
     /** Muat katalog gudang; dipanggil saat aplikasi dibuka dan dari tombol coba lagi. */
     fun reloadCatalog() {
@@ -529,94 +478,80 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun hasDl(id: String, ep: Int) = s.downloads.any { it.id == id && it.ep == ep }
 
+    /** Job unduhan berkas yang sedang berjalan, per "id:ep" (untuk batal). */
+    private val dlJobs = HashMap<String, Job>()
+
     /**
-     * Unduhan ASLI (Media3): ketuk mulai, ketuk lagi saat berjalan = batal.
+     * Unduhan berbasis berkas: ketuk mulai, ketuk lagi saat berjalan = batal.
      * Hanya judul dengan stream HLS langsung yang bisa diunduh; judul
      * embed-saja ditolak dengan jujur.
      */
     fun download(id: String, ep: Int) {
         val k = "$id:$ep"
-        val contentKey = Downloads.key(id, ep)
-        val st = Downloads.states(app)[contentKey]?.state
-        if (st == androidx.media3.exoplayer.offline.Download.STATE_DOWNLOADING ||
-            st == androidx.media3.exoplayer.offline.Download.STATE_QUEUED ||
-            st == androidx.media3.exoplayer.offline.Download.STATE_RESTARTING
-        ) {
-            Downloads.remove(app, contentKey)
+        val running = dlJobs[k]
+        if (running != null && running.isActive) {
+            dlJobs.remove(k)
             downloading.remove(k)
+            running.cancel()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { Downloads.remove(app, id, ep) }
             upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
             toast("Download cancelled")
             return
         }
-        if (hasDl(id, ep)) { toast("Already saved offline"); return }
+        if (hasDl(id, ep) && Downloads.isComplete(app, id, ep)) { toast("Already saved offline"); return }
         val free = try { android.os.StatFs(app.filesDir.path).availableBytes } catch (e: Exception) { Long.MAX_VALUE }
         if (free < 300L * 1024 * 1024) { toast("Not enough storage. Free up some space and try again."); return }
-        viewModelScope.launch { startDownload(id, ep) }
+        val job = viewModelScope.launch { startDownload(id, ep) }
+        dlJobs[k] = job
+        job.invokeOnCompletion { if (dlJobs[k] === job) dlJobs.remove(k) }
     }
 
-    /** Isi unduhan (ambil data putar + antrekan). Dipisah dari download()
+    /** Isi unduhan (ambil data putar + unduh berkasnya). Dipisah dari download()
      *  agar downloadAll bisa menjalankannya BERURUTAN. */
     private suspend fun startDownload(id: String, ep: Int, silent: Boolean = false) {
         val k = "$id:$ep"
+        // Gerbang Wi-Fi-only: unduhan di jaringan terukur ditolak di awal
+        // (dulu dijaga DownloadManager Media3; kini diperiksa di sini).
+        if (s.settings.wifi) {
+            val cm = app.getSystemService(ConnectivityManager::class.java)
+            val metered = try { cm?.isActiveNetworkMetered == true } catch (e: Exception) { false }
+            if (metered) {
+                autoQueued.remove(k)
+                if (!silent) toast("Wi-Fi only is on: connect to Wi-Fi to download")
+                return
+            }
+        }
         val pb = try { ApiClient.fetchPlayback(id, ep, fresh = true) } catch (e: Exception) { null }
-        // Unduhan GUDANG (episode tersalin): ambil anak tangga sesuai
-        // kualitas pilihan pengguna dari pintu gudang (pintu terakhir
-        // yang berhasil bila ada), plus subtitle en/id gudang untuk
-        // putar luring. Jalur unduh lama tidak dipakai sama sekali.
+        // Unduhan GUDANG (episode tersalin): tangga URL anak tangga sesuai
+        // kualitas pilihan pengguna dari SEMUA pintu gudang — pintu
+        // terakhir yang berhasil lebih dulu — lalu berkas diunduh polos
+        // oleh data/Downloads.kt. Subtitle en/id gudang ikut disimpan
+        // untuk putar luring seperti sebelumnya.
         if (pb?.source == "gudang") {
             val dl = pb.download
-            val door = dl?.doors?.firstOrNull { it.name == com.onimeku.app.data.GudangStore.lastDoor(app) }
-                ?: dl?.doors?.firstOrNull()
-            val ladder = when (s.settings.quality) {
-                "1080p" -> door?.q1080
-                "480p" -> door?.q480
-                else -> door?.q720 // "720p" / "Auto" -> 720p untuk luring
-            }
-            if (door == null || ladder.isNullOrBlank() || dl?.downloadable == false) {
+            if (dl == null || !dl.downloadable || dl.doors.isEmpty()) {
                 autoQueued.remove(k)
                 if (!silent) toast("This title can't be downloaded")
                 return
             }
-            if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
-            downloading[k] = 0
-            // Unduhan paralel multi-pintu (debug.60): daftarkan direktori
-            // tangga kualitas ini dari SEMUA pintu, lalu panaskan segmennya
-            // ke cache unduhan dengan pekerja paralel lintas pintu
-            // (GudangDl). Sesudah itu antrean Media3 berjalan seperti
-            // biasa: segmen yang sudah tercache dilewatinya, sisa yang
-            // gagal tetap diambil Media3 lewat kolam pintu yang sama di
-            // tumpukan DownloadManager, dan status/progres unduhan tetap
-            // dimiliki DownloadManager. Subtitle en/id tidak berubah.
-            com.onimeku.app.data.DoorPoolRegistry.register(
-                app,
-                dl?.doors.orEmpty().map { d ->
-                    when (s.settings.quality) {
-                        "1080p" -> d.q1080
-                        "480p" -> d.q480
-                        else -> d.q720
-                    }
-                },
-            )
-            try {
-                com.onimeku.app.data.GudangDl.prefetchSegments(app, ladder, s.settings.wifi) { pct ->
-                    if (downloading.containsKey(k)) downloading[k] = pct
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) { /* pemanasan gagal total: Media3 mengambil semua segmen sendiri */ }
-            if (!downloading.containsKey(k)) {
-                // User membatalkan unduhan saat pemanasan segmen berjalan.
+            val lastName = com.onimeku.app.data.GudangStore.lastDoor(app)
+            val ordered = dl.doors.sortedByDescending { it.name == lastName }
+            val ladder = ordered.mapNotNull { d ->
+                when (s.settings.quality) {
+                    "1080p" -> d.q1080
+                    "480p" -> d.q480
+                    else -> d.q720 // "720p" / "Auto" -> 720p untuk luring
+                }.takeIf { it.isNotBlank() }
+            }
+            if (ladder.isEmpty()) {
                 autoQueued.remove(k)
+                if (!silent) toast("This title can't be downloaded")
                 return
             }
-            Downloads.enqueue(app, id, ep, ladder, null) {
-                autoQueued.remove(k)
-                downloading.remove(k)
-                upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
-                if (!silent) toast("Download failed to start: Episode $ep")
+            val subDoor = ordered.firstOrNull()
+            runFileDownload(id, ep, ladder, pb.referer, silent) {
+                if (subDoor != null) viewModelScope.launch { com.onimeku.app.data.GudangStore.downloadSubs(app, id, ep, subDoor) }
             }
-            viewModelScope.launch { com.onimeku.app.data.GudangStore.downloadSubs(app, id, ep, door) }
-            toast(if (silent) "Saving Episode $ep for offline" else "Download started: Episode $ep")
             return
         }
         val url = pb?.streamUrl
@@ -625,15 +560,43 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
             if (!silent) toast("This title can't be downloaded")
             return
         }
-        if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
-        downloading[k] = 0
-        Downloads.enqueue(app, id, ep, url, pb.referer) {
-            autoQueued.remove(k)
-            downloading.remove(k)
-            upd { s2 -> s2.copy(downloads = s2.downloads.filterNot { it.id == id && it.ep == ep }) }
-            if (!silent) toast("Download failed to start: Episode $ep")
+        // Sumber non-gudang: ambil playlist induk, pilih varian sesuai
+        // kualitas, unduh varian itu sebagai berkas.
+        val ladder = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val rb = okhttp3.Request.Builder().url(url).header("User-Agent", Net.UA)
+                if (!pb.referer.isNullOrBlank()) rb.header("Referer", pb.referer)
+                val master = Net.client.newCall(rb.build()).execute().use { resp -> if (resp.isSuccessful) resp.body?.string() else null }
+                val variants = master?.let { com.onimeku.app.data.DoorMath.parseVariants(it, url) }.orEmpty()
+                listOf(com.onimeku.app.data.DoorMath.chooseVariant(variants, s.settings.quality)?.uri ?: url)
+            }.getOrDefault(listOf(url))
         }
+        runFileDownload(id, ep, ladder, pb.referer, silent, null)
+    }
+
+    /** Jalankan pengunduh berkas + urus state UI (progres, daftar, toast). */
+    private suspend fun runFileDownload(id: String, ep: Int, ladder: List<String>, referer: String?, silent: Boolean, onDone: (() -> Unit)?) {
+        val k = "$id:$ep"
+        downloading[k] = 0
         toast(if (silent) "Saving Episode $ep for offline" else "Download started: Episode $ep")
+        val ok = try {
+            Downloads.download(app, id, ep, ladder, referer) { pct -> if (downloading.containsKey(k)) downloading[k] = pct }
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            false
+        }
+        downloading.remove(k)
+        autoQueued.remove(k)
+        if (ok) {
+            if (!hasDl(id, ep)) upd { it.copy(downloads = it.downloads + Dl(id, ep)) }
+            toast(String.format(I18n.t("dl_saved", "Episode %d saved for offline watching"), ep))
+            onDone?.invoke()
+        } else {
+            // Berkas parsial dibiarkan di disk: ketuk unduh lagi melanjutkan
+            // dari segmen yang sudah ada (resume tingkat segmen).
+            if (!silent) toast(String.format(I18n.t("dl_failed", "Download failed: Episode %d"), ep))
+        }
     }
 
     fun downloadAll(id: String) {
@@ -645,19 +608,29 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         // Berurutan: satu pengambilan data putar pada satu
         // waktu. Sebelumnya semua episode menembak fetchPlayback paralel —
         // untuk judul ratusan episode itu membanjiri jaringan dan hulu.
-        viewModelScope.launch { for (n in todo) startDownload(id, n) }
+        viewModelScope.launch {
+            for (n in todo) {
+                val job = launch { startDownload(id, n) }
+                dlJobs["$id:$n"] = job
+                job.invokeOnCompletion { if (dlJobs["$id:$n"] === job) dlJobs.remove("$id:$n") }
+                job.join()
+            }
+        }
     }
 
     fun removeDl(id: String, ep: Int) {
-        Downloads.remove(app, Downloads.key(id, ep))
+        dlJobs.remove("$id:$ep")?.cancel()
         downloading.remove("$id:$ep")
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { Downloads.remove(app, id, ep) }
         upd { st -> st.copy(downloads = st.downloads.filterNot { it.id == id && it.ep == ep }) }
         toast("Download removed")
     }
 
     fun removeAllDl() {
-        for (d in s.downloads) Downloads.remove(app, Downloads.key(d.id, d.ep))
+        dlJobs.values.forEach { it.cancel() }
+        dlJobs.clear()
         downloading.clear()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { Downloads.removeAll(app) }
         upd { it.copy(downloads = emptyList()) }
         toast("All downloads removed")
     }
@@ -748,7 +721,9 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
         if (!unmetered) { autoQueued.remove(k); return } // coba lagi saat tersambung Wi-Fi
         val free = try { android.os.StatFs(app.filesDir.path).availableBytes } catch (e: Exception) { Long.MAX_VALUE }
         if (free < 1024L * 1024 * 1024) { autoQueued.remove(k); return }
-        viewModelScope.launch { startDownload(id, next, silent = true) }
+        val job = viewModelScope.launch { startDownload(id, next, silent = true) }
+        dlJobs[k] = job
+        job.invokeOnCompletion { if (dlJobs[k] === job) dlJobs.remove(k) }
     }
 
     // ---------- Surprise me ----------
@@ -807,11 +782,9 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     fun setSettings(f: (Settings) -> Settings) {
         val oldAlerts = s.settings.alerts
-        val oldWifi = s.settings.wifi
         // Cap waktu tiap perubahan: dasar last-write-wins sinkronisasi settings antar-perangkat.
         upd { it.copy(settings = f(it.settings), settingsTs = System.currentTimeMillis()) }
         if (oldAlerts != s.settings.alerts) Reminders.rescheduleAll(app, s)
-        if (oldWifi != s.settings.wifi) Downloads.setWifiOnly(app, s.settings.wifi)
     }
 
     /** Kembalikan pengaturan ke bawaan; bahasa antarmuka, petunjuk gestur, dan dubbing per judul dipertahankan. */

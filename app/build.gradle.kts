@@ -12,8 +12,8 @@ android {
         applicationId = "com.onimeku.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
         // Aplikasi hanya punya bahasa en + id: buang string terjemahan 80+ bahasa dari Compose/Material (APK lebih kecil).
         resourceConfigurations += listOf("en", "id")
         // Konfigurasi Firebase proyek khusus Onimeku (isi di gradle.properties; kosong = fitur Firebase nonaktif anggun)
@@ -71,17 +71,24 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.media3:media3-exoplayer:1.5.0")
-    implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
-    implementation("androidx.media3:media3-database:1.5.0")
-    implementation("androidx.media3:media3-ui:1.5.0")
-    implementation("androidx.media3:media3-session:1.5.0")
+    // Mesin pemutar TUNGGAL (streaming + luring): mpv lewat libmpv
+    // (mpv + FFmpeg + libass). Media3 sudah tidak dipakai sama sekali.
+    implementation("io.github.midasvo:libmpv:1.2.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("androidx.media3:media3-datasource-okhttp:1.5.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     // Memasang Baseline Profile (src/main/baseline-prof.txt) saat instalasi: start dan scroll pertama lebih mulus.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     testImplementation("junit:junit:4.13.2")
+}
+
+// libmpv 1.2.0 diterbitkan dengan syarat minCompileSdk 37 (Android 17).
+// Google kini menerbitkan platform SDK sebagai 37.0/37.1/37.2 ("minor SDK")
+// yang hanya dipahami AGP 9; platform polos untuk AGP 8.7.3 berhenti di 36.
+// API publik libmpv hanya memakai API Android lama (Context, Surface) dan
+// minSdk-nya 26, jadi pemeriksaan metadata AAR ini dilewati secara sadar.
+// Naikkan ke AGP 9 + compileSdk 37.0 bila perkakasnya diganti nanti.
+tasks.configureEach {
+    if (name.endsWith("AarMetadata")) enabled = false
 }

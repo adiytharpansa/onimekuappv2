@@ -73,15 +73,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import com.onimeku.app.AppVM
 import com.onimeku.app.I18n
-import com.onimeku.app.PlaybackService
 import com.onimeku.app.Route
+import dev.jdtech.mpv.MPVLib
 import com.onimeku.app.data.Catalog
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -123,39 +120,20 @@ private fun onWifi(ctx: Context): Boolean {
 }
 
 @Composable
-private fun VideoSurface(
-    player: Player, modifier: Modifier, subScale: Float = 1f, subBg: Boolean = false, resizeMode: Int = 0,
-    subColor: Int = android.graphics.Color.WHITE, subSystem: Boolean = false, subLift: Boolean = false, liftDp: Int = 80,
-) {
-    // Tinggi tampilan (px) dipakai mengubah tinggi angkat (dp) menjadi fraksi yang diminta SubtitleView.
-    var hPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    val density = androidx.compose.ui.platform.LocalDensity.current.density
+private fun VideoSurface(engine: MpvEngine, modifier: Modifier) {
+    // Permukaan video mpv: SurfaceView polos; mesin menempel padanya lewat
+    // attachSurface dan menggambar sendiri (termasuk subtitle libass).
     AndroidView(
-        factory = { c -> PlayerView(c).also { it.player = player; it.useController = false } },
-        update = { pv ->
-            pv.resizeMode = resizeMode // 0 = FIT, 4 = ZOOM (penuh, memotong tepi); literal agar tak butuh opt-in API tak stabil
-            pv.subtitleView?.let { sv ->
-                if (subSystem) {
-                    // Ikuti pengaturan "Teks tayang"/Captions sistem (ukuran, warna, tepi) untuk aksesibilitas.
-                    sv.setApplyEmbeddedStyles(true)
-                    sv.setUserDefaultStyle()
-                    sv.setUserDefaultTextSize()
-                } else {
-                    sv.setApplyEmbeddedStyles(false)
-                    sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subScale)
-                    sv.setStyle(androidx.media3.ui.CaptionStyleCompat(
-                        subColor, if (subBg) 0xB3000000.toInt() else android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
-                        androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null,
-                    ))
-                }
-                // Saat kontrol tampil, subtitle naik di atas bilah seek (seperti YouTube) agar tidak tertutup.
-                val base = androidx.media3.ui.SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION
-                sv.setBottomPaddingFraction(if (subLift && hPx > 0) maxOf(base, (liftDp * density / hPx).coerceAtMost(0.45f)) else base)
+        factory = { c ->
+            SurfaceView(c).also { sv ->
+                sv.holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) { engine.attachSurface(holder.surface) }
+                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) { engine.setSurfaceSize(width, height) }
+                    override fun surfaceDestroyed(holder: SurfaceHolder) { engine.detachSurface() }
+                })
             }
         },
-        modifier = modifier.onSizeChanged { hPx = it.height },
-        // Pemutar dipakai bersama lintas episode: lepaskan PlayerView lama agar listener-nya tidak menumpuk.
-        onRelease = { pv -> runCatching { pv.player = null } },
+        modifier = modifier,
     )
 }
 
@@ -346,31 +324,25 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
     LaunchedEffect(r.id) { com.onimeku.app.data.GudangStore.flushReports(ctx) }
     LaunchedEffect(r, attempt) {
         pb = null; pbFailed = false; pbOffline = false
-        // Data putar yang sudah di-prefetch (dari Detail) tiba nyaris seketika, lalu PlayerReady membangun ExoPlayer
+        // Data putar yang sudah di-prefetch (dari Detail) tiba nyaris seketika, lalu PlayerReady membangun pemutar
         // di main thread TEPAT saat animasi masuk (380 ms) berjalan -> patah. Tahan penyerahan [pb] sampai animasi selesai.
         val t0 = android.os.SystemClock.uptimeMillis()
         suspend fun settle() { val w = 380L - (android.os.SystemClock.uptimeMillis() - t0); if (w > 0) delay(w) }
-        // Cadangan unduhan lokal (debug.63): Playback putar-dari-unduhan
-        // bila episode ini sudah terunduh PENUH, null bila tidak ada.
-        // Dipakai SEMUA jalan gagal bootstrap — versi lama hanya
-        // memeriksanya saat fetchPlayback mengembalikan null; respons
-        // yang datang tetapi tanpa alamat aliran (cabang kosong di
-        // bawah) langsung menyerah "Stream unavailable" tanpa pernah
-        // melihat unduhan (regresi lapangan debug.62, Chainsaw Man
-        // ep1: episode terunduh sehat, layar galat total). Subtitle
-        // luring gudang (en/id) yang ikut terunduh dipasangkan;
-        // daftar kosongnya dipulihkan efek pemulihan trek sesudah
-        // putar terpasang (efek itu tidak pernah menahan bootstrap).
+        // Cadangan unduhan lokal: Playback putar-dari-unduhan bila
+        // episode ini sudah terunduh PENUH sebagai berkas (penanda
+        // selesai di data/Downloads.kt), null bila tidak ada. Dipakai
+        // SEMUA jalan gagal bootstrap. Playlist lokalnya dibuka mpv
+        // seperti aliran biasa — satu mesin untuk streaming & luring.
+        // Subtitle luring gudang (en/id) yang ikut terunduh dipasangkan.
         suspend fun loadOffline(sebab: String): com.onimeku.app.data.Playback? {
-            val dl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.onimeku.app.data.Downloads.states(ctx)[com.onimeku.app.data.Downloads.key(r.id, r.ep)]
-            }
-            if (dl == null || dl.state != androidx.media3.exoplayer.offline.Download.STATE_COMPLETED) return null
+            val localPath = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.onimeku.app.data.Downloads.localPlaylistPath(ctx, r.id, r.ep)
+            } ?: return null
             val offSubs = com.onimeku.app.data.GudangStore.offlineSubs(ctx, r.id, r.ep)
             com.onimeku.app.data.CrashLog.note("playback", "${r.id} ep${r.ep} $sebab -> putar unduhan, subs luring=${offSubs.size}")
             return com.onimeku.app.data.Playback(
-                streamUrl = dl.request.uri.toString(), episode = r.ep,
-                subtitles = offSubs,
+                streamUrl = localPath, episode = r.ep,
+                subtitles = offSubs, source = "offline",
             )
         }
         // Batas waktu TOTAL memuat data putar (debug.30, dilonggarkan
@@ -579,173 +551,28 @@ private fun PlayerContent(vm: AppVM, r: Route.Player) {
 
 }
 
-/**
- * ID stabil untuk trek subtitle samping (side-load) yang dibangun dari
- * payload API. Media3 menyalin ID ini ke Format trek (terverifikasi di
- * sumber media3 1.5.0: SingleSampleMediaSource dan jalur ekstraksi
- * DefaultMediaSourceFactory sama-sama memakai SubtitleConfiguration.id),
- * sehingga trek samping bisa dibedakan dari grup teks bawaan manifest
- * HLS. Grup manifest gudang menunjuk berkas .vtt MENTAH sebagai URI
- * rendition — bukan media playlist — jadi parser HLS Media3 menolaknya
- * ("Input does not start with the #EXTM3U header") dan grup itu tidak
- * akan pernah menghasilkan cue; memilihnya = CC tidak tampil.
- */
-private const val LOCAL_SUB_ID_PREFIX = "onimeku-local-sub:"
-
-private fun isLocalSubtitleGroup(g: androidx.media3.common.Tracks.Group): Boolean {
-    if (g.type != androidx.media3.common.C.TRACK_TYPE_TEXT) return false
-    val id = runCatching { g.mediaTrackGroup.getFormat(0).id }.getOrNull() ?: return false
-    return id.startsWith(LOCAL_SUB_ID_PREFIX)
-}
-
-private fun subConfigs(playback: com.onimeku.app.data.Playback): List<MediaItem.SubtitleConfiguration> =
-    playback.subtitles.filter { it.url.isNotBlank() }.mapIndexed { idx, s ->
-        // Ekstensi dibaca dari path saja: URL pintu gudang membawa token di
-        // query, dan dulu ".srt" yang kebetulan muncul di query bisa memilih
-        // mime yang salah.
-        val path = s.url.substringBefore('?').substringBefore('#').lowercase()
-        val mime = when {
-            path.endsWith(".srt") -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
-            path.endsWith(".ass") || path.endsWith(".ssa") -> androidx.media3.common.MimeTypes.TEXT_SSA
-            else -> androidx.media3.common.MimeTypes.TEXT_VTT
-        }
-        MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(s.url))
-            .setMimeType(mime).setLanguage(s.lang)
-            .setLabel(s.label.ifBlank { s.lang.uppercase().ifBlank { "SUB" } })
-            .setId(LOCAL_SUB_ID_PREFIX + idx).build()
-    }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime, ctx: Context, act: android.app.Activity?, audio: AudioManager, quality: String, playback: com.onimeku.app.data.Playback, streamUrl: String, offline: Boolean = false, onDoorSuccess: (() -> Unit)? = null, onFatalError: () -> Unit = {}) {
-    // Pemilik pemutar: ExoPlayer + MediaSession hidup di PlayerHolder (di luar composition) dan dipakai ulang
+    // Pemilik mesin: MpvEngine hidup di PlayerHolder (di luar composition) dan dipakai ulang
     // antar-episode / pintu / retry; PlayerReady hanya "meminjam" lewat token ini.
     val token = remember { Any() }
-    // Pabrik sumber media episode ini (OkHttp + Referer/UA + cache/gudang): dipakai juga saat subtitle dipasang ulang di bawah,
-    // karena pemutar bersama tidak lagi membawa pabrik sumber sendiri.
-    val srcFactory = remember { arrayOfNulls<androidx.media3.exoplayer.source.MediaSource.Factory>(1) }
-    val player = remember(r, streamUrl) {
-        val exo = PlayerHolder.acquire(ctx, token)
-        // Transport OkHttp BERSAMA (Net): pool koneksi + cookie dipakai ulang
-        // antar-episode; UA peramban + Referer dari API (CDN menolak klien
-        // tanpa pola ini).
-        val dsFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(com.onimeku.app.data.Net.client)
-        // Perbaikan debug.25 (audit vs web): identitas permintaan dibedakan
-        // per jalur. Ke PROKSI (workers.dev) JANGAN pakai samaran UA
-        // peramban dan JANGAN kirim header Referer situs asing — panggilan
-        // API aplikasi sendiri ("OnimekuApp/1.0", tanpa Referer) terbukti
-        // lolos di jaringan HP, sedangkan pemutar ber-UA Chrome + Referer
-        // megaplay gagal; proksi hanya membaca parameter ref. Samaran +
-        // Referer akar origin HANYA untuk jalur langsung ke CDN (di sana
-        // memang syaratnya: CDN menolak Referer halaman penuh/asing).
-        val viaProxy = streamUrl.contains("/api/proxy")
-        if (!viaProxy) {
-            dsFactory.setUserAgent(com.onimeku.app.data.Net.UA)
-            val streamHost = runCatching { java.net.URL(streamUrl).host }.getOrNull().orEmpty()
-            val effReferer = if (streamHost == "nexabloom.top" || streamHost.endsWith(".nexabloom.top")) {
-                "https://megaplay.buzz/"
-            } else {
-                playback.referer
-            }
-            if (!effReferer.isNullOrBlank()) {
-                dsFactory.setDefaultRequestProperties(mapOf("Referer" to effReferer))
-            }
-        }
-        // Pemutar MEMBACA cache unduhan (episode terunduh diputar dari disk)
-        // tetapi TIDAK menulis ke dalamnya: sebelumnya tiap segmen yang
-        // di-stream ikut ditulis ke SimpleCache ber-NoOpCacheEvictor, yaitu
-        // beban I/O disk saat memutar dan penyimpanan yang tumbuh tanpa batas.
-        val cacheFactory = androidx.media3.datasource.cache.CacheDataSource.Factory()
-            .setCache(com.onimeku.app.data.Downloads.cache(ctx))
-            .setCacheWriteDataSinkFactory(null)
-            .setUpstreamDataSourceFactory(
-                androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
-            )
-            .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        // Perbaikan debug.25: STREAMING tidak lagi membaca cache bersama.
-        // Entri cache era lama (playlist/segmen rusak yang tersimpan di
-        // bawah kunci URL/konten yang stabil) dibaca pemutar lebih dulu
-        // dan menggagalkan putar walau server+jaringan sehat — instalasi
-        // segar tidak pernah mengalaminya. Cache bersama hanya dipakai
-        // untuk memutar UNDUHAN (offline); streaming murni dari jaringan.
-        // Balapan pintu gudang (debug.60): untuk putar gudang daring,
-        // sumber data dibungkus DoorRaceDataSource — muatan awal dan
-        // muatan yang lambat/gantung dibalap ke 2-3 pintu bersamaan
-        // (pemenang tercepat dipakai, pemenang dicatat sebagai pintu
-        // terakhir-berhasil). Putar luring tetap cacheFactory murni;
-        // jalur non-gudang tidak berubah sama sekali.
-        val raceFactory = if (!offline && playback.source == "gudang" && playback.doors.size >= 2) {
-            val ordered = com.onimeku.app.data.GudangStore.orderedDoors(ctx, playback.doors)
-            val startName = ordered.firstOrNull { it.url == streamUrl }?.name
-                ?: ordered.firstOrNull()?.name
-            val session = com.onimeku.app.data.DoorRaceSession(ordered, startName) { name ->
-                com.onimeku.app.data.GudangStore.saveDoor(ctx, name)
-                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} balapan pintu dimenangkan $name")
-            }
-            com.onimeku.app.data.DoorRaceDataSource.Factory(
-                androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory), session)
-        } else {
-            null
-        }
-        val playFactory = if (offline) cacheFactory else raceFactory ?: androidx.media3.datasource.DefaultDataSource.Factory(ctx, dsFactory)
-        val sourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playFactory)
-            // 5 percobaan ulang per segmen (bawaan 3) sebelum dianggap galat fatal.
-            .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(5))
-        // Opsi 2: blok experimentalParseSubtitlesDuringExtraction(false)
-        // khusus gudang (perbaikan debug.61 untuk jalur samping) DIHAPUS
-        // — subtitle gudang kini trek teks bawaan manifest HLS, tidak
-        // ada lagi trek samping yang perlu dipaksa lewat SingleSample;
-        // pabrik sumber dibiarkan pada bawaan Media3.
-        srcFactory[0] = sourceFactory
-        exo.apply {
-            com.onimeku.app.data.CrashLog.note("player", "PlayerReady dibuat ep${r.ep} url=${streamUrl.take(60)}")
-            // Seek resume dibaca EXACT (diset PlayerHolder.reset); dilonggarkan ke CLOSEST_SYNC saat pertama READY (lihat listener).
-            quality.removeSuffix("p").toIntOrNull()?.let { h ->
-                trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, h).build()
-            }
-            val itemBuilder = MediaItem.Builder().setUri(android.net.Uri.parse(streamUrl))
-                .setMediaMetadata(
-                    androidx.media3.common.MediaMetadata.Builder()
-                        .setTitle(a.title)
-                        // Notifikasi/layar kunci menampilkan "artist" sebagai teks kedua.
-                        .setArtist("${I18n.t("episode", "Episode")} ${r.ep}")
-                        .setSubtitle("${I18n.t("episode", "Episode")} ${r.ep}")
-                        // posterFor() sudah menolak poster kosong/blank (mengembalikan null).
-                        .setArtworkUri(com.onimeku.app.data.PosterHealer.posterFor(a)?.let { android.net.Uri.parse(it) })
-                        .build()
-                )
-            // debug.75: putar gudang daring MEMASANG konfigurasi subtitle
-            // samping selama rendition .vtt-nya terbaca (lihat nativeNow).
-            // debug.75: putar gudang daring hanya dilewati bila memang TIDAK
-            // ada trek samping (murni mengandalkan grup teks bawaan manifest).
-            // Selama rendition .vtt terbaca, konfigurasi samping dipasang —
-            // tanpa ini menu CC tidak punya apa pun untuk dipilih.
-            if (!(playback.source == "gudang" && !offline && playback.subtitles.none { it.url.isNotBlank() })) {
-                itemBuilder.setSubtitleConfigurations(subConfigs(playback))
-            }
-            // AKAR KEGAGALAN PUTAR DI HP: URL proksi ber-path "/api/proxy" —
-            // ekstensi .m3u8 hanya ada di dalam parameter terenkode —
-            // sehingga ExoPlayer gagal mengenali item sebagai HLS dan
-            // memperlakukannya sebagai media progresif:
-            // ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED untuk SEMUA
-            // judul berproksi. Di emulator kaki langsung (CDN mentah)
-            // diam-diam menyelamatkan putar; di HP user kaki itu
-            // terblokir operator sehingga tak ada yang tersisa.
-            // Nyatakan tipe HLS secara eksplisit untuk stream playlist.
-            val looksHls = streamUrl.contains(".m3u8") ||
-                (playback.directUrl?.contains(".m3u8") ?: false) ||
-                (playback.streamUrl?.contains(".m3u8") ?: false)
-            if (looksHls) itemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
-            // Kunci cache unduhan HANYA untuk putar offline (lihat
-            // playFactory): item streaming tidak menyentuh cache bersama.
-            if (offline) itemBuilder.setCustomCacheKey(com.onimeku.app.data.Downloads.key(r.id, r.ep))
-            setMediaSource(sourceFactory.createMediaSource(itemBuilder.build()))
-            val resumeFb = vm.resumeMs?.takeIf { it.first == "${r.id}:${r.ep}" && it.second > 0 }?.second
-            vm.resumeMs = null
-            seekTo(resumeFb ?: ((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L))
-            playWhenReady = true
-            prepare()
-        }
+    val engine = remember { PlayerHolder.acquire(ctx, token) }
+    if (engine == null) {
+        // Mesin mpv gagal dibuat (sangat jarang; tercatat di CrashLog oleh PlayerHolder).
+        PlayerStatus(vm, a, r, loading = false, message = I18n.t("stream_unavailable", "This episode's stream is unavailable right now."), onRetry = { onFatalError() })
+        return
+    }
+    // Terapkan tetapan awal + muat URL episode ini. Posisi resume diterapkan
+    // di penanganan FILE_LOADED (mesin belum punya berkas sebelum itu).
+    LaunchedEffect(engine, streamUrl) {
+        engine.setQualityCap(quality.removeSuffix("p").toIntOrNull())
+        engine.applySubStyle(subScaleOf(vm.s.settings.subSize), if (vm.s.settings.subColor == "yellow") "#FFE04B" else "#FFFFFF", vm.s.settings.subBg, vm.s.settings.subSystem)
+        val resumeFb = vm.resumeMs?.takeIf { it.first == "${r.id}:${r.ep}" && it.second > 0 }?.second
+        vm.resumeMs = null
+        engine.seekAfterLoadMs = resumeFb ?: ((vm.p.prog["${r.id}:${r.ep}"] ?: 0) * 1000L)
+        engine.load(streamUrl, playback.referer)
+        com.onimeku.app.data.CrashLog.note("player", "PlayerReady muat ep${r.ep} url=${streamUrl.take(60)}")
     }
 
     var pos by remember(r) { mutableFloatStateOf((vm.p.prog["${r.id}:${r.ep}"] ?: 0).toFloat()) }
@@ -766,6 +593,23 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // true = dubbing episode ini sudah ditetapkan (otomatis atau pilihan pengguna); onTracksChanged tidak menimpanya lagi.
     val dubDone = remember(r) { BooleanArray(1) }
     var heights by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
+    // Daftar tinggi varian untuk menu kualitas: dari playlist induk HLS
+    // (mpv hanya mengekspos trek video yang sedang dipilih). Gagal baca =
+    // daftar kosong; menu jatuh ke pilihan bawaan di lembar pengaturan.
+    LaunchedEffect(engine, streamUrl) {
+        heights = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val text = if (streamUrl.startsWith("http")) {
+                    val rb = okhttp3.Request.Builder().url(streamUrl).header("User-Agent", com.onimeku.app.data.Net.UA)
+                    if (!playback.referer.isNullOrBlank()) rb.header("Referer", playback.referer)
+                    com.onimeku.app.data.Net.client.newCall(rb.build()).execute().use { resp -> if (resp.isSuccessful) resp.body?.string() else null }
+                } else {
+                    java.io.File(streamUrl).takeIf { it.isFile }?.readText()
+                }
+                text?.let { com.onimeku.app.data.DoorMath.parseVariants(it, streamUrl).map { v -> v.height }.filter { h -> h > 0 }.distinct().sortedDescending() } ?: emptyList()
+            }.getOrDefault(emptyList())
+        }
+    }
     var sleepMin by remember(r) { mutableIntStateOf(0) }
     var locked by remember(r) { mutableStateOf(false) }
     var rendered by remember(r) { mutableStateOf(false) }
@@ -779,100 +623,123 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var full by remember { mutableStateOf(vm.playerFull) }
     var showUi by remember(r) { mutableStateOf(true) }
     var uiTick by remember { mutableIntStateOf(0) }
-    val subTracks = remember(playback) { playback.subtitles.filter { it.url.isNotBlank() } }
+    // Model trek subtitle untuk menu & tombol CC. Dua sumber:
+    //  - payload API (playback.subtitles): trek samping yang dipasang ke mpv
+    //    lewat sub-add; indeks menu memetakan ke trek eksternal mpv seurutan.
+    //  - gudang daring (payload kosong): model DISINTESIS dari trek teks
+    //    bawaan playlist induk yang dienumerasi mpv (refreshTracks).
+    var subTracks by remember(r) { mutableStateOf(playback.subtitles.filter { it.url.isNotBlank() }) }
+    var subMpvIds by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
     var subIdx by remember(r) { mutableIntStateOf(-1) }       // -1 = mati, selain itu indeks di subTracks
-    var subReady by remember(r) { mutableStateOf(false) }
-    // debug.60: apakah pilihan subIdx saat ini sudah diterapkan ke trek
-    // samping lokal (bukan ke grup teks manifest yang tak bisa dirender)?
-    var subLocalApplied by remember(r) { mutableStateOf(false) }
-    // Sinkronisasi subtitle: daftar trek yang sedang terpasang (null = sama dengan playback.subtitles) dan apakah gudang
-    // daring sedang memakai trek samping lokal (hanya saat geseran != 0). nativeNow() = gudang daring yang masih memakai
-    // trek teks manifest HLS (dibaca saat dipanggil, jadi tidak basi di dalam listener).
-    var liveSubs by remember(r) { mutableStateOf<List<com.onimeku.app.data.ApiSubtitle>?>(null) }
-    var gudangSide by remember(r) { mutableStateOf(false) }
-    // Subtitle "native" = putar gudang daring yang HANYA punya grup teks bawaan
-    // manifest (tidak ada trek samping yang bisa dipasang). Bila rendition
-    // subtitle gudang berhasil dibaca sebagai berkas (.vtt), jalur samping
-    // dipakai seperti putar luring — itulah satu-satunya jalur yang benar-benar
-    // menghasilkan cue, karena parser HLS Media3 menolak .vtt mentah sebagai
-    // rendition.
-    fun nativeNow(): Boolean = playback.source == "gudang" && !offline && !gudangSide && subTracks.isEmpty()
-    // Daftar trek subtitle berubah saat video sudah berjalan (mis. efek pemulihan trek): pasang ulang
-    // konfigurasinya ke item yang sama, lanjut dari posisi terakhir, lalu pilih ulang sesuai preferensi.
-    val subCount = playback.subtitles.count { it.url.isNotBlank() }
-    var builtSubs by remember(player) { mutableIntStateOf(subCount) }
-    LaunchedEffect(subCount) {
-        if (subCount != builtSubs) {
-            builtSubs = subCount
-            // Opsi 2: putar gudang daring tidak memasang ulang
-            // konfigurasi samping — trek teksnya berasal dari
-            // manifest; daftar payload di sini hanya model menu.
-            if (nativeNow()) return@LaunchedEffect
-            val cur = player.currentMediaItem
-            if (cur != null) {
-                val pos = player.currentPosition
-                val play = player.playWhenReady
-                val item = cur.buildUpon().setSubtitleConfigurations(subConfigs(playback.copy(subtitles = liveSubs ?: playback.subtitles))).build()
-                val sf = srcFactory[0]
-                if (sf != null) player.setMediaSource(sf.createMediaSource(item), pos) else player.setMediaItem(item, pos)
-                player.prepare()
-                player.playWhenReady = play
-                subReady = false
-            }
+    var audioMpvIds by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
+    var fileLoadedOnce by remember(r) { mutableStateOf(false) }
+    var sideSubsAdded by remember(r) { mutableStateOf(false) }
+    // Pilihan subtitle awal (dari preferensi) hanya diterapkan sekali per episode.
+    val subPickDone = remember(r) { BooleanArray(1) }
+    // END_FILE dari berkas lama saat muat ulang kualitas harus diabaikan sekali.
+    var suppressEndFile by remember(r) { mutableStateOf(false) }
+
+    /** Pilihan subtitle awal dari preferensi pengguna; dipanggil dari refreshTracks begitu trek siap. */
+    fun applyInitialSubChoice() {
+        val pref = vm.s.settings.subLang
+        if (subTracks.isEmpty()) {
+            // Gudang daring tanpa trek teks sama sekali: tak ada yang dipilih;
+            // pref "off" tetap dihormati.
+            if (pref == "off") engine.setSid(null)
+            return
+        }
+        if (pref == "off") { applySub(-1); return }
+        val pick = SubLang.restore(false, -1, subTracks, pref, vm.s.settings.lang)
+        if (pref != "auto" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
+            vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
+        if (pick >= 0) applySub(pick)
+        else {
+            // Tak ada trek yang cocok dengan preferensi: biarkan mesin memilih
+            // lewat slang (id,en) dan sinkronkan indeks menu ke trek terpilih.
+            val sel = engine.tracks().filter { it.type == "sub" }.indexOfFirst { it.selected }
+            if (sel >= 0 && playback.subtitles.isEmpty()) subIdx = sel
         }
     }
-    // Geseran waktu subtitle per judul (menu Subtitle -> Sinkronisasi). Berkas lokal ditulis ulang oleh [withSubOffset],
-    // lalu trek dipasang ulang ke item yang sama dari posisi yang sama (ketukan beruntun digabung 0,4 dtk).
-    // Gudang daring: trek teks manifest HLS tidak bisa ditulis ulang, jadi saat geseran != 0 trek payload (en/id) diunduh
-    // ke berkas lokal, digeser, dan dipasang sebagai trek samping (jalur yang sama dengan putar non-gudang); saat kembali
-    // ke 0 trek samping dilepas dan trek manifest dipakai lagi.
+
+    /**
+     * Baca ulang daftar trek dari mesin (audio/video/subtitle) dan segarkan
+     * model UI. Dipanggil saat FILE_LOADED dan tiap daftar trek berubah.
+     * Juga menetapkan dubbing + subtitle awal, sekali per episode.
+     */
+    fun refreshTracks() {
+        val ts = engine.tracks()
+        if (ts.isEmpty()) return
+        val auds = ts.filter { it.type == "audio" }
+        audioLabels = DubLogic.uniqueLabels(auds.mapIndexed { i, t -> dubName(t.lang, t.title, i) })
+        audioKeys = auds.map { audioKey(it.lang, it.title) }
+        audioMpvIds = auds.map { it.id }
+        audioIdx = auds.indexOfFirst { it.selected }.coerceAtLeast(0)
+        val selVid = ts.filter { it.type == "video" }.firstOrNull { it.selected } ?: ts.firstOrNull { it.type == "video" }
+        if (selVid != null) {
+            if (selVid.height > 0) playingH = selVid.height
+            if (selVid.width > 0 && selVid.height > 0) vidRatio = selVid.width.toFloat() / selVid.height
+        }
+        val subs = ts.filter { it.type == "sub" }
+        val payload = playback.subtitles.filter { it.url.isNotBlank() }
+        if (payload.isNotEmpty()) {
+            subTracks = payload
+            val ext = subs.filter { it.external }
+            subMpvIds = payload.indices.map { i -> ext.getOrNull(i)?.id ?: -1 }
+        } else if (subs.isNotEmpty()) {
+            subTracks = subs.map { t ->
+                com.onimeku.app.data.ApiSubtitle(lang = t.lang, label = t.title.ifBlank { t.lang.uppercase() }, url = "", referer = null)
+            }
+            subMpvIds = subs.map { it.id }
+        }
+        // Dubbing otomatis SEKALI per episode (judul ini > bawaan global).
+        if (!dubDone[0] && auds.isNotEmpty()) {
+            dubDone[0] = true
+            val st = vm.s.settings
+            val title = st.dubByTitle[r.id]
+            val wi = DubLogic.pick(audioKeys, title, st.dubLang)
+            if (wi != null && wi != audioIdx) applyAudio(wi, save = false)
+            val used = wi ?: audioIdx
+            DubLogic.fallbackNotice(audioKeys, title, st.dubLang, used)?.let { w ->
+                vm.toast(I18n.t("dub_unavail", "%1\$s dubbing unavailable · using %2\$s").format(dubLangName(w) ?: w, audioLabels.getOrElse(used) { "?" }))
+            }
+        }
+        // Subtitle awal: tunggu trek eksternal benar-benar muncul untuk payload.
+        val subsReady = if (payload.isNotEmpty()) subMpvIds.any { it >= 0 } else true
+        if (!subPickDone[0] && subsReady && subTracks.isNotEmpty()) {
+            subPickDone[0] = true
+            applyInitialSubChoice()
+        } else if (!subPickDone[0] && payload.isEmpty() && subs.isEmpty()) {
+            subPickDone[0] = true
+            applyInitialSubChoice()
+        }
+    }
+
+    // Geseran waktu subtitle per judul (menu Subtitle -> Sinkronisasi):
+    // kini properti sub-delay mpv — berlaku untuk trek bawaan playlist DAN
+    // trek samping, tanpa menulis ulang berkas seperti era Media3.
     val subOffsetNow = vm.s.settings.subOffsetByTitle[r.id] ?: 0
-    var appliedOffset by remember(r) { mutableIntStateOf(if (playback.source == "gudang" && !offline) 0 else subOffsetNow) }
-    // Pasang ulang karena geseran: daftar trek sama persis, jadi pilihan pengguna (mis. "English · SDH") harus dipertahankan,
-    // bukan dihitung ulang dari preferensi bahasa (yang selalu jatuh ke trek pertama bahasa itu).
-    var keepSel by remember(r) { mutableStateOf(false) }
-    fun reattachSubs(configs: List<MediaItem.SubtitleConfiguration>) {
-        val cur = player.currentMediaItem ?: return
-        val pos = player.currentPosition
-        val play = player.playWhenReady
-        val item = cur.buildUpon().setSubtitleConfigurations(configs).build()
-        val sf = srcFactory[0]
-        if (sf != null) player.setMediaSource(sf.createMediaSource(item), pos) else player.setMediaItem(item, pos)
-        player.prepare()
-        player.playWhenReady = play
-        keepSel = subReady
-        subReady = false
+    LaunchedEffect(subOffsetNow) { engine.setSubDelay(subOffsetNow) }
+    // Gaya subtitle (ukuran/warna/latar/sistem) diterapkan langsung ke mesin.
+    LaunchedEffect(vm.s.settings.subSize, vm.s.settings.subBg, vm.s.settings.subColor, vm.s.settings.subSystem) {
+        engine.applySubStyle(subScaleOf(vm.s.settings.subSize), if (vm.s.settings.subColor == "yellow") "#FFE04B" else "#FFFFFF", vm.s.settings.subBg, vm.s.settings.subSystem)
     }
-    LaunchedEffect(subOffsetNow) {
-        if (subOffsetNow == appliedOffset) return@LaunchedEffect
-        delay(400)
-        if (playback.source == "gudang" && !offline) {
-            if (subOffsetNow == 0) {
-                if (gudangSide) { gudangSide = false; liveSubs = null; reattachSubs(emptyList()) }
-            } else {
-                val got = localizeSubtitles(ctx, r, playback, budgetMs = 20_000L, offsetMs = subOffsetNow).subtitles
-                if (got.none { it.url.startsWith("file:") }) {
-                    vm.toast(I18n.t("sub_sync_fail", "Couldn't shift subtitles for this source"))
-                } else {
-                    liveSubs = got; gudangSide = true
-                    reattachSubs(subConfigs(playback.copy(subtitles = got)))
-                }
-            }
-        } else {
-            val base = liveSubs ?: playback.subtitles
-            val shifted = withSubOffset(base, subOffsetNow)
-            if (shifted.map { it.url } != base.map { it.url }) {
-                liveSubs = shifted
-                reattachSubs(subConfigs(playback.copy(subtitles = shifted)))
-            }
+    // Trek subtitle payload yang tiba belakangan (efek pemulihan trek di
+    // PlayerContent): pasang ke mesin yang sedang memutar + segarkan model.
+    LaunchedEffect(playback.subtitles) {
+        val payload = playback.subtitles.filter { it.url.isNotBlank() }
+        if (payload.isEmpty()) return@LaunchedEffect
+        subTracks = payload
+        if (fileLoadedOnce && !sideSubsAdded) {
+            sideSubsAdded = true
+            payload.forEach { engine.addSideSub(it.url) }
+            subPickDone[0] = false
         }
-        appliedOffset = subOffsetNow
     }
     // "Sinkronkan ke ucapan sekarang": geseran dihitung dari baris subtitle terdekat dengan posisi tayang saat tombol ditekan.
     val subScope = androidx.compose.runtime.rememberCoroutineScope()
     fun alignSubs() {
-        val t = (liveSubs ?: playback.subtitles).filter { it.url.isNotBlank() }.getOrNull(subIdx)
-        val posMs = player.currentPosition
+        val t = subTracks.getOrNull(subIdx)
+        val posMs = engine.positionMs()
         val curOff = vm.s.settings.subOffsetByTitle[r.id] ?: 0
         subScope.launch {
             val ms: Int? = kotlinx.coroutines.withContext<Int?>(kotlinx.coroutines.Dispatchers.IO) {
@@ -929,91 +796,37 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     fun subName(i: Int): String = if (i < 0) I18n.t("ctl_off", "Off") else subTracks.getOrNull(i)?.let { SubLang.display(it, i) } ?: I18n.t("ctl_off", "Off")
 
     fun applySub(i: Int) {
-        // Opsi 2 (subtitle HLS native, putar gudang daring): subtitle
-        // adalah trek teks bawaan manifest — pilihan diterapkan dengan
-        // mekanisme standar Media3 pada trek teks manifest: bahasa
-        // pilihan lewat setPreferredTextLanguage, Off lewat
-        // penonaktifan tipe trek teks. Tidak ada trek samping, unduhan
-        // lokal, atau penundaan di cabang ini. Putar luring TIDAK
-        // masuk cabang ini (perilakunya tidak berubah).
-        if (nativeNow()) {
-            val nb = player.trackSelectionParameters.buildUpon()
-            if (i < 0) {
-                nb.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-            } else {
-                val want = subTracks.getOrNull(i)
-                val code = want?.let { SubLang.code(it) ?: it.lang }
-                nb.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-                if (!code.isNullOrBlank()) nb.setPreferredTextLanguage(code)
-            }
-            player.trackSelectionParameters = nb.build()
-            subIdx = i
-            com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} applySub gudang-native($i) lang=${if (i < 0) "off" else subTracks.getOrNull(i)?.lang ?: "?"}")
-            return
-        }
-        // Perbaikan agen (berulang dari v5/v6): konstanta C dipakai sebagai
-        // qualifier nama lengkap, tidak disimpan ke val (ilegal di Kotlin).
-        val b = player.trackSelectionParameters.buildUpon()
-        val allText = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
-        // debug.60 (CC gudang tidak tampil): bila trek samping lokal dari
-        // payload sudah termuat, HANYA grup itu yang boleh dipilih. Grup
-        // teks manifest HLS gudang menunjuk berkas .vtt mentah (bukan
-        // playlist) sehingga tidak pernah menghasilkan cue di Media3 —
-        // memilihnya membuat UI tertulis "Indonesian" tanpa teks apa pun,
-        // dan urutan gabungan sumber menaruh grup manifest lebih dulu.
-        // Jalur non-gudang tanpa trek ber-ID lokal tidak berubah: kolam
-        // cadangannya tetap semua grup teks seperti sebelumnya.
-        val localText = allText.filter { isLocalSubtitleGroup(it) }
-        val groups = if (localText.isNotEmpty()) localText else allText
-        if (i < 0) {
-            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-            subLocalApplied = false
-        } else if (groups.isEmpty()) {
-            // Belum ada grup teks yang bisa dirender. Trek samping lokal
-            // (SubtitleConfiguration) menyusul beberapa event kemudian;
-            // grup teks manifest gudang menunjuk .vtt mentah sehingga
-            // memuatnya bisa memicu galat parser HLS. Jadi tipe teks
-            // DIMATIKAN dulu (bukan dibiarkan menyala) dan pilihan
-            // diterapkan ulang begitu trek lokal tiba (cabang subLocalApplied).
-            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-            subLocalApplied = false
-            subIdx = i
-            player.trackSelectionParameters = b.build()
-            return
-        } else {
-            // Cocokkan trek menurut bahasa (urutan ke-n untuk bahasa yang sama); cadangan: indeks.
-            val want = subTracks.getOrNull(i)
-            val nth = if (want == null) 0 else subTracks.take(i).count { it.lang.equals(want.lang, true) }
-            val byLang = if (want == null) emptyList() else groups.filter { it.mediaTrackGroup.getFormat(0).language.equals(want.lang, true) }
-            val g = byLang.getOrNull(nth) ?: groups.getOrNull(i) ?: groups.first()
-            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-                .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0))
-            subLocalApplied = isLocalSubtitleGroup(g)
-        }
-        player.trackSelectionParameters = b.build()
         subIdx = i
+        if (i < 0) { engine.setSid(null); return }
+        val id = subMpvIds.getOrNull(i)
+        if (id != null && id >= 0) engine.setSid(id)
+        // id belum dikenal (trek belum muncul): pilihan dicatat di subIdx;
+        // refreshTracks berikutnya tidak menimpa pilihan pengguna.
+        com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} applySub($i) mpvId=${id ?: -1}")
     }
     fun applyQuality(q: String) {
-        val b = player.trackSelectionParameters.buildUpon()
-        val h = q.removeSuffix("p").toIntOrNull()
-        if (h != null) b.setMaxVideoSize(Int.MAX_VALUE, h) else b.setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
-        player.trackSelectionParameters = b.build()
+        // Kualitas di mpv = batas bitrate HLS: mesin memilih varian tertinggi
+        // di bawah batas. Muat ulang di posisi yang sama agar batas berlaku
+        // untuk segmen berikutnya (posisi dipulihkan di FILE_LOADED).
+        engine.setQualityCap(q.removeSuffix("p").toIntOrNull())
+        suppressEndFile = true
+        engine.reload()
     }
     fun applyAudio(i: Int, save: Boolean = true) {
         if (save) dubDone[0] = true
-        val g = player.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }.getOrNull(i) ?: return
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, 0)).build()
+        val id = audioMpvIds.getOrNull(i) ?: return
+        engine.setAid(id)
         audioIdx = i
         // Pilihan pengguna jadi dubbing bawaan (tersimpan permanen), dipakai lagi di episode berikutnya.
         // Disimpan dua tingkat: bawaan global (judul baru ikut) + khusus judul ini (menang atas global saat judul ini dibuka lagi).
-        if (save) audioKey(g.mediaTrackGroup.getFormat(0)).takeIf { it.isNotBlank() }?.let { k ->
+        if (save) audioKeys.getOrNull(i)?.takeIf { it.isNotBlank() }?.let { k ->
             vm.setSettings { it.copy(dubLang = k, dubByTitle = DubLogic.remember(it.dubByTitle, r.id, k)) }
         }
     }
     fun seekBy(ms: Long) {
-        val t = (player.currentPosition + ms).coerceIn(0L, if (player.duration > 0) player.duration else Long.MAX_VALUE)
-        player.seekTo(t)
+        val d = engine.durationMs()
+        val t = (engine.positionMs() + ms).coerceIn(0L, if (d > 0) d else Long.MAX_VALUE)
+        engine.seekToMs(t)
         hud = if (ms > 0) "+${ms / 1000}s" else "−${-ms / 1000}s"; hudTick++
     }
 
@@ -1022,189 +835,161 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         if (locked) return
         if (dtSide != side) dtSecs = 0
         dtSide = side; dtSecs += 10; dtTick++
-        player.seekTo((player.currentPosition + side * 10_000L).coerceIn(0L, if (player.duration > 0) player.duration else Long.MAX_VALUE))
+        val d = engine.durationMs()
+        engine.seekToMs((engine.positionMs() + side * 10_000L).coerceIn(0L, if (d > 0) d else Long.MAX_VALUE))
     }
     LaunchedEffect(dtTick) { if (dtTick > 0) { delay(800); dtSide = 0; dtSecs = 0 } }
 
-    DisposableEffect(player) {
-        val stalls = ArrayDeque<Long>()
+    DisposableEffect(engine) {
         var wasReady = false
+        var fileLoaded = false
+        var eofSeen = false
+        val bornAt = System.currentTimeMillis()
+        val stalls = ArrayDeque<Long>()
         var hinted = false
-        var seekRelaxed = false
-        var lastSeekAt = 0L
-        var netRetry = 0
-        var disposed = false
-        val l = object : Player.Listener {
-            override fun onPositionDiscontinuity(o: Player.PositionInfo, n: Player.PositionInfo, reason: Int) {
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) lastSeekAt = System.currentTimeMillis()
+        val observer = object : MPVLib.EventObserver {
+            override fun eventProperty(property: String) {
+                // Daftar trek berubah (trek samping tiba / trek bawaan terbaca).
+                if (property == "track-list" && PlayerHolder.isOwner(token)) refreshTracks()
             }
-            override fun onPlaybackStateChanged(state: Int) {
+            override fun eventProperty(property: String, value: Long) {}
+            override fun eventProperty(property: String, value: Boolean) {
                 if (!PlayerHolder.isOwner(token)) return
-                buffering = state == Player.STATE_BUFFERING
-                // Saran kualitas: 3x macet dalam 90 dtk (di luar seek) -> tawarkan turunkan kualitas, sekali per sesi.
-                val now = System.currentTimeMillis()
-                if (state == Player.STATE_READY) wasReady = true
-                // Resume sudah presisi (EXACT); seek berikutnya (ketuk dua kali / geser) kembali cepat ke keyframe terdekat.
-                if (state == Player.STATE_READY && !seekRelaxed) { seekRelaxed = true; player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC) }
-                if (state == Player.STATE_BUFFERING && wasReady && now - lastSeekAt > 3_000) {
-                    stalls.addLast(now)
-                    while (stalls.isNotEmpty() && now - stalls.first() > 90_000) stalls.removeFirst()
-                    if (stalls.size >= 3 && !hinted) { hinted = true; vm.toast(I18n.t("slow_conn", "Slow connection. Try a lower quality.")) }
-                }
-                if (state == Player.STATE_READY) { failed = false; netRetry = 0 }
-                if (state == Player.STATE_ENDED) {
-                    vm.saveProg(r.id, r.ep, durNow, durNow)
-                    val nxt = EpisodeMath.next(a.available, a.eps, r.ep)
-                    if (sleepNow == -1) { player.pause(); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")) }
-                    else if (vm.s.settings.autoplay && !autoCancelNow && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
-                }
-            }
-            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-                // Perbaikan agen: alias C0 sama ilegalnya dengan val C.
-                val ag = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }
-                val af = ag.map { it.mediaTrackGroup.getFormat(0) }
-                val keys = af.map { audioKey(it) }
-                audioLabels = DubLogic.uniqueLabels(af.mapIndexed { i, f -> dubName(f, i) })
-                audioKeys = keys
-                audioIdx = ag.indexOfFirst { it.isSelected }.coerceAtLeast(0)
-                // Dubbing otomatis SEKALI per episode (judul ini > bawaan global). Dulu dicoba tiap trek berubah, sehingga dua trek
-                // berbahasa sama (mis. dua "English") selalu dikembalikan ke yang pertama dan pilihan pengguna tertimpa.
-                if (!dubDone[0] && af.isNotEmpty()) {
-                    dubDone[0] = true
-                    val st = vm.s.settings
-                    val title = st.dubByTitle[r.id]
-                    val wi = DubLogic.pick(keys, title, st.dubLang)
-                    if (wi != null && wi != audioIdx) applyAudio(wi, save = false)
-                    val used = wi ?: audioIdx
-                    // Dubbing pilihan tidak ada di episode ini (tapi ada pilihan lain): beri tahu, seperti subtitle.
-                    DubLogic.fallbackNotice(keys, title, st.dubLang, used)?.let { w ->
-                        vm.toast(I18n.t("dub_unavail", "%1\$s dubbing unavailable · using %2\$s").format(dubLangName(w) ?: w, audioLabels.getOrElse(used) { "?" }))
+                when (property) {
+                    "pause" -> {
+                        wantPlay = !value; vm.playing = !value
+                        // Dijeda: simpan posisi sekarang (proses bisa dimatikan sistem sebelum polling berikutnya).
+                        if (value && engine.positionMs() > 0)
+                            vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
                     }
-                }
-                heights = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
-                    .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).height } }
-                    .filter { it > 0 }.distinct().sortedDescending()
-                if (!subReady && tracks.groups.any { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }) {
-                    subReady = true
-                    val pref = vm.s.settings.subLang
-                    val kept = keepSel
-                    keepSel = false
-                    // debug.75: daftar trek samping KOSONG (manifest tanpa rendition
-                    // .vtt yang bisa dipasang) JANGAN dianggap "mati". Dulu
-                    // SubLang.pick(emptyList) = -1 lalu applySub(-1) mematikan
-                    // seluruh tipe trek teks — subtitle bawaan manifest ikut
-                    // lenyap. Kini hanya preferensi "off" yang mematikan teks;
-                    // selain itu bahasa pilihan diminta langsung ke Media3.
-                    if (subTracks.isEmpty()) {
-                        val nb = player.trackSelectionParameters.buildUpon()
-                        if (pref == "off") {
-                            nb.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-                        } else {
-                            val want = if (pref == "auto") (if (vm.s.settings.lang == "id") "id" else "en") else pref
-                            nb.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-                            if (want.isNotBlank()) nb.setPreferredTextLanguage(want)
+                    "paused-for-cache" -> {
+                        buffering = value
+                        // Saran kualitas: 3x macet dalam 90 dtk setelah video tampil -> tawarkan turunkan kualitas, sekali per sesi.
+                        if (value && wasReady) {
+                            val now = System.currentTimeMillis()
+                            stalls.addLast(now)
+                            while (stalls.isNotEmpty() && now - stalls.first() > 90_000) stalls.removeFirst()
+                            if (stalls.size >= 3 && !hinted) { hinted = true; vm.toast(I18n.t("slow_conn", "Slow connection. Try a lower quality.")) }
                         }
-                        player.trackSelectionParameters = nb.build()
-                        com.onimeku.app.data.CrashLog.note("subs", "${r.id} ep${r.ep} trek teks manifest (pref=$pref, tanpa trek samping)")
-                    } else {
-                        val pick = SubLang.restore(kept, subIdx, subTracks, pref, vm.s.settings.lang)
-                        // Bahasa pilihan tidak tersedia di episode ini -> beri tahu, lalu pakai bahasa cadangan.
-                        // (Tidak diulang saat trek hanya dipasang ulang karena geseran.)
-                        if (!kept && pref != "auto" && pref != "off" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
-                            vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
-                        applySub(pick)
                     }
-                } else if (subReady && subIdx >= 0 && !subLocalApplied && tracks.groups.any { isLocalSubtitleGroup(it) }) {
-                    // debug.60: trek samping lokal tiba SESUDAH grup teks
-                    // manifest (pilihan awal jatuh ke grup manifest yang
-                    // tak bisa dirender) -> terapkan ulang pilihan yang
-                    // sama ke trek lokal yang sehat.
-                    applySub(subIdx)
+                    "eof-reached" -> if (value) {
+                        eofSeen = true
+                        vm.saveProg(r.id, r.ep, durNow, durNow)
+                        val nxt = EpisodeMath.next(a.available, a.eps, r.ep)
+                        if (sleepNow == -1) { engine.setPaused(true); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")) }
+                        else if (vm.s.settings.autoplay && !autoCancelNow && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
+                    }
                 }
             }
-            override fun onRenderedFirstFrame() {
-                rendered = true
-                // Gudang: pintu ini terbukti memutar — ingat sebagai
-                // pintu awal kunjungan berikutnya.
-                onDoorSuccess?.invoke()
-            }
-            override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
-                if (size.width > 0 && size.height > 0) vidRatio = size.width * size.pixelWidthHeightRatio / size.height
-                if (size.height > 0) playingH = size.height
-            }
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                wantPlay = playWhenReady; vm.playing = playWhenReady
-                // Dijeda: simpan posisi sekarang (di latar proses bisa dimatikan sistem sebelum polling 10 dtk berikutnya).
-                if (!playWhenReady && PlayerHolder.isOwner(token) && player.playbackState != Player.STATE_IDLE && player.currentPosition > 0)
-                    vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
-            }
-            override fun onPlayerError(error: PlaybackException) {
+            override fun eventProperty(property: String, value: Double) {
                 if (!PlayerHolder.isOwner(token)) return
-                // Galat jaringan sesaat saat sudah memutar: coba lanjutkan di tempat (maks 3x) sebelum menjatuhkan ke jalur cadangan.
-                // debug.64: dulu hanya CONNECTION_FAILED/TIMEOUT. Segmen yang gagal dengan 5xx/429, galat IO tak spesifik
-                // (koneksi putus di tengah baca), dan TIMEOUT umum juga sesaat -> ikut dicoba ulang di tempat. 4xx lain
-                // (403/404: token/segmen mati) tetap langsung ke rantai cadangan.
-                val httpCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
-                val transient = PlaybackChain.isTransient(error.errorCode, httpCode)
-                if (transient && wasReady && netRetry < 3) {
-                    netRetry++; buffering = true
-                    com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} galat sesaat ${error.errorCodeName}${httpCode?.let { " http=$it" } ?: ""}, coba lagi #$netRetry")
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (!disposed) player.prepare() }, 1000L * netRetry)
-                    return
+                when (property) {
+                    "time-pos" -> if (!dragging) pos = value.toFloat()
+                    "duration" -> { val ds = value.toInt(); if (ds > 0 && ds != dur) dur = ds }
                 }
-                vm.resumeMs = "${r.id}:${r.ep}" to player.currentPosition
-                failed = true; buffering = false
-                errMsg = error.errorCodeName
-                com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} leg=${if (streamUrl.contains("/api/proxy")) "proxy" else "direct"} ${error.errorCodeName}: ${error.cause ?: error.message}")
-                // Serahkan ke rantai cadangan di PlayerContent (URL
-                // langsung / embed) — ia yang tahu lapisan berikutnya.
-                onFatalError()
+            }
+            override fun eventProperty(property: String, value: String) {}
+            override fun event(eventId: Int) {
+                if (!PlayerHolder.isOwner(token)) return
+                when (eventId) {
+                    MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
+                        fileLoaded = true; wasReady = true; eofSeen = false
+                        rendered = true; failed = false; buffering = false
+                        fileLoadedOnce = true
+                        // Pintu ini terbukti memutar — ingat sebagai pintu awal kunjungan berikutnya.
+                        onDoorSuccess?.invoke()
+                        refreshTracks()
+                        // Resume / posisi sesudah muat ulang kualitas.
+                        val seek = engine.seekAfterLoadMs
+                        if (seek > 0) { engine.seekToMs(seek); engine.seekAfterLoadMs = -1L }
+                        if (speed != 1f) engine.setSpeed(speed.toDouble())
+                        engine.setSubDelay(subOffsetNow)
+                        // Trek subtitle samping dari payload (sumber non-gudang / luring).
+                        val payload = playback.subtitles.filter { it.url.isNotBlank() }
+                        if (payload.isNotEmpty() && !sideSubsAdded) {
+                            sideSubsAdded = true
+                            payload.forEach { engine.addSideSub(it.url) }
+                        }
+                    }
+                    MPVLib.MpvEvent.MPV_EVENT_END_FILE -> {
+                        if (suppressEndFile) { suppressEndFile = false; return }
+                        if (eofSeen) return
+                        // END_FILE warisan dari instance sebelumnya (stop saat
+                        // ambil alih) bisa tiba tepat sesudah observer ini
+                        // terdaftar; abaikan yang terlalu dini — kegagalan
+                        // muat sungguhan tetap ditangkap pengawas 30 dtk.
+                        if (!fileLoaded && System.currentTimeMillis() - bornAt < 2_000) return
+                        // Berhenti jauh sebelum akhir (atau tak pernah termuat) = galat fatal -> rantai cadangan.
+                        val posMs = engine.positionMs()
+                        val durMs = durNow * 1000L
+                        if (!fileLoaded || (durMs > 0 && posMs < durMs - 15_000L)) {
+                            vm.resumeMs = "${r.id}:${r.ep}" to posMs
+                            failed = true; buffering = false
+                            errMsg = "MPV_END_FILE"
+                            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} leg=${if (streamUrl.contains("/api/proxy")) "proxy" else "direct"} MPV_END_FILE pos=${posMs / 1000}s dur=${durNow}s loaded=$fileLoaded")
+                            onFatalError()
+                        }
+                    }
+                }
             }
         }
-        player.addListener(l)
+        engine.mpv.addObserver(observer)
+        engine.mpv.observeProperty("time-pos", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
+        engine.mpv.observeProperty("duration", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
+        engine.mpv.observeProperty("pause", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+        engine.mpv.observeProperty("paused-for-cache", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+        engine.mpv.observeProperty("eof-reached", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+        engine.mpv.observeProperty("track-list", MPVLib.MpvFormat.MPV_FORMAT_NONE)
         vm.playing = true
         onDispose {
-            disposed = true
-            player.removeListener(l)
-            // Pemutar dipakai bersama: bila episode/pintu berikutnya sudah mengambil alih, jangan menyimpan posisi
-            // episode baru sebagai milik episode lama (progres lama sudah disimpan di goEp / ENDED).
+            runCatching { engine.mpv.removeObserver(observer) }
+            // Mesin dipakai bersama: bila episode/pintu berikutnya sudah mengambil alih, jangan menyimpan posisi
+            // episode baru sebagai milik episode lama (progres lama sudah disimpan di goEp / EOF).
             val mine = PlayerHolder.isOwner(token)
-            if (mine) vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
+            if (mine) vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
             PlayerHolder.release(token)
             if (mine) vm.playing = false
         }
     }
 
-    // debug.64 — pengawas macet. Dulu buffering yang menggantung tanpa galat (koneksi setengah mati) hanya
-    // berakhir setelah timeout baca OkHttp 25 dtk, dan sesudahnya tak ada yang menurunkan beban. Kini, bila video
-    // sudah pernah tampil lalu menunggu data terus-menerus: 12 dtk -> minta ulang segmen di posisi yang sama
-    // (seek ke posisi sekarang); 15 dtk berikutnya -> turunkan kualitas satu tingkat (sesi ini saja, pengaturan
-    // tidak diubah) + siapkan ulang sumber; sekali lagi bila belum pulih. Maks 3 siklus per kemacetan.
-    LaunchedEffect(player, buffering, rendered) {
+    // Pengawas muat: URL tak pernah selesai dimuat dalam 30 dtk (dan tidak
+    // ada END_FILE yang menanganinya) -> serahkan ke rantai cadangan.
+    LaunchedEffect(engine, streamUrl) {
+        delay(30_000)
+        if (!rendered && !failed && PlayerHolder.isOwner(token)) {
+            vm.resumeMs = "${r.id}:${r.ep}" to engine.positionMs()
+            failed = true; buffering = false; errMsg = "MPV_LOAD_TIMEOUT"
+            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} muat tak selesai 30 dtk -> rantai cadangan")
+            onFatalError()
+        }
+    }
+
+    // Pengawas macet: buffering menggantung sesudah video tampil -> siklus
+    // StallPolicy: seek ke posisi yang sama untuk memancing segmen baru;
+    // mulai siklus ke-2 turunkan kualitas satu tingkat (sesi ini saja,
+    // pengaturan tidak diubah). Maks 3 siklus per kemacetan.
+    LaunchedEffect(engine, buffering, rendered) {
         if (!buffering || !rendered) return@LaunchedEffect
         var tries = 0
         while (tries < 3) {
             delay(StallPolicy.delayMs(tries))
-            if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@LaunchedEffect
+            if (!buffering || !wantPlay) return@LaunchedEffect
             tries++
             val lower = heights.filter { it < playingH }.maxOrNull()
             if (StallPolicy.shouldLower(tries, lower)) {
                 applyQuality("${lower}p")
                 vm.toast(I18n.t("slow_switched", "Slow connection · switched to %1\$dp").format(lower))
             }
-            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} macet >${if (tries == 1) 12 else 12 + 15 * (tries - 1)}s, pulihkan #$tries (tinggi=$playingH, turun=${lower ?: 0})")
-            player.seekTo(player.currentPosition)
-            if (tries >= 2) player.prepare()
+            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} macet, pulihkan #$tries (tinggi=$playingH, turun=${lower ?: 0})")
+            engine.seekToMs(engine.positionMs())
         }
     }
-
-    // MediaSession + layanan latar kini dimiliki PlayerHolder (hidup selama pemutar dipakai, lintas episode).
 
     // Timer tidur.
     LaunchedEffect(sleepMin) {
         if (sleepMin > 0) {
             delay(sleepMin * 60_000L)
-            player.pause(); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")); sleepMin = 0
+            engine.setPaused(true); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")); sleepMin = 0
         }
     }
 
@@ -1212,28 +997,29 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // (sebelumnya tiap 500 ms -> seluruh PlayerReady recompose 2x/dtk).
     // Simpan progres tiap 10 dtk (tiap simpan = serialisasi seluruh AppState).
     val nextEp = remember(r, a) { EpisodeMath.next(a.available, a.eps, r.ep) }
-    LaunchedEffect(player) {
+    LaunchedEffect(engine) {
         var n = 0
         var prefetched = false
         var trPre = false
         var introAutoDone = false
+        var lastTrackCount = -1
         while (true) {
-            // Pemutar sudah diambil alih episode/pintu berikutnya: berhenti (jangan menyimpan posisi episode lain).
+            // Mesin sudah diambil alih episode/pintu berikutnya: berhenti (jangan menyimpan posisi episode lain).
             if (!PlayerHolder.isOwner(token)) break
-            val sec = (player.currentPosition / 1000).toInt()
+            val sec = (engine.positionMs() / 1000).toInt()
             if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
             // Lewati intro otomatis (opsional): sekali per episode, hanya bila API memberi penanda intro.
             if (!introAutoDone) {
                 val tgt = SkipLogic.autoSkipTarget(sec, playback.introStart, playback.introEnd, vm.s.settings.skipIntro, vm.s.settings.autoSkipIntro)
                 if (tgt != null) {
                     introAutoDone = true
-                    player.seekTo(tgt * 1000L)
+                    engine.seekToMs(tgt * 1000L)
                     vm.toast(I18n.t("intro_skipped", "Intro skipped"))
                 }
             }
-            val bufSec = (player.bufferedPosition / 1000L).toFloat()
+            val bufSec = (engine.bufferedEndMs() / 1000L).toFloat()
             if (bufSec != buffered) buffered = bufSec
-            val d = player.duration
+            val d = engine.durationMs()
             if (d > 0) {
                 val ds = (d / 1000).toInt()
                 if (ds != dur) dur = ds
@@ -1250,6 +1036,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 }
             }
             if (++n % 10 == 0 && wantPlay) vm.saveProg(r.id, r.ep, sec, durNow)
+            // Jaring pengaman daftar trek: bila jumlah trek berubah (trek
+            // samping tiba belakangan), segarkan model audio/subtitle.
+            if (n % 5 == 4) {
+                val tc = runCatching { engine.mpv.getPropertyInt("track-list/count") }.getOrNull() ?: -1
+                if (tc >= 0 && tc != lastTrackCount) { lastTrackCount = tc; refreshTracks() }
+            }
             delay(1000)
         }
     }
@@ -1257,20 +1049,17 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // Ke background: pause, kecuali PiP atau "Background playback" aktif.
     // Saat berlanjut di latar, trek video dimatikan (hemat data + baterai).
     val owner = LocalLifecycleOwner.current
-    DisposableEffect(owner, player) {
+    DisposableEffect(owner, engine) {
         val o = LifecycleEventObserver { _, e ->
-            fun videoOff(off: Boolean) {
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, off).build()
-            }
             if (e == Lifecycle.Event.ON_STOP) {
                 // Simpan posisi sebelum proses berpeluang dimatikan di latar (polling hanya menyimpan tiap 10 dtk).
-                if (PlayerHolder.isOwner(token) && player.currentPosition > 0) vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
+                if (PlayerHolder.isOwner(token) && engine.positionMs() > 0) vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
                 // ON_STOP saat masih di PiP = jendela PiP ditutup (X): berhenti seperti YouTube, jangan lanjut berbunyi di latar.
                 // Mengetuk jendela PiP (membuka kembali) tidak memicu ON_STOP, jadi pemutaran lanjut normal.
-                if (vm.inPip || act?.isInPictureInPictureMode == true) player.pause()
-                else if (bg) videoOff(true) else player.pause()
+                if (vm.inPip || act?.isInPictureInPictureMode == true) engine.setPaused(true)
+                else if (bg) engine.setVideoEnabled(false) else engine.setPaused(true)
             }
-            if (e == Lifecycle.Event.ON_START) videoOff(audioOnlyNow)
+            if (e == Lifecycle.Event.ON_START) engine.setVideoEnabled(!audioOnlyNow)
         }
         owner.lifecycle.addObserver(o)
         onDispose { owner.lifecycle.removeObserver(o) }
@@ -1286,8 +1075,12 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
         }
     }
-    LaunchedEffect(player) { if (speed != 1f) player.setPlaybackSpeed(speed) }
     LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null; barKind = 0 } }
+    // Subtitle diangkat saat kontrol tampil agar tidak tertutup panel bawah; isi/pas layar lewat panscan mpv.
+    LaunchedEffect(showUi, wantPlay, buffering, failed, locked) {
+        engine.setSubLifted(!locked && (showUi || !wantPlay || failed || buffering))
+    }
+    LaunchedEffect(fillMode) { engine.setPanscan(fillMode) }
 
     // Fullscreen: kunci landscape + sembunyikan bilah sistem; dipulihkan saat keluar/pergi dari pemutar.
     LaunchedEffect(r) {
@@ -1330,7 +1123,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
 
     // Pindah episode: simpan posisi episode ini DULU (pemutar bersama langsung dipakai episode baru).
     fun goEp(n: Int) {
-        vm.saveProg(r.id, r.ep, (player.currentPosition / 1000).toInt(), durNow)
+        vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
         vm.replaceTop(Route.Player(r.id, n))
     }
     fun step(d: Int) {
@@ -1350,10 +1143,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
     // Tombol di jendela PiP (putar/jeda, sebelumnya, berikutnya).
     val stepNow by rememberUpdatedState<(Int) -> Unit>({ d -> step(d) })
-    // Tombol Next/Prev di notifikasi & layar kunci (sesi media dipegang PlayerHolder).
-    LaunchedEffect(player, hasPrev, hasNext) {
-        PlayerHolder.setNav(token, EpisodeNav(hasPrev, hasNext, { stepNow(-1) }, { stepNow(1) }))
-    }
     // Android 13+: minta izin notifikasi sekali saat pemutaran pertama supaya notifikasi media muncul.
     val ensureNotif = LocalEnsureNotif.current
     LaunchedEffect(Unit) {
@@ -1362,11 +1151,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             ensureNotif { }   // di bawah Android 13 langsung selesai tanpa dialog
         }
     }
-    DisposableEffect(player) {
+    DisposableEffect(engine) {
         val rcv = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
                 when (i.getStringExtra("op")) {
-                    "toggle" -> if (player.playWhenReady) player.pause() else player.play()
+                    "toggle" -> engine.setPaused(!engine.isPaused())
                     "prev" -> stepNow(-1)
                     "next" -> stepNow(1)
                 }
@@ -1379,14 +1168,13 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var wasPip by remember { mutableStateOf(false) }
     LaunchedEffect(vm.inPip) {
         if (vm.inPip) showUi = false
-        if (wasPip && !vm.inPip && !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && !bg) player.pause()
+        if (wasPip && !vm.inPip && !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && !bg) engine.setPaused(true)
         wasPip = vm.inPip
     }
 
     // Posisi/buffer dibaca lewat lambda DI composable anak: hanya anak itu yang recompose tiap detik, bukan seluruh PlayerReady.
     val posProvider: () -> Float = { pos }
     val bufferedProvider: () -> Float = { buffered }
-    val subScale = subScaleOf(vm.s.settings.subSize)
     val marks = remember(playback) {
         buildList<Pair<Float, Float>> {
             val i1 = playback.introEnd; val i0 = playback.introStart ?: 0
@@ -1395,11 +1183,8 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             if (o0 != null && o1 > o0) add(o0.toFloat() to o1.toFloat())
         }
     }
-    val subBgOn = vm.s.settings.subBg
-    val subColorInt = subColorOf(vm.s.settings.subColor)
-    val subSys = vm.s.settings.subSystem
     if (vm.inPip) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, 0, subColorInt, subSys) }
+        Box(Modifier.fillMaxSize().background(Color.Black)) { VideoSurface(engine, Modifier.fillMaxSize()) }
         return
     }
 
@@ -1433,7 +1218,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     val nr = android.graphics.Rect(bnd.left.toInt(), bnd.top.toInt(), bnd.right.toInt(), bnd.bottom.toInt())
                     if (nr != pipRect) pipRect = nr
                 }
-                .pointerInput(player) {
+                .pointerInput(engine) {
                     detectTapGestures(
                         onTap = { o ->
                             if (epPanel) epPanel = false
@@ -1443,16 +1228,16 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                         onDoubleTap = { o -> doubleSeek(if (o.x < size.width / 2f) -1 else 1) },
                     )
                 }
-                .pointerInput(player) {
+                .pointerInput(engine) {
                     // Tahan layar = kecepatan 2x selama jari menempel (seperti YouTube).
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var held = true
                         withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation(); held = false }
-                        if (held && !locked && player.isPlaying) {
-                            boost = true; player.setPlaybackSpeed(2f)
+                        if (held && !locked && !engine.isPaused()) {
+                            boost = true; engine.setSpeed(2.0)
                             waitForUpOrCancellation()
-                            boost = false; player.setPlaybackSpeed(speedNow)
+                            boost = false; engine.setSpeed(speedNow.toDouble())
                         }
                     }
                 }
@@ -1484,21 +1269,21 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     }
                 }
                 // Geser horizontal = seek (satu lebar layar = 90 dtk); lepas jari untuk melompat.
-                .pointerInput(player) {
+                .pointerInput(engine) {
                     var startPos = 0L; var acc = 0f; var ok = true; var target = 0L
                     val edge = 28.dp.toPx()
                     detectHorizontalDragGestures(
                         onDragStart = { o ->
                             ok = !locked && o.x > edge && o.x < size.width - edge && o.y > size.height * 0.12f && o.y < size.height * 0.88f
-                            startPos = player.currentPosition; acc = 0f; target = startPos
+                            startPos = engine.positionMs(); acc = 0f; target = startPos
                         },
-                        onDragEnd = { if (ok && acc != 0f) player.seekTo(target) },
+                        onDragEnd = { if (ok && acc != 0f) engine.seekToMs(target) },
                         onDragCancel = { },
                     ) { change, dx ->
                         if (!ok) return@detectHorizontalDragGestures
                         change.consume()
                         acc += dx
-                        val d = if (player.duration > 0) player.duration else Long.MAX_VALUE
+                        val d = if (engine.durationMs() > 0) engine.durationMs() else Long.MAX_VALUE
                         target = (startPos + (acc / size.width * 90_000f).toLong()).coerceIn(0L, d)
                         val delta = (target - startPos) / 1000
                         hud = "${fmt((target / 1000).toInt())}  (${if (delta >= 0) "+" else "−"}${kotlin.math.abs(delta)}s)"; hudTick++
@@ -1527,7 +1312,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         ) {
             // Kontrol juga tampil saat dijeda/buffering/galat (bukan hanya showUi); subtitle harus naik di semua keadaan itu.
             val ctlShown = !locked && (showUi || !wantPlay || failed || buffering)
-            VideoSurface(player, Modifier.fillMaxSize(), subScale, subBgOn, if (fillMode) 4 else 0, subColorInt, subSys, subLift = ctlShown, liftDp = if (full) 96 else 80)
+            VideoSurface(engine, Modifier.fillMaxSize())
             // Sampul anime menutupi layar hitam sampai bingkai video pertama tampil.
             if (!rendered && !failed) {
                 RealImage(a, Modifier.fillMaxSize())
@@ -1535,7 +1320,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }
             SkipChips(
                 posProvider = posProvider, dur = dur, playback = playback, enabled = vm.s.settings.skipIntro,
-                onSeekSec = { sec -> player.seekTo(sec * 1000L) },
+                onSeekSec = { sec -> engine.seekToMs(sec * 1000L) },
             )
             hud?.let {
                 Text(it, Modifier.align(Alignment.Center).offset(y = (-58).dp).clip(RoundedCornerShape(14.dp)).background(Color(0xB3000000))
@@ -1596,7 +1381,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                 Row(Modifier.clip(CircleShape).background(Color(0xCC0A0B10)).border(1.dp, Line, CircleShape).padding(start = Sp.S16, end = Sp.S4),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
                     Text("${I18n.t("resuming_from", "Resuming from")} ${fmt(resumeStart)}", fontSize = Ty.Small, color = Color.White)
-                    Text(I18n.t("from_start", "Start over"), Modifier.clip(CircleShape).clickable { player.seekTo(0L); resumeChip = false }
+                    Text(I18n.t("from_start", "Start over"), Modifier.clip(CircleShape).clickable { engine.seekToMs(0L); resumeChip = false }
                         .padding(horizontal = Sp.S12, vertical = Sp.S8), fontSize = Ty.Small, fontWeight = FontWeight.SemiBold, color = RedText)
                 }
             }
@@ -1653,11 +1438,11 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 16.sp)
                         Spacer(Modifier.height(Sp.S12))
                         Row(horizontalArrangement = Arrangement.spacedBy(Sp.S8)) {
-                            Chip(I18n.t("retry", "Retry"), icon = Icons.Filled.Refresh) { failed = false; player.prepare(); player.playWhenReady = true }
+                            Chip(I18n.t("retry", "Retry"), icon = Icons.Filled.Refresh) { failed = false; suppressEndFile = true; engine.reload(); engine.setPaused(false) }
                             val lowerQ = lowerQuality(vm.s.settings.quality)
                             if (lowerQ != null) Chip(I18n.t("lower_quality", "Lower quality")) {
                                 vm.setSettings { it.copy(quality = lowerQ) }; applyQuality(lowerQ)
-                                failed = false; player.prepare(); player.playWhenReady = true
+                                failed = false; engine.setPaused(false)
                                 vm.toast("${I18n.t("quality", "Quality")}: $lowerQ")
                             }
                         }
@@ -1684,7 +1469,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                             if (buffering) {
                                 BufferingRing(ringSize = 52.dp, stroke = 3.5.dp)
                             } else {
-                                Box(Modifier.fillMaxSize().clip(CircleShape).pressable { player.playWhenReady = !player.playWhenReady; uiTick++ }, contentAlignment = Alignment.Center) {
+                                Box(Modifier.fillMaxSize().clip(CircleShape).pressable { engine.setPaused(wantPlay); uiTick++ }, contentAlignment = Alignment.Center) {
                                     MorphIcon(wantPlay, Icons.Filled.Pause, Icons.Filled.PlayArrow, if (wantPlay) "Pause" else "Play", 56.dp, Color.White)
                                 }
                             }
@@ -1713,7 +1498,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
                     SeekBarLive(
                         posProvider = posProvider, dur = dur.toFloat(), bufferedProvider = bufferedProvider, marks = marks, modifier = Modifier.padding(bottom = Sp.S4),
                         onPreview = { dragging = true; pos = it; uiTick++ },
-                        onDone = { player.seekTo((it * 1000).toLong()); pos = it; dragging = false; uiTick++ },
+                        onDone = { engine.seekToMs((it * 1000).toLong()); pos = it; dragging = false; uiTick++ },
                     )
                 }
             }
@@ -1873,7 +1658,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         onSubAlign = { alignSubs() },
         onSubOffset = { v -> vm.setSettings { it.copy(subOffsetByTitle = SubSync.remember(it.subOffsetByTitle, r.id, v)) } },
         autoplay = vm.s.settings.autoplay, onAutoplay = { v -> vm.setSettings { it.copy(autoplay = v) }; vm.toast("${I18n.t("autoplay_next", "Autoplay next")}: ${if (v) I18n.t("ctl_on", "On") else I18n.t("ctl_off", "Off")}") },
-        speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; player.setPlaybackSpeed(v); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
+        speed = speed, onSpeed = { v -> speed = v; vm.playerSpeed = v; engine.setSpeed(v.toDouble()); sheet = null; vm.toast("${I18n.t("speed", "Speed")} ${spdLabel(v)}×") },
         audioLabels = audioLabels, audioKeys = audioKeys, audioIdx = audioIdx, onAudio = { n -> applyAudio(n); sheet = null; vm.toast("${I18n.t("dubbing", "Dubbing")}: ${audioLabels.getOrElse(n) { "?" }}") },
         sleepMin = sleepMin, onSleep = { m -> sleepMin = m; sheet = null; vm.toast(when (m) { 0 -> "Sleep timer: Off"; -1 -> "Sleep timer: ${I18n.t("sleep_end", "End of episode")}"; else -> "Sleep timer: $m min" }) },
         onLock = { locked = true; showUi = true; sheet = null },
@@ -1884,7 +1669,7 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         audioOnly = audioOnly,
         onAudioOnly = {
             audioOnly = !audioOnly; sheet = null
-            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, audioOnly).build()
+            engine.setVideoEnabled(!audioOnly)
             vm.toast(if (audioOnly) "Audio only: On" else "Audio only: Off")
         },
         onPage = { sheet = it },

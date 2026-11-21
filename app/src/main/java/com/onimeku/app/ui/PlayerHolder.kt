@@ -1,195 +1,275 @@
 package com.onimeku.app.ui
 
-import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.ForwardingPlayer
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.SeekParameters
-import androidx.media3.session.MediaController
-import androidx.media3.session.MediaSession
-import androidx.media3.session.SessionToken
-import com.onimeku.app.MainActivity
-import com.onimeku.app.PlaybackService
+import android.view.Surface
 import com.onimeku.app.data.CrashLog
+import com.onimeku.app.data.Net
+import dev.jdtech.mpv.MPVLib
 
-/** Aksi navigasi episode yang dipajang ke notifikasi / layar kunci (tombol Sebelumnya / Berikutnya). */
-internal class EpisodeNav(
-    val hasPrev: Boolean,
-    val hasNext: Boolean,
-    val onPrev: () -> Unit,
-    val onNext: () -> Unit,
-) {
-    companion object {
-        val NONE = EpisodeNav(false, false, {}, {})
-    }
-}
-
-/**
- * Pembungkus untuk MediaSession: satu item media saja tidak menampilkan tombol Next/Prev di notifikasi,
- * jadi perintahnya diiklankan di sini dan dialihkan ke navigasi episode aplikasi.
- * [nav] bisa diganti tanpa membuat pembungkus baru selama ketersediaan tombolnya tidak berubah.
- */
-private class EpisodeNavPlayer(player: Player, @Volatile var nav: EpisodeNav) : ForwardingPlayer(player) {
-    override fun getAvailableCommands(): Player.Commands {
-        val n = nav
-        val b = super.getAvailableCommands().buildUpon()
-        if (n.hasPrev) b.addAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-        else b.removeAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-        if (n.hasNext) b.addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-        else b.removeAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-        return b.build()
-    }
-
-    override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
-    override fun hasPreviousMediaItem(): Boolean = nav.hasPrev
-    override fun hasNextMediaItem(): Boolean = nav.hasNext
-
-    override fun seekToPrevious() {
-        // Konvensi pemutar lain: lewat 3 dtk -> ulang episode ini; selebihnya ke episode sebelumnya.
-        if (wrappedPlayer.currentPosition > 3_000L) { wrappedPlayer.seekTo(0L); return }
-        val n = nav
-        if (n.hasPrev) n.onPrev()
-    }
-    override fun seekToNext() { val n = nav; if (n.hasNext) n.onNext() }
-    override fun seekToPreviousMediaItem() { val n = nav; if (n.hasPrev) n.onPrev() }
-    override fun seekToNextMediaItem() { val n = nav; if (n.hasNext) n.onNext() }
-}
+/** Satu trek dari daftar trek mpv (`track-list`). */
+internal data class MpvTrack(
+    val id: Int,
+    val type: String, // "video" | "audio" | "sub"
+    val lang: String,
+    val title: String,
+    val external: Boolean,
+    val selected: Boolean,
+    val width: Int,
+    val height: Int,
+)
 
 /**
- * Pemilik tunggal ExoPlayer + MediaSession, hidup DI LUAR composition.
+ * Mesin putar tunggal aplikasi: mpv lewat libmpv. Dipakai untuk streaming
+ * (playlist HLS dari gudang/sumber lain) DAN luring (playlist lokal hasil
+ * unduhan berbasis berkas di data/Downloads.kt). Tidak ada mesin kedua.
  *
- * Sebelumnya ExoPlayer dibuat di `remember(r, streamUrl)` dan dibuang tiap ganti episode / pintu gudang /
- * retry: layar hitam + buffering ulang tiap Next, dan sesi notifikasi dibongkar-pasang. Kini satu instance
- * dipakai ulang; PlayerReady hanya "meminjam" lewat token ([acquire]) dan menyetel MediaSource per episode.
- *
- * Pengambilalihan: composable episode baru memanggil [acquire] SEBELUM composable lama dibuang. Karena itu
- * [release] dari pemilik lama diabaikan bila sudah ada pemilik baru ([isOwner] false); instance baru dilepas
- * hanya saat pemilik terakhir pergi. Semua dipanggil dari main thread.
+ * Semua panggilan dibungkus runCatching: properti mpv bisa tidak tersedia
+ * sesaat (belum ada berkas dimuat, trek hilang), dan kegagalan satu panggilan
+ * tidak boleh menjatuhkan aplikasi.
  */
-internal object PlayerHolder {
-    private var exo: ExoPlayer? = null
-    private var session: MediaSession? = null
-    private var owner: Any? = null
-    private var releaseController: (() -> Unit)? = null
-    private var navPlayer: EpisodeNavPlayer? = null
+internal class MpvEngine private constructor(val mpv: MPVLib) {
 
-    fun acquire(ctx: Context, who: Any): ExoPlayer {
-        owner = who
-        val p = exo ?: create(ctx.applicationContext).also { exo = it }
-        reset(p)
-        return p
-    }
+    /** URL yang terakhir diminta dimuat (untuk muat ulang ganti kualitas). */
+    @Volatile var currentUrl: String? = null
+        private set
 
-    fun isOwner(who: Any): Boolean = owner === who
+    /** Posisi (ms) yang harus diterapkan begitu berkas selesai dimuat; -1 = tidak ada. */
+    @Volatile var seekAfterLoadMs: Long = -1L
 
-    /** Pasang aksi Next/Prev untuk notifikasi & layar kunci; diabaikan bila [who] bukan pemilik lagi. */
-    fun setNav(who: Any, nav: EpisodeNav) {
-        if (owner !== who) return
-        val p = exo ?: return
-        val cur = navPlayer
-        if (cur != null && cur.nav.hasPrev == nav.hasPrev && cur.nav.hasNext == nav.hasNext) {
-            // Tombol yang tampil tidak berubah: cukup ganti aksinya, tanpa memposting ulang notifikasi.
-            cur.nav = nav
-            return
+    fun load(url: String, referer: String?) {
+        currentUrl = url
+        runCatching {
+            if (!referer.isNullOrBlank() && url.startsWith("http")) {
+                mpv.setPropertyString("http-header-fields", "Referer: $referer")
+            } else {
+                mpv.setPropertyString("http-header-fields", "")
+            }
         }
-        val w = EpisodeNavPlayer(p, nav)
-        navPlayer = w
-        session?.setPlayer(w)
+        runCatching { mpv.command(arrayOf("loadfile", url)) }
     }
 
-    fun release(who: Any) {
-        if (owner !== who) return
-        owner = null
-        destroy()
+    /** Muat ulang URL yang sama (dipakai sesudah batas bitrate kualitas diganti). */
+    fun reload() {
+        val u = currentUrl ?: return
+        seekAfterLoadMs = positionMs()
+        runCatching { mpv.command(arrayOf("loadfile", u)) }
     }
 
-    private fun create(app: Context): ExoPlayer {
-        // Mulai putar setelah 1,5 dtk terbuffer (bawaan 2,5), pulih dari rebuffer di 5 dtk, buffer maju 30-60 dtk,
-        // sisakan 20 dtk ke belakang agar seek mundur / ketuk dua kali -10 dtk tidak mengunduh ulang segmen.
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(30_000, 60_000, 1_500, 5_000)
-            .setBackBuffer(20_000, true)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-        val renderers = DefaultRenderersFactory(app)
-            .setEnableDecoderFallback(true) // dekoder utama gagal -> coba dekoder lain, bukan error
-        val p = ExoPlayer.Builder(app, renderers)
-            .setLoadControl(loadControl)
-            // Fokus audio: jeda saat ada panggilan/aplikasi lain, lanjut otomatis setelahnya; jeda saat headset dicabut.
-            .setAudioAttributes(
-                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
-                true,
+    fun stop() {
+        currentUrl = null
+        runCatching { mpv.command(arrayOf("stop")) }
+    }
+
+    fun setPaused(paused: Boolean) {
+        runCatching { mpv.setPropertyBoolean("pause", paused) }
+    }
+
+    fun isPaused(): Boolean =
+        runCatching { mpv.getPropertyBoolean("pause") }.getOrNull() ?: true
+
+    /** Posisi putar sekarang dalam milidetik (0 bila belum ada). */
+    fun positionMs(): Long =
+        (runCatching { mpv.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0)
+            .times(1000).toLong().coerceAtLeast(0)
+
+    fun durationMs(): Long =
+        (runCatching { mpv.getPropertyDouble("duration") }.getOrNull() ?: 0.0)
+            .times(1000).toLong().coerceAtLeast(0)
+
+    /** Akhir rentang yang sudah ter-buffer (ms): posisi + sisa cache demuxer. */
+    fun bufferedEndMs(): Long {
+        val pos = runCatching { mpv.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
+        val cache = runCatching { mpv.getPropertyDouble("demuxer-cache-time") }.getOrNull() ?: 0.0
+        return ((pos + cache) * 1000).toLong().coerceAtLeast(0)
+    }
+
+    fun seekToMs(ms: Long) {
+        runCatching { mpv.command(arrayOf("seek", (ms / 1000.0).toString(), "absolute")) }
+    }
+
+    fun setSpeed(v: Double) {
+        runCatching { mpv.setPropertyDouble("speed", v) }
+    }
+
+    /** Pilih trek subtitle berdasarkan id mpv; null = matikan subtitle. */
+    fun setSid(id: Int?) {
+        runCatching { mpv.setPropertyString("sid", id?.toString() ?: "no") }
+    }
+
+    /** Pilih trek audio berdasarkan id mpv; null = matikan audio. */
+    fun setAid(id: Int?) {
+        runCatching { mpv.setPropertyString("aid", id?.toString() ?: "no") }
+    }
+
+    /** Tambahkan subtitle samping (berkas lokal/URL) sebagai trek eksternal. */
+    fun addSideSub(url: String) {
+        runCatching { mpv.command(arrayOf("sub-add", url, "auto")) }
+    }
+
+    /** Daftar trek saat ini; defensif — trek bisa hilang di tengah jalan. */
+    fun tracks(): List<MpvTrack> {
+        val count = runCatching { mpv.getPropertyInt("track-list/count") }.getOrNull() ?: return emptyList()
+        val out = ArrayList<MpvTrack>(count)
+        for (i in 0 until count) {
+            val type = runCatching { mpv.getPropertyString("track-list/$i/type") }.getOrNull() ?: continue
+            val id = runCatching { mpv.getPropertyInt("track-list/$i/id") }.getOrNull() ?: continue
+            out += MpvTrack(
+                id = id,
+                type = type,
+                lang = runCatching { mpv.getPropertyString("track-list/$i/lang") }.getOrNull() ?: "",
+                title = runCatching { mpv.getPropertyString("track-list/$i/title") }.getOrNull() ?: "",
+                external = runCatching { mpv.getPropertyBoolean("track-list/$i/external") }.getOrNull() ?: false,
+                selected = runCatching { mpv.getPropertyBoolean("track-list/$i/selected") }.getOrNull() ?: false,
+                width = runCatching { mpv.getPropertyInt("track-list/$i/demux-w") }.getOrNull() ?: 0,
+                height = runCatching { mpv.getPropertyInt("track-list/$i/demux-h") }.getOrNull() ?: 0,
             )
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-        // Telemetri pemutar: transisi keadaan, galat pemutar, dan galat muat per-URL ke CrashLog (query URL disamarkan).
-        p.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-            override fun onPlaybackStateChanged(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, state: Int) {
-                CrashLog.note("exo-state", "state=$state")
-            }
-            override fun onPlayerError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, error: androidx.media3.common.PlaybackException) {
-                CrashLog.note("exo-error", "${error.errorCodeName}: ${error.message} | cause=${error.cause}")
-            }
-            override fun onLoadError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo, mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData, error: java.io.IOException, wasCanceled: Boolean) {
-                CrashLog.note("exo-load", "${loadEventInfo.dataSpec.uri} -> ${error.javaClass.simpleName}: ${error.message}")
-            }
-        })
-        // Sesi media + layanan latar: notifikasi, kontrol layar kunci, tombol headset.
-        val w = EpisodeNavPlayer(p, EpisodeNav.NONE)
-        navPlayer = w
-        // Ketuk notifikasi / layar kunci -> bawa aplikasi ke depan (MainActivity singleTask).
-        val open = PendingIntent.getActivity(
-            app, 0,
-            Intent(app, MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val s = MediaSession.Builder(app, w)
-            .setId("onimeku-${System.nanoTime()}")
-            .setSessionActivity(open)
-            .build()
-        session = s
-        PlaybackService.current = s
-        val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
-        val fut = MediaController.Builder(app, token).buildAsync()
-        releaseController = { MediaController.releaseFuture(fut) }
-        return p
+        }
+        return out
     }
 
-    /** Bersihkan sisa episode sebelumnya supaya pemilik baru mulai dari keadaan bawaan. */
-    private fun reset(p: ExoPlayer) {
-        p.stop()
-        p.clearMediaItems()
-        p.setPlaybackSpeed(1f)
-        // Resume dibaca persis (EXACT); PlayerReady melonggarkannya ke CLOSEST_SYNC saat pertama READY.
-        p.setSeekParameters(SeekParameters.EXACT)
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-            .clearOverrides()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
-            .setPreferredTextLanguage(null)
-            .clearVideoSizeConstraints()
-            .build()
-        // Kosongkan AKSI episode lama (composable-nya sudah dibongkar) tetapi pertahankan tombol yang tampil,
-        // supaya notifikasi tidak berkedip; setNav() pemilik baru menyusul pada pass komposisi yang sama.
-        navPlayer?.let { it.nav = EpisodeNav(it.nav.hasPrev, it.nav.hasNext, {}, {}) }
+    /**
+     * Petakan pilihan kualitas ke batas bitrate HLS mpv (`hls-bitrate`):
+     * mpv memilih varian tertinggi yang bitrate-nya di bawah batas ini.
+     * null = "Auto" (tanpa batas praktis).
+     */
+    fun setQualityCap(height: Int?) {
+        val bps = when (height) {
+            null -> 2_147_483_647
+            else -> when {
+                height >= 1080 -> 12_000_000
+                height >= 720 -> 6_000_000
+                height >= 480 -> 3_000_000
+                height >= 360 -> 1_500_000
+                else -> 800_000
+            }
+        }
+        runCatching { mpv.setPropertyInt("hls-bitrate", bps) }
     }
 
-    private fun destroy() {
-        releaseController?.invoke()
-        releaseController = null
-        val s = session
-        if (s != null && PlaybackService.current === s) PlaybackService.current = null
-        s?.release()
-        session = null
-        navPlayer = null
-        exo?.release()
-        exo = null
+    fun setSubDelay(ms: Int) {
+        runCatching { mpv.setPropertyDouble("sub-delay", ms / 1000.0) }
+    }
+
+    /** Mode audio-saja / putar latar: matikan trek video (hemat baterai & data). */
+    fun setVideoEnabled(on: Boolean) {
+        runCatching { mpv.setPropertyString("vid", if (on) "auto" else "no") }
+    }
+
+    /** Isi-layar (crop) vs pas-layar, mengikuti zoom mpv `panscan`. */
+    fun setPanscan(fill: Boolean) {
+        runCatching { mpv.setPropertyDouble("panscan", if (fill) 1.0 else 0.0) }
+    }
+
+    /**
+     * Gaya subtitle lewat properti mpv (libass menggambarnya langsung).
+     * [system] = pakai gaya bawaan mpv sepenuhnya (pengaturan "Ikuti sistem").
+     */
+    fun applySubStyle(scale: Float, colorHex: String, bg: Boolean, system: Boolean) {
+        if (system) return
+        runCatching {
+            mpv.setPropertyDouble("sub-scale", scale.toDouble())
+            mpv.setPropertyString("sub-color", colorHex)
+            mpv.setPropertyString("sub-bold", "yes")
+            if (bg) {
+                mpv.setPropertyString("sub-border-style", "background-box")
+                mpv.setPropertyString("sub-back-color", "#B3000000")
+            } else {
+                mpv.setPropertyString("sub-border-style", "outline-and-shadow")
+                mpv.setPropertyString("sub-border-size", "2")
+                mpv.setPropertyString("sub-shadow-offset", "1")
+            }
+        }
+    }
+
+    /** Angkat subtitle saat kontrol tampil agar tidak tertutup panel bawah. */
+    fun setSubLifted(lifted: Boolean) {
+        runCatching { mpv.setPropertyInt("sub-pos", if (lifted) 88 else 100) }
+    }
+
+    fun attachSurface(surface: Surface) {
+        runCatching { mpv.attachSurface(surface) }
+    }
+
+    fun setSurfaceSize(w: Int, h: Int) {
+        runCatching { mpv.setPropertyString("android-surface-size", "${w}x$h") }
+    }
+
+    fun detachSurface() {
+        runCatching { mpv.detachSurface() }
+    }
+
+    fun destroy() {
+        runCatching { mpv.destroy() }
+    }
+
+    companion object {
+        fun create(ctx: Context): MpvEngine? {
+            val m = MPVLib.create(ctx.applicationContext) ?: return null
+            return runCatching {
+                m.setOptionString("vo", "gpu")
+                m.setOptionString("gpu-context", "android")
+                m.setOptionString("hwdec", "mediacodec")
+                // mpv tidak membaca trust store Android; tanpa ini sebagian
+                // pintu CDN gagal jabat tangan TLS (pola Kitsunime/Anime.id).
+                m.setOptionString("tls-verify", "no")
+                m.setOptionString("cache", "yes")
+                // Segmen gudang besar (±14 MB); cache demuxer diperbesar agar
+                // putar tidak tersendat di sambungan lambat (pelajaran Anime.id).
+                m.setOptionString("demuxer-max-bytes", "128MiB")
+                m.setOptionString("demuxer-max-back-bytes", "32MiB")
+                m.setOptionString("user-agent", Net.UA)
+                // Utamakan subtitle Indonesia lalu Inggris dari trek bawaan
+                // playlist induk; pilihan persisnya tetap diatur sid sesudah muat.
+                m.setOptionString("slang", "id,ind,en,eng")
+                m.init()
+                MpvEngine(m)
+            }.getOrElse {
+                CrashLog.log(ctx, "mpv-create", it)
+                runCatching { m.destroy() }
+                null
+            }
+        }
+    }
+}
+
+/**
+ * Pemilik tunggal [MpvEngine] di luar composition: layar putar bisa disusun
+ * ulang (putar layar, ganti episode) tanpa membunuh mesin. Kepemilikan diatur
+ * token — pemilik baru mengambil alih, pelepasan dari pemilik lama yang sudah
+ * tergeser diabaikan (semantik yang sama seperti pemegang ExoPlayer dulu).
+ *
+ * MediaSession/PlaybackService lama sudah dibuang: tidak ada lagi kontrol
+ * notifikasi/layar kunci; pemutaran memang tidak pernah berlanjut tanpa UI
+ * (komentar di PlaybackService lama menyatakannya sendiri).
+ */
+object PlayerHolder {
+    private var engine: MpvEngine? = null
+    private var owner: Any? = null
+
+    @Synchronized
+    fun acquire(ctx: Context, token: Any): MpvEngine? {
+        val cur = engine
+        if (cur != null && owner === token) return cur
+        val e = cur ?: MpvEngine.create(ctx) ?: return null
+        engine = e
+        owner = token
+        // Keadaan bersih untuk episode baru: berhenti, kecepatan normal,
+        // tanpa geseran subtitle, tanpa batas kualitas, video menyala.
+        e.stop()
+        e.setSpeed(1.0)
+        e.setSubDelay(0)
+        e.setQualityCap(null)
+        e.setVideoEnabled(true)
+        return e
+    }
+
+    @Synchronized
+    fun isOwner(token: Any): Boolean = owner === token
+
+    @Synchronized
+    fun release(token: Any) {
+        if (owner !== token) return
+        owner = null
+        engine?.stop()
     }
 }

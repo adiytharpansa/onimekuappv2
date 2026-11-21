@@ -6,8 +6,6 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
@@ -49,15 +47,6 @@
             <!-- Pintasan ikon aplikasi (tekan lama ikon): Lanjut menonton, Cari -->
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
-        <!-- Pemutaran latar + kontrol layar kunci/notifikasi (MediaSession) -->
-        <service
-            android:name=".PlaybackService"
-            android:exported="true"
-            android:foregroundServiceType="mediaPlayback">
-            <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
-            </intent-filter>
-        </service>
         <!-- Widget layar utama: Continue Watching -->
         <receiver
             android:name=".widget.ContinueWidget"
@@ -69,14 +58,5 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_continue_info" />
         </receiver>
-        <service
-            android:name=".data.OnimekuDownloadService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-        <!-- Penjadwal unduhan Media3 (PlatformScheduler): membangunkan layanan unduh saat syarat jaringan terpenuhi -->
-        <service
-            android:name="androidx.media3.exoplayer.scheduler.PlatformScheduler$PlatformSchedulerService"
-            android:exported="true"
-            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>
