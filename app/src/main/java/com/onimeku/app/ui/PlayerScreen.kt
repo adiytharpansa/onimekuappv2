@@ -874,11 +874,14 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // Seluruh efek mesin (pengamat mpv, pengawas macet/muat, polling, PiP,
     // layar penuh) dipecah ke PlayerEffects: badan PlayerReady terlalu besar
     // dalam satu fungsi hingga penolakan VerifyError di perangkat.
+    val nextEp = remember(r, a) { EpisodeMath.next(a.available, a.eps, r.ep) }
+    val owner = LocalLifecycleOwner.current
     PlayerEffects(
         engine = engine, token = token, vm = vm, r = r, a = a, ctx = ctx, act = act,
         playback = playback, streamUrl = streamUrl, subOffsetNow = subOffsetNow, orient = orient,
         onDoorSuccess = onDoorSuccess, onFatalError = onFatalError,
         refreshTracks = { refreshTracks() }, applyQuality = { applyQuality(it) },
+        nextEp = nextEp, owner = owner,
         posS = posS, durS = durS, wantPlayS = wantPlayS, bufferingS = bufferingS, failedS = failedS,
         errMsgS = errMsgS, draggingS = draggingS, speedS = speedS, hudS = hudS, hudTickS = hudTickS,
         sleepMinS = sleepMinS, lockedS = lockedS, renderedS = renderedS, showUiS = showUiS,
@@ -1765,6 +1768,7 @@ private fun PlayerEffects(
     streamUrl: String, subOffsetNow: Int, orient: Int,
     onDoorSuccess: (() -> Unit)?, onFatalError: () -> Unit,
     refreshTracks: () -> Unit, applyQuality: (String) -> Unit,
+    nextEp: Int?, owner: androidx.lifecycle.LifecycleOwner,
     posS: MutableState<Float>,
     durS: MutableState<Int>,
     wantPlayS: MutableState<Boolean>,
@@ -1985,7 +1989,6 @@ private fun PlayerEffects(
     // Polling posisi 1 dtk dan HANYA menulis state saat detiknya berubah
     // (sebelumnya tiap 500 ms -> seluruh PlayerReady recompose 2x/dtk).
     // Simpan progres tiap 10 dtk (tiap simpan = serialisasi seluruh AppState).
-    val nextEp = remember(r, a) { EpisodeMath.next(a.available, a.eps, r.ep) }
     LaunchedEffect(engine) {
         var n = 0
         var prefetched = false
@@ -2037,7 +2040,6 @@ private fun PlayerEffects(
 
     // Ke background: pause, kecuali PiP atau "Background playback" aktif.
     // Saat berlanjut di latar, trek video dimatikan (hemat data + baterai).
-    val owner = LocalLifecycleOwner.current
     DisposableEffect(owner, engine) {
         val o = LifecycleEventObserver { _, e ->
             if (e == Lifecycle.Event.ON_STOP) {
