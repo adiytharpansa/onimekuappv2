@@ -639,81 +639,6 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     // END_FILE dari berkas lama saat muat ulang kualitas harus diabaikan sekali.
     var suppressEndFile by remember(r) { mutableStateOf(false) }
 
-    /** Pilihan subtitle awal dari preferensi pengguna; dipanggil dari refreshTracks begitu trek siap. */
-    fun applyInitialSubChoice() {
-        val pref = vm.s.settings.subLang
-        if (subTracks.isEmpty()) {
-            // Gudang daring tanpa trek teks sama sekali: tak ada yang dipilih;
-            // pref "off" tetap dihormati.
-            if (pref == "off") engine.setSid(null)
-            return
-        }
-        if (pref == "off") { applySub(-1); return }
-        val pick = SubLang.restore(false, -1, subTracks, pref, vm.s.settings.lang)
-        if (pref != "auto" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
-            vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
-        if (pick >= 0) applySub(pick)
-        else {
-            // Tak ada trek yang cocok dengan preferensi: biarkan mesin memilih
-            // lewat slang (id,en) dan sinkronkan indeks menu ke trek terpilih.
-            val sel = engine.tracks().filter { it.type == "sub" }.indexOfFirst { it.selected }
-            if (sel >= 0 && playback.subtitles.isEmpty()) subIdx = sel
-        }
-    }
-
-    /**
-     * Baca ulang daftar trek dari mesin (audio/video/subtitle) dan segarkan
-     * model UI. Dipanggil saat FILE_LOADED dan tiap daftar trek berubah.
-     * Juga menetapkan dubbing + subtitle awal, sekali per episode.
-     */
-    fun refreshTracks() {
-        val ts = engine.tracks()
-        if (ts.isEmpty()) return
-        val auds = ts.filter { it.type == "audio" }
-        audioLabels = DubLogic.uniqueLabels(auds.mapIndexed { i, t -> dubName(t.lang, t.title, i) })
-        audioKeys = auds.map { audioKey(it.lang, it.title) }
-        audioMpvIds = auds.map { it.id }
-        audioIdx = auds.indexOfFirst { it.selected }.coerceAtLeast(0)
-        val selVid = ts.filter { it.type == "video" }.firstOrNull { it.selected } ?: ts.firstOrNull { it.type == "video" }
-        if (selVid != null) {
-            if (selVid.height > 0) playingH = selVid.height
-            if (selVid.width > 0 && selVid.height > 0) vidRatio = selVid.width.toFloat() / selVid.height
-        }
-        val subs = ts.filter { it.type == "sub" }
-        val payload = playback.subtitles.filter { it.url.isNotBlank() }
-        if (payload.isNotEmpty()) {
-            subTracks = payload
-            val ext = subs.filter { it.external }
-            subMpvIds = payload.indices.map { i -> ext.getOrNull(i)?.id ?: -1 }
-        } else if (subs.isNotEmpty()) {
-            subTracks = subs.map { t ->
-                com.onimeku.app.data.ApiSubtitle(lang = t.lang, label = t.title.ifBlank { t.lang.uppercase() }, url = "", referer = null)
-            }
-            subMpvIds = subs.map { it.id }
-        }
-        // Dubbing otomatis SEKALI per episode (judul ini > bawaan global).
-        if (!dubDone[0] && auds.isNotEmpty()) {
-            dubDone[0] = true
-            val st = vm.s.settings
-            val title = st.dubByTitle[r.id]
-            val wi = DubLogic.pick(audioKeys, title, st.dubLang)
-            if (wi != null && wi != audioIdx) applyAudio(wi, save = false)
-            val used = wi ?: audioIdx
-            DubLogic.fallbackNotice(audioKeys, title, st.dubLang, used)?.let { w ->
-                vm.toast(I18n.t("dub_unavail", "%1\$s dubbing unavailable · using %2\$s").format(dubLangName(w) ?: w, audioLabels.getOrElse(used) { "?" }))
-            }
-        }
-        // Subtitle awal: tunggu trek eksternal benar-benar muncul untuk payload.
-        val subsReady = if (payload.isNotEmpty()) subMpvIds.any { it >= 0 } else true
-        if (!subPickDone[0] && subsReady && subTracks.isNotEmpty()) {
-            subPickDone[0] = true
-            applyInitialSubChoice()
-        } else if (!subPickDone[0] && payload.isEmpty() && subs.isEmpty()) {
-            subPickDone[0] = true
-            applyInitialSubChoice()
-        }
-    }
-
     // Geseran waktu subtitle per judul (menu Subtitle -> Sinkronisasi):
     // kini properti sub-delay mpv — berlaku untuk trek bawaan playlist DAN
     // trek samping, tanpa menulis ulang berkas seperti era Media3.
@@ -823,6 +748,81 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             vm.setSettings { it.copy(dubLang = k, dubByTitle = DubLogic.remember(it.dubByTitle, r.id, k)) }
         }
     }
+    /** Pilihan subtitle awal dari preferensi pengguna; dipanggil dari refreshTracks begitu trek siap. */
+    fun applyInitialSubChoice() {
+        val pref = vm.s.settings.subLang
+        if (subTracks.isEmpty()) {
+            // Gudang daring tanpa trek teks sama sekali: tak ada yang dipilih;
+            // pref "off" tetap dihormati.
+            if (pref == "off") engine.setSid(null)
+            return
+        }
+        if (pref == "off") { applySub(-1); return }
+        val pick = SubLang.restore(false, -1, subTracks, pref, vm.s.settings.lang)
+        if (pref != "auto" && pick >= 0 && SubLang.key(subTracks[pick]) != pref)
+            vm.toast(I18n.t("sub_unavail", "%1\$s subtitle unavailable · using %2\$s").format(SubLang.prefName(pref), subName(pick)))
+        if (pick >= 0) applySub(pick)
+        else {
+            // Tak ada trek yang cocok dengan preferensi: biarkan mesin memilih
+            // lewat slang (id,en) dan sinkronkan indeks menu ke trek terpilih.
+            val sel = engine.tracks().filter { it.type == "sub" }.indexOfFirst { it.selected }
+            if (sel >= 0 && playback.subtitles.isEmpty()) subIdx = sel
+        }
+    }
+
+    /**
+     * Baca ulang daftar trek dari mesin (audio/video/subtitle) dan segarkan
+     * model UI. Dipanggil saat FILE_LOADED dan tiap daftar trek berubah.
+     * Juga menetapkan dubbing + subtitle awal, sekali per episode.
+     */
+    fun refreshTracks() {
+        val ts = engine.tracks()
+        if (ts.isEmpty()) return
+        val auds = ts.filter { it.type == "audio" }
+        audioLabels = DubLogic.uniqueLabels(auds.mapIndexed { i, t -> dubName(t.lang, t.title, i) })
+        audioKeys = auds.map { audioKey(it.lang, it.title) }
+        audioMpvIds = auds.map { it.id }
+        audioIdx = auds.indexOfFirst { it.selected }.coerceAtLeast(0)
+        val selVid = ts.filter { it.type == "video" }.firstOrNull { it.selected } ?: ts.firstOrNull { it.type == "video" }
+        if (selVid != null) {
+            if (selVid.height > 0) playingH = selVid.height
+            if (selVid.width > 0 && selVid.height > 0) vidRatio = selVid.width.toFloat() / selVid.height
+        }
+        val subs = ts.filter { it.type == "sub" }
+        val payload = playback.subtitles.filter { it.url.isNotBlank() }
+        if (payload.isNotEmpty()) {
+            subTracks = payload
+            val ext = subs.filter { it.external }
+            subMpvIds = payload.indices.map { i -> ext.getOrNull(i)?.id ?: -1 }
+        } else if (subs.isNotEmpty()) {
+            subTracks = subs.map { t ->
+                com.onimeku.app.data.ApiSubtitle(lang = t.lang, label = t.title.ifBlank { t.lang.uppercase() }, url = "", referer = null)
+            }
+            subMpvIds = subs.map { it.id }
+        }
+        // Dubbing otomatis SEKALI per episode (judul ini > bawaan global).
+        if (!dubDone[0] && auds.isNotEmpty()) {
+            dubDone[0] = true
+            val st = vm.s.settings
+            val title = st.dubByTitle[r.id]
+            val wi = DubLogic.pick(audioKeys, title, st.dubLang)
+            if (wi != null && wi != audioIdx) applyAudio(wi, save = false)
+            val used = wi ?: audioIdx
+            DubLogic.fallbackNotice(audioKeys, title, st.dubLang, used)?.let { w ->
+                vm.toast(I18n.t("dub_unavail", "%1\$s dubbing unavailable · using %2\$s").format(dubLangName(w) ?: w, audioLabels.getOrElse(used) { "?" }))
+            }
+        }
+        // Subtitle awal: tunggu trek eksternal benar-benar muncul untuk payload.
+        val subsReady = if (payload.isNotEmpty()) subMpvIds.any { it >= 0 } else true
+        if (!subPickDone[0] && subsReady && subTracks.isNotEmpty()) {
+            subPickDone[0] = true
+            applyInitialSubChoice()
+        } else if (!subPickDone[0] && payload.isEmpty() && subs.isEmpty()) {
+            subPickDone[0] = true
+            applyInitialSubChoice()
+        }
+    }
+
     fun seekBy(ms: Long) {
         val d = engine.durationMs()
         val t = (engine.positionMs() + ms).coerceIn(0L, if (d > 0) d else Long.MAX_VALUE)

@@ -224,7 +224,7 @@ internal class MpvEngine private constructor(val mpv: MPVLib) {
                 m.init()
                 MpvEngine(m)
             }.getOrElse {
-                CrashLog.log(ctx, "mpv-create", it)
+                CrashLog.note("mpv-create", "${it.javaClass.simpleName}: ${it.message}")
                 runCatching { m.destroy() }
                 null
             }
@@ -242,7 +242,7 @@ internal class MpvEngine private constructor(val mpv: MPVLib) {
  * notifikasi/layar kunci; pemutaran memang tidak pernah berlanjut tanpa UI
  * (komentar di PlaybackService lama menyatakannya sendiri).
  */
-object PlayerHolder {
+internal object PlayerHolder {
     private var engine: MpvEngine? = null
     private var owner: Any? = null
 
