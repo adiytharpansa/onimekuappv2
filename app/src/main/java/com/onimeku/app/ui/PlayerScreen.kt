@@ -575,24 +575,36 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         com.onimeku.app.data.CrashLog.note("player", "PlayerReady muat ep${r.ep} url=${streamUrl.take(60)}")
     }
 
-    var pos by remember(r) { mutableFloatStateOf((vm.p.prog["${r.id}:${r.ep}"] ?: 0).toFloat()) }
-    var dur by remember(r) { mutableIntStateOf(0) } // 0 = belum diketahui (tampil --:--)
-    var wantPlay by remember(r) { mutableStateOf(true) }
-    var buffering by remember(r) { mutableStateOf(true) }
-    var failed by remember(r) { mutableStateOf(false) }
-    var errMsg by remember(r) { mutableStateOf<String?>(null) }
-    var dragging by remember(r) { mutableStateOf(false) }
-    var speed by remember(r) { mutableFloatStateOf(vm.playerSpeed) }
+    val posS = remember(r) { mutableFloatStateOf((vm.p.prog["${r.id}:${r.ep}"] ?: 0).toFloat()) }
+    var pos by posS
+    val durS = remember(r) { mutableIntStateOf(0) } // 0 = belum diketahui (tampil --:--)
+    var dur by durS
+    val wantPlayS = remember(r) { mutableStateOf(true) }
+    var wantPlay by wantPlayS
+    val bufferingS = remember(r) { mutableStateOf(true) }
+    var buffering by bufferingS
+    val failedS = remember(r) { mutableStateOf(false) }
+    var failed by failedS
+    val errMsgS = remember(r) { mutableStateOf<String?>(null) }
+    var errMsg by errMsgS
+    val draggingS = remember(r) { mutableStateOf(false) }
+    var dragging by draggingS
+    val speedS = remember(r) { mutableFloatStateOf(vm.playerSpeed) }
+    var speed by speedS
     var br by remember { mutableFloatStateOf(1f) }
-    var hud by remember { mutableStateOf<String?>(null) }
-    var hudTick by remember { mutableIntStateOf(0) }
-    val durNow by rememberUpdatedState(dur)
+    val hudS = remember { mutableStateOf<String?>(null) }
+    var hud by hudS
+    val hudTickS = remember { mutableIntStateOf(0) }
+    var hudTick by hudTickS
+    val durNowS = rememberUpdatedState(dur)
+    val durNow by durNowS
     var audioLabels by remember(r) { mutableStateOf<List<String>>(emptyList()) }
     var audioKeys by remember(r) { mutableStateOf<List<String>>(emptyList()) }
     var audioIdx by remember(r) { mutableIntStateOf(0) }
     // true = dubbing episode ini sudah ditetapkan (otomatis atau pilihan pengguna); onTracksChanged tidak menimpanya lagi.
     val dubDone = remember(r) { BooleanArray(1) }
-    var heights by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
+    val heightsS = remember(r) { mutableStateOf<List<Int>>(emptyList()) }
+    var heights by heightsS
     // Daftar tinggi varian untuk menu kualitas: dari playlist induk HLS
     // (mpv hanya mengekspos trek video yang sedang dipilih). Gagal baca =
     // daftar kosong; menu jatuh ke pilihan bawaan di lembar pengaturan.
@@ -610,18 +622,24 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
             }.getOrDefault(emptyList())
         }
     }
-    var sleepMin by remember(r) { mutableIntStateOf(0) }
-    var locked by remember(r) { mutableStateOf(false) }
-    var rendered by remember(r) { mutableStateOf(false) }
+    val sleepMinS = remember(r) { mutableIntStateOf(0) }
+    var sleepMin by sleepMinS
+    val lockedS = remember(r) { mutableStateOf(false) }
+    var locked by lockedS
+    val renderedS = remember(r) { mutableStateOf(false) }
+    var rendered by renderedS
     var vidRatio by remember(r) { mutableFloatStateOf(16f / 9f) }
     var pipRect by remember { mutableStateOf<android.graphics.Rect?>(null) }
-    val bg by rememberUpdatedState(vm.s.settings.bgPlay)
+    val bgS = rememberUpdatedState(vm.s.settings.bgPlay)
+    val bg by bgS
 
     // ---- Fullscreen, kontrol otomatis sembunyi, subtitle, kualitas ----
     // Fullscreen diwarisi dari AppVM: pindah episode membongkar
     // PlayerReady, tetapi keadaan penuhnya tidak ikut hilang.
-    var full by remember { mutableStateOf(vm.playerFull) }
-    var showUi by remember(r) { mutableStateOf(true) }
+    val fullS = remember { mutableStateOf(vm.playerFull) }
+    var full by fullS
+    val showUiS = remember(r) { mutableStateOf(true) }
+    var showUi by showUiS
     var uiTick by remember { mutableIntStateOf(0) }
     // Model trek subtitle untuk menu & tombol CC. Dua sumber:
     //  - payload API (playback.subtitles): trek samping yang dipasang ke mpv
@@ -632,12 +650,15 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     var subMpvIds by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
     var subIdx by remember(r) { mutableIntStateOf(-1) }       // -1 = mati, selain itu indeks di subTracks
     var audioMpvIds by remember(r) { mutableStateOf<List<Int>>(emptyList()) }
-    var fileLoadedOnce by remember(r) { mutableStateOf(false) }
-    var sideSubsAdded by remember(r) { mutableStateOf(false) }
+    val fileLoadedOnceS = remember(r) { mutableStateOf(false) }
+    var fileLoadedOnce by fileLoadedOnceS
+    val sideSubsAddedS = remember(r) { mutableStateOf(false) }
+    var sideSubsAdded by sideSubsAddedS
     // Pilihan subtitle awal (dari preferensi) hanya diterapkan sekali per episode.
     val subPickDone = remember(r) { BooleanArray(1) }
     // END_FILE dari berkas lama saat muat ulang kualitas harus diabaikan sekali.
-    var suppressEndFile by remember(r) { mutableStateOf(false) }
+    val suppressEndFileS = remember(r) { mutableStateOf(false) }
+    var suppressEndFile by suppressEndFileS
 
     // Geseran waktu subtitle per judul (menu Subtitle -> Sinkronisasi):
     // kini properti sub-delay mpv — berlaku untuk trek bawaan playlist DAN
@@ -688,23 +709,33 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
         }
     }
     // Menu pengaturan ala YouTube (roda gigi): null = tertutup, "main" | "quality" | "subs" | "speed" | "audio".
-    var sheet by remember { mutableStateOf<String?>(null) }
-    var buffered by remember(r) { mutableFloatStateOf(0f) }
-    var playingH by remember(r) { mutableIntStateOf(0) }
+    val sheetS = remember { mutableStateOf<String?>(null) }
+    var sheet by sheetS
+    val bufferedS = remember(r) { mutableFloatStateOf(0f) }
+    var buffered by bufferedS
+    val playingHS = remember(r) { mutableIntStateOf(0) }
+    var playingH by playingHS
     var boost by remember { mutableStateOf(false) }          // tahan layar = 2x
     var autoCancel by remember(r) { mutableStateOf(false) }  // batalkan autoplay episode berikutnya
-    val autoCancelNow by rememberUpdatedState(autoCancel)
-    val sleepNow by rememberUpdatedState(sleepMin)           // -1 = jeda di akhir episode
-    var fillMode by remember { mutableStateOf(false) }       // false = pas layar, true = penuh (zoom)
+    val autoCancelNowS = rememberUpdatedState(autoCancel)
+    val autoCancelNow by autoCancelNowS
+    val sleepNowS = rememberUpdatedState(sleepMin)           // -1 = jeda di akhir episode
+    val sleepNow by sleepNowS
+    val fillModeS = remember { mutableStateOf(false) }       // false = pas layar, true = penuh (zoom)
+    var fillMode by fillModeS
     var audioOnly by remember { mutableStateOf(false) }
-    val audioOnlyNow by rememberUpdatedState(audioOnly)
-    var fullByRot by remember { mutableStateOf(false) }      // fullscreen karena HP diputar (bukan tombol)
+    val audioOnlyNowS = rememberUpdatedState(audioOnly)
+    val audioOnlyNow by audioOnlyNowS
+    val fullByRotS = remember { mutableStateOf(false) }      // fullscreen karena HP diputar (bukan tombol)
+    var fullByRot by fullByRotS
     // Tawaran melanjutkan: episode yang pernah ditonton >=30 dtk mulai dari posisi tersimpan, dengan opsi "Mulai dari awal" 7 dtk.
     val resumeStart = remember(r) { vm.p.prog["${r.id}:${r.ep}"] ?: 0 }
     var resumeChip by remember(r) { mutableStateOf(EpisodeMath.offerResume(resumeStart)) }
     LaunchedEffect(r) { if (resumeChip) { delay(7000); resumeChip = false } }
-    var epPanel by remember { mutableStateOf(false) }        // daftar episode di mode layar penuh
-    var barKind by remember { mutableIntStateOf(0) }         // bilah vertikal: 1 = kecerahan, 2 = volume
+    val epPanelS = remember { mutableStateOf(false) }        // daftar episode di mode layar penuh
+    var epPanel by epPanelS
+    val barKindS = remember { mutableIntStateOf(0) }         // bilah vertikal: 1 = kecerahan, 2 = volume
+    var barKind by barKindS
     var barLevel by remember { mutableFloatStateOf(0f) }
     val orient = LocalConfiguration.current.orientation
     // Portrait <-> landscape/fullscreen dianimasikan (tinggi area video tumbuh/menyusut) agar tidak "melompat".
@@ -840,284 +871,23 @@ private fun PlayerReady(vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anim
     }
     LaunchedEffect(dtTick) { if (dtTick > 0) { delay(800); dtSide = 0; dtSecs = 0 } }
 
-    DisposableEffect(engine) {
-        var wasReady = false
-        var fileLoaded = false
-        var eofSeen = false
-        val bornAt = System.currentTimeMillis()
-        val stalls = ArrayDeque<Long>()
-        var hinted = false
-        val observer = object : MPVLib.EventObserver {
-            override fun eventProperty(property: String) {
-                // Daftar trek berubah (trek samping tiba / trek bawaan terbaca).
-                if (property == "track-list" && PlayerHolder.isOwner(token)) refreshTracks()
-            }
-            override fun eventProperty(property: String, value: Long) {}
-            override fun eventProperty(property: String, value: Boolean) {
-                if (!PlayerHolder.isOwner(token)) return
-                when (property) {
-                    "pause" -> {
-                        wantPlay = !value; vm.playing = !value
-                        // Dijeda: simpan posisi sekarang (proses bisa dimatikan sistem sebelum polling berikutnya).
-                        if (value && engine.positionMs() > 0)
-                            vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
-                    }
-                    "paused-for-cache" -> {
-                        buffering = value
-                        // Saran kualitas: 3x macet dalam 90 dtk setelah video tampil -> tawarkan turunkan kualitas, sekali per sesi.
-                        if (value && wasReady) {
-                            val now = System.currentTimeMillis()
-                            stalls.addLast(now)
-                            while (stalls.isNotEmpty() && now - stalls.first() > 90_000) stalls.removeFirst()
-                            if (stalls.size >= 3 && !hinted) { hinted = true; vm.toast(I18n.t("slow_conn", "Slow connection. Try a lower quality.")) }
-                        }
-                    }
-                    "eof-reached" -> if (value) {
-                        eofSeen = true
-                        vm.saveProg(r.id, r.ep, durNow, durNow)
-                        val nxt = EpisodeMath.next(a.available, a.eps, r.ep)
-                        if (sleepNow == -1) { engine.setPaused(true); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")) }
-                        else if (vm.s.settings.autoplay && !autoCancelNow && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
-                    }
-                }
-            }
-            override fun eventProperty(property: String, value: Double) {
-                if (!PlayerHolder.isOwner(token)) return
-                when (property) {
-                    "time-pos" -> if (!dragging) pos = value.toFloat()
-                    "duration" -> { val ds = value.toInt(); if (ds > 0 && ds != dur) dur = ds }
-                }
-            }
-            override fun eventProperty(property: String, value: String) {}
-            override fun event(eventId: Int) {
-                if (!PlayerHolder.isOwner(token)) return
-                when (eventId) {
-                    MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
-                        fileLoaded = true; wasReady = true; eofSeen = false
-                        rendered = true; failed = false; buffering = false
-                        fileLoadedOnce = true
-                        // Pintu ini terbukti memutar — ingat sebagai pintu awal kunjungan berikutnya.
-                        onDoorSuccess?.invoke()
-                        refreshTracks()
-                        // Resume / posisi sesudah muat ulang kualitas.
-                        val seek = engine.seekAfterLoadMs
-                        if (seek > 0) { engine.seekToMs(seek); engine.seekAfterLoadMs = -1L }
-                        if (speed != 1f) engine.setSpeed(speed.toDouble())
-                        engine.setSubDelay(subOffsetNow)
-                        // Trek subtitle samping dari payload (sumber non-gudang / luring).
-                        val payload = playback.subtitles.filter { it.url.isNotBlank() }
-                        if (payload.isNotEmpty() && !sideSubsAdded) {
-                            sideSubsAdded = true
-                            payload.forEach { engine.addSideSub(it.url) }
-                        }
-                    }
-                    MPVLib.MpvEvent.MPV_EVENT_END_FILE -> {
-                        if (suppressEndFile) { suppressEndFile = false; return }
-                        if (eofSeen) return
-                        // END_FILE warisan dari instance sebelumnya (stop saat
-                        // ambil alih) bisa tiba tepat sesudah observer ini
-                        // terdaftar; abaikan yang terlalu dini — kegagalan
-                        // muat sungguhan tetap ditangkap pengawas 30 dtk.
-                        if (!fileLoaded && System.currentTimeMillis() - bornAt < 2_000) return
-                        // Berhenti jauh sebelum akhir (atau tak pernah termuat) = galat fatal -> rantai cadangan.
-                        val posMs = engine.positionMs()
-                        val durMs = durNow * 1000L
-                        if (!fileLoaded || (durMs > 0 && posMs < durMs - 15_000L)) {
-                            vm.resumeMs = "${r.id}:${r.ep}" to posMs
-                            failed = true; buffering = false
-                            errMsg = "MPV_END_FILE"
-                            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} leg=${if (streamUrl.contains("/api/proxy")) "proxy" else "direct"} MPV_END_FILE pos=${posMs / 1000}s dur=${durNow}s loaded=$fileLoaded")
-                            onFatalError()
-                        }
-                    }
-                }
-            }
-        }
-        engine.mpv.addObserver(observer)
-        engine.mpv.observeProperty("time-pos", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
-        engine.mpv.observeProperty("duration", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
-        engine.mpv.observeProperty("pause", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
-        engine.mpv.observeProperty("paused-for-cache", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
-        engine.mpv.observeProperty("eof-reached", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
-        engine.mpv.observeProperty("track-list", MPVLib.MpvFormat.MPV_FORMAT_NONE)
-        vm.playing = true
-        onDispose {
-            runCatching { engine.mpv.removeObserver(observer) }
-            // Mesin dipakai bersama: bila episode/pintu berikutnya sudah mengambil alih, jangan menyimpan posisi
-            // episode baru sebagai milik episode lama (progres lama sudah disimpan di goEp / EOF).
-            val mine = PlayerHolder.isOwner(token)
-            if (mine) vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
-            PlayerHolder.release(token)
-            if (mine) vm.playing = false
-        }
-    }
-
-    // Pengawas muat: URL tak pernah selesai dimuat dalam 30 dtk (dan tidak
-    // ada END_FILE yang menanganinya) -> serahkan ke rantai cadangan.
-    LaunchedEffect(engine, streamUrl) {
-        delay(30_000)
-        if (!rendered && !failed && PlayerHolder.isOwner(token)) {
-            vm.resumeMs = "${r.id}:${r.ep}" to engine.positionMs()
-            failed = true; buffering = false; errMsg = "MPV_LOAD_TIMEOUT"
-            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} muat tak selesai 30 dtk -> rantai cadangan")
-            onFatalError()
-        }
-    }
-
-    // Pengawas macet: buffering menggantung sesudah video tampil -> siklus
-    // StallPolicy: seek ke posisi yang sama untuk memancing segmen baru;
-    // mulai siklus ke-2 turunkan kualitas satu tingkat (sesi ini saja,
-    // pengaturan tidak diubah). Maks 3 siklus per kemacetan.
-    LaunchedEffect(engine, buffering, rendered) {
-        if (!buffering || !rendered) return@LaunchedEffect
-        var tries = 0
-        while (tries < 3) {
-            delay(StallPolicy.delayMs(tries))
-            if (!buffering || !wantPlay) return@LaunchedEffect
-            tries++
-            val lower = heights.filter { it < playingH }.maxOrNull()
-            if (StallPolicy.shouldLower(tries, lower)) {
-                applyQuality("${lower}p")
-                vm.toast(I18n.t("slow_switched", "Slow connection · switched to %1\$dp").format(lower))
-            }
-            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} macet, pulihkan #$tries (tinggi=$playingH, turun=${lower ?: 0})")
-            engine.seekToMs(engine.positionMs())
-        }
-    }
-
-    // Timer tidur.
-    LaunchedEffect(sleepMin) {
-        if (sleepMin > 0) {
-            delay(sleepMin * 60_000L)
-            engine.setPaused(true); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")); sleepMin = 0
-        }
-    }
-
-    // Polling posisi 1 dtk dan HANYA menulis state saat detiknya berubah
-    // (sebelumnya tiap 500 ms -> seluruh PlayerReady recompose 2x/dtk).
-    // Simpan progres tiap 10 dtk (tiap simpan = serialisasi seluruh AppState).
-    val nextEp = remember(r, a) { EpisodeMath.next(a.available, a.eps, r.ep) }
-    LaunchedEffect(engine) {
-        var n = 0
-        var prefetched = false
-        var trPre = false
-        var introAutoDone = false
-        var lastTrackCount = -1
-        while (true) {
-            // Mesin sudah diambil alih episode/pintu berikutnya: berhenti (jangan menyimpan posisi episode lain).
-            if (!PlayerHolder.isOwner(token)) break
-            val sec = (engine.positionMs() / 1000).toInt()
-            if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
-            // Lewati intro otomatis (opsional): sekali per episode, hanya bila API memberi penanda intro.
-            if (!introAutoDone) {
-                val tgt = SkipLogic.autoSkipTarget(sec, playback.introStart, playback.introEnd, vm.s.settings.skipIntro, vm.s.settings.autoSkipIntro)
-                if (tgt != null) {
-                    introAutoDone = true
-                    engine.seekToMs(tgt * 1000L)
-                    vm.toast(I18n.t("intro_skipped", "Intro skipped"))
-                }
-            }
-            val bufSec = (engine.bufferedEndMs() / 1000L).toFloat()
-            if (bufSec != buffered) buffered = bufSec
-            val d = engine.durationMs()
-            if (d > 0) {
-                val ds = (d / 1000).toInt()
-                if (ds != dur) dur = ds
-                // 60 dtk terakhir: ambil data putar episode berikutnya di latar,
-                // supaya autoplay langsung mulai tanpa menunggu API.
-                // Pemanasan data putar episode berikutnya dimulai lebih awal (2 menit setelah mulai).
-                if (!trPre && nextEp != null && sec >= 120) {
-                    trPre = true
-                    launch { com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp) }
-                }
-                if (!prefetched && nextEp != null && vm.s.settings.autoplay && ds - sec in 1..60) {
-                    prefetched = true
-                    launch { com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp) }
-                }
-            }
-            if (++n % 10 == 0 && wantPlay) vm.saveProg(r.id, r.ep, sec, durNow)
-            // Jaring pengaman daftar trek: bila jumlah trek berubah (trek
-            // samping tiba belakangan), segarkan model audio/subtitle.
-            if (n % 5 == 4) {
-                val tc = runCatching { engine.mpv.getPropertyInt("track-list/count") }.getOrNull() ?: -1
-                if (tc >= 0 && tc != lastTrackCount) { lastTrackCount = tc; refreshTracks() }
-            }
-            delay(1000)
-        }
-    }
-
-    // Ke background: pause, kecuali PiP atau "Background playback" aktif.
-    // Saat berlanjut di latar, trek video dimatikan (hemat data + baterai).
-    val owner = LocalLifecycleOwner.current
-    DisposableEffect(owner, engine) {
-        val o = LifecycleEventObserver { _, e ->
-            if (e == Lifecycle.Event.ON_STOP) {
-                // Simpan posisi sebelum proses berpeluang dimatikan di latar (polling hanya menyimpan tiap 10 dtk).
-                if (PlayerHolder.isOwner(token) && engine.positionMs() > 0) vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
-                // ON_STOP saat masih di PiP = jendela PiP ditutup (X): berhenti seperti YouTube, jangan lanjut berbunyi di latar.
-                // Mengetuk jendela PiP (membuka kembali) tidak memicu ON_STOP, jadi pemutaran lanjut normal.
-                if (vm.inPip || act?.isInPictureInPictureMode == true) engine.setPaused(true)
-                else if (bg) engine.setVideoEnabled(false) else engine.setPaused(true)
-            }
-            if (e == Lifecycle.Event.ON_START) engine.setVideoEnabled(!audioOnlyNow)
-        }
-        owner.lifecycle.addObserver(o)
-        onDispose { owner.lifecycle.removeObserver(o) }
-    }
-
-    // PiP: auto-enter saat video diputar (Android 12+), layar tetap menyala, kecerahan dipulihkan
-    DisposableEffect(Unit) {
-        act?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            vm.pipParams = null
-            act?.setPictureInPictureParams(pipParams(ctx, false, false))
-            act?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
-        }
-    }
-    LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null; barKind = 0 } }
-    // Subtitle diangkat saat kontrol tampil agar tidak tertutup panel bawah; isi/pas layar lewat panscan mpv.
-    LaunchedEffect(showUi, wantPlay, buffering, failed, locked) {
-        engine.setSubLifted(!locked && (showUi || !wantPlay || failed || buffering))
-    }
-    LaunchedEffect(fillMode) { engine.setPanscan(fillMode) }
-
-    // Fullscreen: kunci landscape + sembunyikan bilah sistem; dipulihkan saat keluar/pergi dari pemutar.
-    LaunchedEffect(r) {
-        if (!vm.s.settings.gestureHintSeen) { delay(25_000); vm.setSettings { it.copy(gestureHintSeen = true) } }
-    }
-    // Putar HP ke landscape = fullscreen otomatis; kembali ke portrait = keluar (hanya bila fullscreen berasal dari rotasi).
-    LaunchedEffect(orient) {
-        if (orient == Configuration.ORIENTATION_LANDSCAPE && !full) { fullByRot = true; full = true }
-        else if (orient == Configuration.ORIENTATION_PORTRAIT && full && fullByRot) { full = false; fullByRot = false }
-    }
-    val prevFull = remember { java.util.concurrent.atomic.AtomicBoolean(full) }
-    LaunchedEffect(full) {
-        vm.playerFull = full
-        val leaving = !full && prevFull.getAndSet(full)
-        act?.requestedOrientation = when {
-            full && !fullByRot -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            leaving && orient == Configuration.ORIENTATION_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-        if (leaving) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }, 700)
-        act?.window?.let { w ->
-            val c = WindowCompat.getInsetsController(w, w.decorView)
-            if (full) {
-                c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                c.hide(WindowInsetsCompat.Type.systemBars())
-            } else c.show(WindowInsetsCompat.Type.systemBars())
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            act?.window?.let { w -> WindowCompat.getInsetsController(w, w.decorView).show(WindowInsetsCompat.Type.systemBars()) }
-        }
-    }
-    BackHandler(enabled = full) { full = false; fullByRot = false }
-    BackHandler(enabled = epPanel) { epPanel = false }
-    BackHandler(enabled = sheet != null) { if (sheet == "main") sheet = null else sheet = "main" }
+    // Seluruh efek mesin (pengamat mpv, pengawas macet/muat, polling, PiP,
+    // layar penuh) dipecah ke PlayerEffects: badan PlayerReady terlalu besar
+    // dalam satu fungsi hingga penolakan VerifyError di perangkat.
+    PlayerEffects(
+        engine = engine, token = token, vm = vm, r = r, a = a, ctx = ctx, act = act,
+        playback = playback, streamUrl = streamUrl, subOffsetNow = subOffsetNow, orient = orient,
+        onDoorSuccess = onDoorSuccess, onFatalError = onFatalError,
+        refreshTracks = { refreshTracks() }, applyQuality = { applyQuality(it) },
+        posS = posS, durS = durS, wantPlayS = wantPlayS, bufferingS = bufferingS, failedS = failedS,
+        errMsgS = errMsgS, draggingS = draggingS, speedS = speedS, hudS = hudS, hudTickS = hudTickS,
+        sleepMinS = sleepMinS, lockedS = lockedS, renderedS = renderedS, showUiS = showUiS,
+        sheetS = sheetS, bufferedS = bufferedS, playingHS = playingHS, heightsS = heightsS,
+        fillModeS = fillModeS, fullS = fullS, fullByRotS = fullByRotS, epPanelS = epPanelS,
+        barKindS = barKindS, fileLoadedOnceS = fileLoadedOnceS, sideSubsAddedS = sideSubsAddedS,
+        suppressEndFileS = suppressEndFileS, durNowS = durNowS, sleepNowS = sleepNowS,
+        autoCancelNowS = autoCancelNowS, bgS = bgS, audioOnlyNowS = audioOnlyNowS
+    )
     // Kontrol hilang sendiri 3,5 dtk setelah ketukan terakhir saat video berjalan.
     LaunchedEffect(showUi, uiTick, wantPlay, buffering) { if (showUi && wantPlay && !buffering) { delay(3500); showUi = false } }
 
@@ -1977,4 +1747,364 @@ private fun NavEpCard(label: String, ep: Int, next: Boolean, modifier: Modifier 
         }
         if (next) Icon(Icons.Filled.SkipNext, null, Modifier.size(22.dp), tint = Color.White)
     }
+}
+
+
+/**
+ * Seluruh efek samping pemutar (pengamat peristiwa mpv, pengawas muat &
+ * macet, polling posisi, siklus hidup, PiP, layar penuh, tombol kembali).
+ * Dipecah dari PlayerReady: satu fungsi komposabel raksasa ditolak verifier
+ * ART di perangkat (VerifyError copy-reference BooleanConstant). Keadaan
+ * dibagikan lewat pemegang MutableState yang sama persis dengan milik
+ * PlayerReady (delegasi `by`), jadi perilaku tidak berubah.
+ */
+@Composable
+private fun PlayerEffects(
+    engine: MpvEngine, token: Any, vm: AppVM, r: Route.Player, a: com.onimeku.app.data.Anime,
+    ctx: Context, act: android.app.Activity?, playback: com.onimeku.app.data.Playback,
+    streamUrl: String, subOffsetNow: Int, orient: Int,
+    onDoorSuccess: (() -> Unit)?, onFatalError: () -> Unit,
+    refreshTracks: () -> Unit, applyQuality: (String) -> Unit,
+    posS: MutableState<Float>,
+    durS: MutableState<Int>,
+    wantPlayS: MutableState<Boolean>,
+    bufferingS: MutableState<Boolean>,
+    failedS: MutableState<Boolean>,
+    errMsgS: MutableState<String?>,
+    draggingS: MutableState<Boolean>,
+    speedS: MutableState<Float>,
+    hudS: MutableState<String?>,
+    hudTickS: MutableState<Int>,
+    sleepMinS: MutableState<Int>,
+    lockedS: MutableState<Boolean>,
+    renderedS: MutableState<Boolean>,
+    showUiS: MutableState<Boolean>,
+    sheetS: MutableState<String?>,
+    bufferedS: MutableState<Float>,
+    playingHS: MutableState<Int>,
+    heightsS: MutableState<List<Int>>,
+    fillModeS: MutableState<Boolean>,
+    fullS: MutableState<Boolean>,
+    fullByRotS: MutableState<Boolean>,
+    epPanelS: MutableState<Boolean>,
+    barKindS: MutableState<Int>,
+    fileLoadedOnceS: MutableState<Boolean>,
+    sideSubsAddedS: MutableState<Boolean>,
+    suppressEndFileS: MutableState<Boolean>,
+    durNowS: State<Int>,
+    sleepNowS: State<Int>,
+    autoCancelNowS: State<Boolean>,
+    bgS: State<Boolean>,
+    audioOnlyNowS: State<Boolean>
+) {
+    var pos by posS
+    var dur by durS
+    var wantPlay by wantPlayS
+    var buffering by bufferingS
+    var failed by failedS
+    var errMsg by errMsgS
+    var dragging by draggingS
+    var speed by speedS
+    var hud by hudS
+    var hudTick by hudTickS
+    var sleepMin by sleepMinS
+    var locked by lockedS
+    var rendered by renderedS
+    var showUi by showUiS
+    var sheet by sheetS
+    var buffered by bufferedS
+    var playingH by playingHS
+    var heights by heightsS
+    var fillMode by fillModeS
+    var full by fullS
+    var fullByRot by fullByRotS
+    var epPanel by epPanelS
+    var barKind by barKindS
+    var fileLoadedOnce by fileLoadedOnceS
+    var sideSubsAdded by sideSubsAddedS
+    var suppressEndFile by suppressEndFileS
+    val durNow by durNowS
+    val sleepNow by sleepNowS
+    val autoCancelNow by autoCancelNowS
+    val bg by bgS
+    val audioOnlyNow by audioOnlyNowS
+
+    DisposableEffect(engine) {
+        var wasReady = false
+        var fileLoaded = false
+        var eofSeen = false
+        val bornAt = System.currentTimeMillis()
+        val stalls = ArrayDeque<Long>()
+        var hinted = false
+        val observer = object : MPVLib.EventObserver {
+            override fun eventProperty(property: String) {
+                // Daftar trek berubah (trek samping tiba / trek bawaan terbaca).
+                if (property == "track-list" && PlayerHolder.isOwner(token)) refreshTracks()
+            }
+            override fun eventProperty(property: String, value: Long) {}
+            override fun eventProperty(property: String, value: Boolean) {
+                if (!PlayerHolder.isOwner(token)) return
+                when (property) {
+                    "pause" -> {
+                        wantPlay = !value; vm.playing = !value
+                        // Dijeda: simpan posisi sekarang (proses bisa dimatikan sistem sebelum polling berikutnya).
+                        if (value && engine.positionMs() > 0)
+                            vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
+                    }
+                    "paused-for-cache" -> {
+                        buffering = value
+                        // Saran kualitas: 3x macet dalam 90 dtk setelah video tampil -> tawarkan turunkan kualitas, sekali per sesi.
+                        if (value && wasReady) {
+                            val now = System.currentTimeMillis()
+                            stalls.addLast(now)
+                            while (stalls.isNotEmpty() && now - stalls.first() > 90_000) stalls.removeFirst()
+                            if (stalls.size >= 3 && !hinted) { hinted = true; vm.toast(I18n.t("slow_conn", "Slow connection. Try a lower quality.")) }
+                        }
+                    }
+                    "eof-reached" -> if (value) {
+                        eofSeen = true
+                        vm.saveProg(r.id, r.ep, durNow, durNow)
+                        val nxt = EpisodeMath.next(a.available, a.eps, r.ep)
+                        if (sleepNow == -1) { engine.setPaused(true); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")) }
+                        else if (vm.s.settings.autoplay && !autoCancelNow && nxt != null) vm.replaceTop(Route.Player(r.id, nxt))
+                    }
+                }
+            }
+            override fun eventProperty(property: String, value: Double) {
+                if (!PlayerHolder.isOwner(token)) return
+                when (property) {
+                    "time-pos" -> if (!dragging) pos = value.toFloat()
+                    "duration" -> { val ds = value.toInt(); if (ds > 0 && ds != dur) dur = ds }
+                }
+            }
+            override fun eventProperty(property: String, value: String) {}
+            override fun event(eventId: Int) {
+                if (!PlayerHolder.isOwner(token)) return
+                when (eventId) {
+                    MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
+                        fileLoaded = true; wasReady = true; eofSeen = false
+                        rendered = true; failed = false; buffering = false
+                        fileLoadedOnce = true
+                        // Pintu ini terbukti memutar — ingat sebagai pintu awal kunjungan berikutnya.
+                        onDoorSuccess?.invoke()
+                        refreshTracks()
+                        // Resume / posisi sesudah muat ulang kualitas.
+                        val seek = engine.seekAfterLoadMs
+                        if (seek > 0) { engine.seekToMs(seek); engine.seekAfterLoadMs = -1L }
+                        if (speed != 1f) engine.setSpeed(speed.toDouble())
+                        engine.setSubDelay(subOffsetNow)
+                        // Trek subtitle samping dari payload (sumber non-gudang / luring).
+                        val payload = playback.subtitles.filter { it.url.isNotBlank() }
+                        if (payload.isNotEmpty() && !sideSubsAdded) {
+                            sideSubsAdded = true
+                            payload.forEach { engine.addSideSub(it.url) }
+                        }
+                    }
+                    MPVLib.MpvEvent.MPV_EVENT_END_FILE -> {
+                        if (suppressEndFile) { suppressEndFile = false; return }
+                        if (eofSeen) return
+                        // END_FILE warisan dari instance sebelumnya (stop saat
+                        // ambil alih) bisa tiba tepat sesudah observer ini
+                        // terdaftar; abaikan yang terlalu dini — kegagalan
+                        // muat sungguhan tetap ditangkap pengawas 30 dtk.
+                        if (!fileLoaded && System.currentTimeMillis() - bornAt < 2_000) return
+                        // Berhenti jauh sebelum akhir (atau tak pernah termuat) = galat fatal -> rantai cadangan.
+                        val posMs = engine.positionMs()
+                        val durMs = durNow * 1000L
+                        if (!fileLoaded || (durMs > 0 && posMs < durMs - 15_000L)) {
+                            vm.resumeMs = "${r.id}:${r.ep}" to posMs
+                            failed = true; buffering = false
+                            errMsg = "MPV_END_FILE"
+                            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} leg=${if (streamUrl.contains("/api/proxy")) "proxy" else "direct"} MPV_END_FILE pos=${posMs / 1000}s dur=${durNow}s loaded=$fileLoaded")
+                            onFatalError()
+                        }
+                    }
+                }
+            }
+        }
+        engine.mpv.addObserver(observer)
+        engine.mpv.observeProperty("time-pos", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
+        engine.mpv.observeProperty("duration", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
+        engine.mpv.observeProperty("pause", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+        engine.mpv.observeProperty("paused-for-cache", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+        engine.mpv.observeProperty("eof-reached", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+        engine.mpv.observeProperty("track-list", MPVLib.MpvFormat.MPV_FORMAT_NONE)
+        vm.playing = true
+        onDispose {
+            runCatching { engine.mpv.removeObserver(observer) }
+            // Mesin dipakai bersama: bila episode/pintu berikutnya sudah mengambil alih, jangan menyimpan posisi
+            // episode baru sebagai milik episode lama (progres lama sudah disimpan di goEp / EOF).
+            val mine = PlayerHolder.isOwner(token)
+            if (mine) vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
+            PlayerHolder.release(token)
+            if (mine) vm.playing = false
+        }
+    }
+
+    // Pengawas muat: URL tak pernah selesai dimuat dalam 30 dtk (dan tidak
+    // ada END_FILE yang menanganinya) -> serahkan ke rantai cadangan.
+    LaunchedEffect(engine, streamUrl) {
+        delay(30_000)
+        if (!rendered && !failed && PlayerHolder.isOwner(token)) {
+            vm.resumeMs = "${r.id}:${r.ep}" to engine.positionMs()
+            failed = true; buffering = false; errMsg = "MPV_LOAD_TIMEOUT"
+            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} muat tak selesai 30 dtk -> rantai cadangan")
+            onFatalError()
+        }
+    }
+
+    // Pengawas macet: buffering menggantung sesudah video tampil -> siklus
+    // StallPolicy: seek ke posisi yang sama untuk memancing segmen baru;
+    // mulai siklus ke-2 turunkan kualitas satu tingkat (sesi ini saja,
+    // pengaturan tidak diubah). Maks 3 siklus per kemacetan.
+    LaunchedEffect(engine, buffering, rendered) {
+        if (!buffering || !rendered) return@LaunchedEffect
+        var tries = 0
+        while (tries < 3) {
+            delay(StallPolicy.delayMs(tries))
+            if (!buffering || !wantPlay) return@LaunchedEffect
+            tries++
+            val lower = heights.filter { it < playingH }.maxOrNull()
+            if (StallPolicy.shouldLower(tries, lower)) {
+                applyQuality("${lower}p")
+                vm.toast(I18n.t("slow_switched", "Slow connection · switched to %1\$dp").format(lower))
+            }
+            com.onimeku.app.data.CrashLog.note("player", "${r.id} ep${r.ep} macet, pulihkan #$tries (tinggi=$playingH, turun=${lower ?: 0})")
+            engine.seekToMs(engine.positionMs())
+        }
+    }
+
+    // Timer tidur.
+    LaunchedEffect(sleepMin) {
+        if (sleepMin > 0) {
+            delay(sleepMin * 60_000L)
+            engine.setPaused(true); vm.toast(I18n.t("sleep_done", "Sleep timer: paused")); sleepMin = 0
+        }
+    }
+
+    // Polling posisi 1 dtk dan HANYA menulis state saat detiknya berubah
+    // (sebelumnya tiap 500 ms -> seluruh PlayerReady recompose 2x/dtk).
+    // Simpan progres tiap 10 dtk (tiap simpan = serialisasi seluruh AppState).
+    val nextEp = remember(r, a) { EpisodeMath.next(a.available, a.eps, r.ep) }
+    LaunchedEffect(engine) {
+        var n = 0
+        var prefetched = false
+        var trPre = false
+        var introAutoDone = false
+        var lastTrackCount = -1
+        while (true) {
+            // Mesin sudah diambil alih episode/pintu berikutnya: berhenti (jangan menyimpan posisi episode lain).
+            if (!PlayerHolder.isOwner(token)) break
+            val sec = (engine.positionMs() / 1000).toInt()
+            if (!dragging && sec != pos.toInt()) pos = sec.toFloat()
+            // Lewati intro otomatis (opsional): sekali per episode, hanya bila API memberi penanda intro.
+            if (!introAutoDone) {
+                val tgt = SkipLogic.autoSkipTarget(sec, playback.introStart, playback.introEnd, vm.s.settings.skipIntro, vm.s.settings.autoSkipIntro)
+                if (tgt != null) {
+                    introAutoDone = true
+                    engine.seekToMs(tgt * 1000L)
+                    vm.toast(I18n.t("intro_skipped", "Intro skipped"))
+                }
+            }
+            val bufSec = (engine.bufferedEndMs() / 1000L).toFloat()
+            if (bufSec != buffered) buffered = bufSec
+            val d = engine.durationMs()
+            if (d > 0) {
+                val ds = (d / 1000).toInt()
+                if (ds != dur) dur = ds
+                // 60 dtk terakhir: ambil data putar episode berikutnya di latar,
+                // supaya autoplay langsung mulai tanpa menunggu API.
+                // Pemanasan data putar episode berikutnya dimulai lebih awal (2 menit setelah mulai).
+                if (!trPre && nextEp != null && sec >= 120) {
+                    trPre = true
+                    launch { com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp) }
+                }
+                if (!prefetched && nextEp != null && vm.s.settings.autoplay && ds - sec in 1..60) {
+                    prefetched = true
+                    launch { com.onimeku.app.data.ApiClient.prefetchPlayback(r.id, nextEp) }
+                }
+            }
+            if (++n % 10 == 0 && wantPlay) vm.saveProg(r.id, r.ep, sec, durNow)
+            // Jaring pengaman daftar trek: bila jumlah trek berubah (trek
+            // samping tiba belakangan), segarkan model audio/subtitle.
+            if (n % 5 == 4) {
+                val tc = runCatching { engine.mpv.getPropertyInt("track-list/count") }.getOrNull() ?: -1
+                if (tc >= 0 && tc != lastTrackCount) { lastTrackCount = tc; refreshTracks() }
+            }
+            delay(1000)
+        }
+    }
+
+    // Ke background: pause, kecuali PiP atau "Background playback" aktif.
+    // Saat berlanjut di latar, trek video dimatikan (hemat data + baterai).
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner, engine) {
+        val o = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_STOP) {
+                // Simpan posisi sebelum proses berpeluang dimatikan di latar (polling hanya menyimpan tiap 10 dtk).
+                if (PlayerHolder.isOwner(token) && engine.positionMs() > 0) vm.saveProg(r.id, r.ep, (engine.positionMs() / 1000).toInt(), durNow)
+                // ON_STOP saat masih di PiP = jendela PiP ditutup (X): berhenti seperti YouTube, jangan lanjut berbunyi di latar.
+                // Mengetuk jendela PiP (membuka kembali) tidak memicu ON_STOP, jadi pemutaran lanjut normal.
+                if (vm.inPip || act?.isInPictureInPictureMode == true) engine.setPaused(true)
+                else if (bg) engine.setVideoEnabled(false) else engine.setPaused(true)
+            }
+            if (e == Lifecycle.Event.ON_START) engine.setVideoEnabled(!audioOnlyNow)
+        }
+        owner.lifecycle.addObserver(o)
+        onDispose { owner.lifecycle.removeObserver(o) }
+    }
+
+    // PiP: auto-enter saat video diputar (Android 12+), layar tetap menyala, kecerahan dipulihkan
+    DisposableEffect(Unit) {
+        act?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            vm.pipParams = null
+            act?.setPictureInPictureParams(pipParams(ctx, false, false))
+            act?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            act?.window?.let { w -> w.attributes = w.attributes.also { it.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
+        }
+    }
+    LaunchedEffect(hudTick) { if (hudTick > 0) { delay(800); hud = null; barKind = 0 } }
+    // Subtitle diangkat saat kontrol tampil agar tidak tertutup panel bawah; isi/pas layar lewat panscan mpv.
+    LaunchedEffect(showUi, wantPlay, buffering, failed, locked) {
+        engine.setSubLifted(!locked && (showUi || !wantPlay || failed || buffering))
+    }
+    LaunchedEffect(fillMode) { engine.setPanscan(fillMode) }
+
+    // Fullscreen: kunci landscape + sembunyikan bilah sistem; dipulihkan saat keluar/pergi dari pemutar.
+    LaunchedEffect(r) {
+        if (!vm.s.settings.gestureHintSeen) { delay(25_000); vm.setSettings { it.copy(gestureHintSeen = true) } }
+    }
+    // Putar HP ke landscape = fullscreen otomatis; kembali ke portrait = keluar (hanya bila fullscreen berasal dari rotasi).
+    LaunchedEffect(orient) {
+        if (orient == Configuration.ORIENTATION_LANDSCAPE && !full) { fullByRot = true; full = true }
+        else if (orient == Configuration.ORIENTATION_PORTRAIT && full && fullByRot) { full = false; fullByRot = false }
+    }
+    val prevFull = remember { java.util.concurrent.atomic.AtomicBoolean(full) }
+    LaunchedEffect(full) {
+        vm.playerFull = full
+        val leaving = !full && prevFull.getAndSet(full)
+        act?.requestedOrientation = when {
+            full && !fullByRot -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            leaving && orient == Configuration.ORIENTATION_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (leaving) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }, 700)
+        act?.window?.let { w ->
+            val c = WindowCompat.getInsetsController(w, w.decorView)
+            if (full) {
+                c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                c.hide(WindowInsetsCompat.Type.systemBars())
+            } else c.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            act?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            act?.window?.let { w -> WindowCompat.getInsetsController(w, w.decorView).show(WindowInsetsCompat.Type.systemBars()) }
+        }
+    }
+    BackHandler(enabled = full) { full = false; fullByRot = false }
+    BackHandler(enabled = epPanel) { epPanel = false }
+    BackHandler(enabled = sheet != null) { if (sheet == "main") sheet = null else sheet = "main" }
 }
